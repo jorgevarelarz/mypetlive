@@ -4,7 +4,7 @@ export type User = {
   _id: string;
   email: string;
   name?: string;
-  role: "tenant" | "landlord" | "pro" | "admin";
+  role: "tenant" | "landlord" | "pro" | "admin" | "store" | "vet";
   isVerified?: boolean;
   tenantPro?: {
     status?: string;
@@ -23,13 +23,8 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
-export async function register(
-  name: string,
-  email: string,
-  password: string,
-  role: "tenant" | "landlord" | "pro"
-) {
-  await axios.post("/api/auth/register", { name, email, password, role });
+export async function register(name: string, email: string, password: string) {
+  await axios.post("/api/auth/register", { name, email, password });
 }
 
 export function logout() {

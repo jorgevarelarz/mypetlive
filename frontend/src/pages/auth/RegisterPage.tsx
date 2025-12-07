@@ -7,7 +7,6 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"tenant"|"landlord"|"pro">("tenant");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
@@ -17,11 +16,19 @@ export default function RegisterPage() {
     e.preventDefault();
     setErr(null); setLoading(true);
     try {
-      await apiRegister(name.trim(), email.trim(), password, role);
-      await login(email.trim(), password);
-      nav("/", { replace: true });
+      await apiRegister(name.trim(), email.trim(), password);
+      const user = await login(email.trim(), password);
+      const destination = user?.role === 'tenant' ? '/home' : '/';
+      nav(destination, { replace: true });
     } catch (e: any) {
-      setErr(e?.response?.data?.error || e?.message || "No se pudo registrar");
+      const code = e?.response?.data?.code || e?.response?.data?.error;
+      if (code === 'email_in_use') {
+        setErr('Ese correo ya está registrado. Inicia sesión o usa otro.');
+      } else if (code === 'missing_fields') {
+        setErr('Completa nombre, correo y contraseña.');
+      } else {
+        setErr(e?.response?.data?.message || e?.message || "No se pudo registrar");
+      }
     } finally {
       setLoading(false);
     }
@@ -30,7 +37,7 @@ export default function RegisterPage() {
   return (
     <>
       <h1 className="auth-title">Crea tu cuenta</h1>
-      <p className="auth-subtitle">Elige tu rol para personalizar la experiencia.</p>
+      <p className="auth-subtitle">Únete a la comunidad de adoptantes y lleva el cuidado de tus mascotas al día.</p>
       <form className="auth-form" onSubmit={submit} noValidate>
         <label className="auth-label" htmlFor="name">
           Nombre
@@ -44,18 +51,6 @@ export default function RegisterPage() {
           Contraseña
           <input id="password" type="password" required className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
         </label>
-        <fieldset style={{ display: 'grid', gap: 8 }}>
-          <legend className="auth-label" style={{ fontWeight: 600 }}>Rol</legend>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="radio" name="role" value="tenant" checked={role==='tenant'} onChange={()=>setRole('tenant')} /> Inquilino
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="radio" name="role" value="landlord" checked={role==='landlord'} onChange={()=>setRole('landlord')} /> Propietario
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="radio" name="role" value="pro" checked={role==='pro'} onChange={()=>setRole('pro')} /> Profesional (PRO)
-          </label>
-        </fieldset>
         {err && <p className="auth-error" style={{ color: '#b91c1c' }}>{err}</p>}
         <button type="submit" className="auth-button" disabled={loading}>
           {loading ? 'Creando…' : 'Crear cuenta'}
@@ -63,6 +58,19 @@ export default function RegisterPage() {
       </form>
       <div className="auth-footer">
         ¿Ya tienes cuenta? <Link to="/login" className="auth-link">Inicia sesión</Link>
+      </div>
+      <div className="auth-cta" style={{ marginTop: 24, textAlign: 'center', color: '#3F4A3C' }}>
+        <p style={{ fontWeight: 600 }}>¿Eres protectora, veterinario o tienda?</p>
+        <p className="text-sm" style={{ color: '#7A8273' }}>Hablemos y te activamos como profesional.</p>
+        <a
+          href="https://wa.me/XXXXXXXXXX"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm"
+          style={{ textDecoration: 'underline', textUnderlineOffset: 4 }}
+        >
+          Escríbenos por WhatsApp
+        </a>
       </div>
     </>
   );

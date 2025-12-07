@@ -1,6 +1,18 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env as any).VITE_API_URL || '';
+const fallbackBase = () => {
+  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
+  if ((process.env as any).VITE_API_URL) return (process.env as any).VITE_API_URL;
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
+};
+
+export const API_BASE = fallbackBase().replace(/\/$/, '');
 
 export const api = axios.create({ baseURL: API_BASE });
 

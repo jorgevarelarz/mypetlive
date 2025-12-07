@@ -6,10 +6,11 @@ export default function RedirectHome() {
   const { user } = useAuth();
   const nav = useNavigate();
   useEffect(() => {
-    const path = user?.role === 'tenant' ? '/tenant'
+    const path = user?.role === 'tenant' ? '/home'
       : user?.role === 'landlord' ? '/landlord'
       : user?.role === 'pro' ? '/pro'
       : user?.role === 'admin' ? '/admin'
+      : user?.role === 'store' || user?.role === 'vet' ? '/partner'
       : '/login';
     nav(path, { replace: true });
   }, [user, nav]);

@@ -11,8 +11,16 @@ import getRequestLogger from '../utils/requestLogger';
 
 export async function create(req: Request, res: Response) {
   const b: any = req.body;
+  const actor: any = (req as any).user;
+  const ownerId = actor?._id || actor?.id;
+  if (!ownerId) return res.status(401).json({ error: 'unauthorized' });
   const coords: [number, number] = [b.location.lng, b.location.lat];
-  const payload: any = { ...b, location: { type: 'Point', coordinates: coords }, status: 'draft' };
+  const payload: any = {
+    ...b,
+    owner: ownerId,
+    location: { type: 'Point', coordinates: coords },
+    status: 'draft',
+  };
   if (payload.onlyTenantPro && (!payload.requiredTenantProMaxRent || payload.requiredTenantProMaxRent === 0)) {
     payload.requiredTenantProMaxRent = payload.price;
   }
@@ -26,7 +34,17 @@ export async function update(req: Request, res: Response) {
   if (!prev) return res.status(404).json({ error: 'not_found' });
 
   const b: any = req.body;
+  // Prevent changing owner through payload
+  delete b.owner;
   if (b.location) b.location = { type: 'Point', coordinates: [b.location.lng, b.location.lat] };
+
+  const actor: any = (req as any).user;
+  const actorId = actor?._id || actor?.id;
+  const isAdmin = actor?.role === 'admin';
+  const isOwner = actorId && String(prev.owner) === String(actorId);
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
 
   if (b.onlyTenantPro) {
     const required = Number(b.requiredTenantProMaxRent ?? 0);
@@ -87,8 +105,17 @@ export async function publish(req: Request, res: Response) {
 }
 
 export async function archive(req: Request, res: Response) {
-  const p = await Property.findByIdAndUpdate(req.params.id, { status: 'archived' }, { new: true });
+  const actor: any = (req as any).user;
+  const p = await Property.findById(req.params.id);
   if (!p) return res.status(404).json({ error: 'not_found' });
+  const actorId = actor?._id || actor?.id;
+  const isAdmin = actor?.role === 'admin';
+  const isOwner = actorId && String(p.owner) === String(actorId);
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  p.status = 'archived';
+  await p.save();
   res.json({ _id: p._id, status: p.status });
 }
 

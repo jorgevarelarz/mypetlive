@@ -3,6 +3,7 @@ import { app } from "../../src/app";
 import { connectDb, disconnectDb, clearDb } from "../utils/db";
 
 describe("Signature callback idempotency", () => {
+  const prevSignProvider = process.env.SIGN_PROVIDER;
   let id: string;
 
   beforeAll(async () => {
@@ -10,7 +11,14 @@ describe("Signature callback idempotency", () => {
     process.env.SIGNATURE_CALLBACK_SECRET = 'test-secret';
     await connectDb();
   });
-  afterAll(disconnectDb);
+  afterAll(async () => {
+    await disconnectDb();
+    if (prevSignProvider === undefined) {
+      delete process.env.SIGN_PROVIDER;
+    } else {
+      process.env.SIGN_PROVIDER = prevSignProvider;
+    }
+  });
   afterEach(clearDb);
 
   beforeEach(async () => {

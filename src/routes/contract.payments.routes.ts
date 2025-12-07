@@ -3,12 +3,14 @@ import { getStripeClient, isStripeConfigured } from '../utils/stripe';
 import { Contract } from '../models/contract.model';
 import { User } from '../models/user.model';
 import { calcPlatformFeeOnRent, calcSurchargeCents, calcSignFeeOnRent } from '../utils/rentFees';
+import { authenticate } from '../middleware/auth.middleware';
 
 const r = Router();
 
-r.post('/contracts/:id/pay-rent', async (req, res) => {
-  const tenantId = req.header('x-user-id');
-  if (!tenantId) return res.status(400).json({ error: 'Missing x-user-id' });
+r.post('/contracts/:id/pay-rent', authenticate as any, async (req, res) => {
+  const user: any = (req as any).user;
+  const tenantId = user?._id || user?.id;
+  if (!tenantId) return res.status(401).json({ error: 'unauthorized' });
 
   const { method, paymentMethodId } = req.body || {};
   if (!['sepa_debit', 'card', 'bizum'].includes(method)) return res.status(400).json({ error: 'invalid_method' });

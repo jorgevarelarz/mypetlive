@@ -6,8 +6,8 @@ const r = Router();
 
 // Create or retrieve Express account and return onboarding link
 r.post('/connect/owner/link', async (req, res) => {
-  const ownerId = req.header('x-user-id');
-  if (!ownerId) return res.status(400).json({ error: 'Missing x-user-id' });
+  const ownerId = (req as any).user?._id || (req as any).user?.id;
+  if (!ownerId) return res.status(401).json({ error: 'unauthorized' });
 
   const owner = await User.findById(ownerId);
   if (!owner) return res.status(404).json({ error: 'owner_not_found' });
@@ -46,8 +46,8 @@ r.post('/connect/owner/link', async (req, res) => {
 
 // Retrieve account status
 r.get('/connect/owner/status', async (req, res) => {
-  const ownerId = req.header('x-user-id');
-  if (!ownerId) return res.status(400).json({ error: 'Missing x-user-id' });
+  const ownerId = (req as any).user?._id || (req as any).user?.id;
+  if (!ownerId) return res.status(401).json({ error: 'unauthorized' });
 
   const owner = await User.findById(ownerId).lean();
   if (!owner?.stripeAccountId) return res.json({ connected: false });

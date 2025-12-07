@@ -3,7 +3,6 @@ import { register } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Input from '../components/ui/Input';
-import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useToast } from '../context/ToastContext';
@@ -14,7 +13,6 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isRegister, setIsRegister] = useState(false);
-  const [role, setRole] = useState<'tenant' | 'landlord' | 'pro'>('tenant');
   const [error, setError] = useState('');
   const { login: loginCtx } = useAuth();
   const { push } = useToast();
@@ -29,12 +27,15 @@ const Login: React.FC = () => {
     setError('');
     try {
       if (isRegister) {
-        await register(name, email, password, role);
+        await register(name, email, password);
       }
-      await loginCtx(email, password);
-      navigate('/dashboard', { replace: true });
+      const user = await loginCtx(email, password);
+      navigate(user?.role === 'tenant' ? '/home' : '/dashboard', { replace: true });
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Error';
+      const code = err?.response?.data?.code || err?.response?.data?.error;
+      let msg = err?.response?.data?.message || 'Error';
+      if (code === 'email_in_use') msg = 'Ese correo ya está registrado';
+      if (code === 'missing_fields') msg = 'Completa los campos requeridos';
       setError(msg);
       push({ title: msg, tone: 'error' });
     }
@@ -51,13 +52,6 @@ const Login: React.FC = () => {
             )}
             <Input label="Correo" type="email" placeholder="correo@dominio.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <Input label="Contraseña" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
-            {isRegister && (
-              <Select label="Rol" value={role} onChange={e => setRole(e.target.value as any)}>
-                <option value="tenant">Inquilino</option>
-                <option value="landlord">Propietario</option>
-                <option value="pro">Profesional</option>
-              </Select>
-            )}
             <Button type="submit">{isRegister ? 'Registrar' : 'Entrar'}</Button>
             <p style={{ textAlign: 'center' }}>
               {isRegister ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}{' '}

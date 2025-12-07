@@ -25,6 +25,9 @@ import AdminReports from "./pages/admin/Reports";
 import AdminIncidents from "./pages/admin/Incidents";
 import AdminSettings from "./pages/admin/Settings";
 import AdminPayments from "./pages/admin/Payments";
+import AdminAnimalsPage from "./pages/admin/AdminAnimalsPage";
+import AdminAdoptionsPage from "./pages/admin/AdminAdoptionsPage";
+import CouponsAdminPage from "./pages/admin/CouponsAdminPage";
 import RedirectHome from "./pages/RedirectHome";
 import MyContracts from "./pages/MyContracts";
 import LandlordDashboard from "./pages/LandlordDashboard";
@@ -51,6 +54,18 @@ import ProDetail from "./pages/ProDetail";
 import ContractDetail from "./pages/ContractDetail";
 import ColivingList from "./pages/ColivingList";
 import ColivingDetail from "./pages/ColivingDetail";
+import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
+import AnimalDetail from "./pages/animals/AnimalDetail";
+import MyAdoptions from "./pages/animals/MyAdoptions";
+import AdoptionDetail from "./pages/animals/AdoptionDetail";
+import AnimalsPage from "./pages/landlord/AnimalsPage";
+import AdoptionsPage from "./pages/landlord/AdoptionsPage";
+import QuestionnairePage from "./pages/landlord/QuestionnairePage";
+import DonationsPage from "./pages/Donations";
+import Home from "./pages/home/Home";
+import CouponsList from "./pages/coupons/CouponsList";
+import PatitasPending from "./pages/partners/PatitasPending";
+import PetPage from "./pages/pet/PetPage";
 
 export default function AppRoutes() {
   return (
@@ -61,6 +76,15 @@ export default function AppRoutes() {
             <Route path="/" element={<RedirectHome />} />
             <Route path="/properties" element={<PropertiesList />} />
             <Route path="/properties/:id" element={<PropertyDetail />} />
+            <Route path="/animals" element={<AnimalsPublicList />} />
+            <Route path="/animals/:id" element={<AnimalDetail />} />
+            <Route path="/adoptions/mine" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><MyAdoptions /></RoleGuard></ProtectedRoute>} />
+            <Route path="/adoptions/:id" element={<ProtectedRoute><AdoptionDetail /></ProtectedRoute>} />
+            {/* <Route path="/donate" element={<DonationsPage />} /> */}
+            <Route path="/coupons" element={<CouponsList />} />
+            <Route path="/pet" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><PetPage /></RoleGuard></ProtectedRoute>} />
+            <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+            <Route path="/home" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><Home /></RoleGuard></ProtectedRoute>} />
             <Route path="/coliving" element={<ColivingList />} />
             <Route path="/coliving/:id" element={<ColivingDetail />} />
             <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
@@ -69,11 +93,17 @@ export default function AppRoutes() {
             <Route path="/tenant/applications" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><TenantApplications /></RoleGuard></ProtectedRoute>} />
             <Route path="/tenant/kyc" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><TenantKyc /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordDashboard /></RoleGuard></ProtectedRoute>} />
+            <Route path="/landlord/animals" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AnimalsPage /></RoleGuard></ProtectedRoute>} />
+            <Route path="/landlord/adoptions" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AdoptionsPage /></RoleGuard></ProtectedRoute>} />
+            <Route path="/landlord/questionnaire" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><QuestionnairePage /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/payments" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordPayments /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/issues" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordIssues /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/services" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordServices /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/showings" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordShowings /></RoleGuard></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminHome /></RoleGuard></ProtectedRoute>} />
+            <Route path="/admin/animals" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminAnimalsPage /></RoleGuard></ProtectedRoute>} />
+            <Route path="/admin/adoptions" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminAdoptionsPage /></RoleGuard></ProtectedRoute>} />
+            <Route path="/admin/coupons" element={<ProtectedRoute><RoleGuard roles={["admin"]}><CouponsAdminPage /></RoleGuard></ProtectedRoute>} />
             <Route
               path="/tenant-pro"
               element={

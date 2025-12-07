@@ -141,7 +141,16 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
     }
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      if (session.metadata?.deposit === 'true') {
+      if (session.metadata?.donation === 'true') {
+        const amount = session.amount_total || 0;
+        const paymentRef = session.payment_intent as string | undefined;
+        const { Donation } = await import('../models/donation.model');
+        await Donation.findOneAndUpdate(
+          { sessionId: session.id },
+          { status: 'completed', paymentRef, amount, currency: session.currency?.toLowerCase() || 'eur' },
+          { new: true }
+        );
+      } else if (session.metadata?.deposit === 'true') {
         const contractId = session.metadata?.contractId;
         if (contractId) {
           const contract = await Contract.findById(contractId);

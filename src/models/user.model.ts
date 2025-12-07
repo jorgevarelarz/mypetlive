@@ -87,7 +87,7 @@ const userSchema = new Schema(
      */
     role: {
       type: String,
-      enum: ['landlord', 'tenant', 'admin', 'pro'],
+      enum: ['landlord', 'tenant', 'admin', 'pro', 'store', 'vet'],
       required: true,
     },
     ratingAvg: { type: Number, default: 0 },
@@ -102,6 +102,7 @@ const userSchema = new Schema(
     legalVersion: { type: String },
     termsVersionAccepted: { type: String },
     privacyVersionAccepted: { type: String },
+    patitas: { type: Number, default: 0 },
     // Password reset support
     resetToken: { type: String },
     resetTokenExp: { type: Date },

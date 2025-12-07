@@ -44,18 +44,32 @@ function buildResetLink(token: string) {
 export const register = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
   try {
-    const { name, email, password, role } = req.body;
+    const rawName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!rawName || !rawEmail || !password) {
+      throw badRequest('missing_fields');
+    }
+    const allowedRoles = ['tenant', 'landlord', 'pro', 'admin', 'store', 'vet'];
+    let normalizedRole: string = 'tenant';
+    if (process.env.NODE_ENV === 'test') {
+      const requested = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
+      if (allowedRoles.includes(requested)) normalizedRole = requested;
+    }
     // Generate the password hash
     const passwordHash = await bcrypt.hash(password, 10);
     // Save new user with hashed password
-    const user = new User({ name, email, passwordHash, role });
+    const user = new User({ name: rawName, email: rawEmail, passwordHash, role: normalizedRole });
     await user.save();
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 11000 || /duplicate key/i.test(error?.message || '')) {
+      throw new AppError('email_in_use', { status: 409, code: 'email_in_use' });
+    }
     if (isAppError(error)) throw error;
     log.error({ err: error, email: req.body?.email }, 'Error registrando usuario');
     throw badRequest('Error al registrar', { cause: (error as Error)?.message });

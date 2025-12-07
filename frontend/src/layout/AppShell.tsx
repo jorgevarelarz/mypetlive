@@ -5,46 +5,69 @@ import navConfig from '../config/nav.config.json';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
 import { listConversations } from '../api/chat';
 
+type NavItem = { label: string; path?: string; to?: string };
+
+const getGeneralItems = (role?: string): NavItem[] => {
+  const config: any = navConfig;
+  if (role === 'tenant' && Array.isArray(config.tenantGeneral)) return config.tenantGeneral as NavItem[];
+  return (config.general || []) as NavItem[];
+};
+
+const resolvePath = (item: NavItem) => item.path || item.to || '#';
+
 function Header() {
   const { user, logout } = useAuth();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
+  const generalItems = getGeneralItems(role);
+  const showInbox = generalItems.some(item => item.path === '/inbox');
   useEffect(() => {
     let timer: any;
     const load = async () => {
       try {
-        if (!user?._id) { setUnread(0); return; }
+        if (!user?._id || !showInbox) { setUnread(0); return; }
         const list = await listConversations({ page: 1, limit: 50 });
         const total = list.reduce((acc: number, c: any) => acc + (c?.unread?.[user._id] || 0), 0);
         setUnread(total);
       } catch {}
     };
     load();
-    // polling ligero cada 30s
-    timer = setInterval(load, 30_000);
-    return () => clearInterval(timer);
-  }, [user?._id]);
-  const roleHome = user?.role === 'tenant' ? '/tenant'
+    if (showInbox) {
+      timer = setInterval(load, 30_000);
+      return () => clearInterval(timer);
+    }
+    return () => {};
+  }, [user?._id, showInbox]);
+  const roleHome = user?.role === 'tenant' ? '/home'
     : user?.role === 'landlord' ? '/landlord'
     : user?.role === 'pro' ? '/pro'
     : user?.role === 'admin' ? '/admin'
+    : user?.role === 'store' || user?.role === 'vet' ? '/partner'
     : '/login';
-  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | undefined;
   const labelFor: Record<string, string> = {
-    tenant: 'Inquilino',
-    landlord: 'Propietario',
+    tenant: 'Adoptante',
+    landlord: 'Protectora',
     pro: 'Profesional',
     admin: 'Administración',
+    store: 'Tienda',
+    vet: 'Veterinario',
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-gray-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
-        <Link to={roleHome} className="font-semibold text-lg">RentalApp</Link>
+    <header
+      className="sticky top-0 z-20 backdrop-blur"
+      style={{ background: 'rgba(246, 243, 236, 0.95)', borderBottom: '1px solid #E7E1D5' }}
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3"
+        style={{ color: '#3F4A3C' }}
+      >
+        <Link to={roleHome} className="text-lg" style={{ fontWeight: 500 }}>AnimalApp</Link>
 
         {/* Menú compacto en móviles */}
         <button
-          className="md:hidden px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+          className="md:hidden text-sm"
+          style={{ padding: '8px 14px' }}
           onClick={() => setMenuOpen(v => !v)}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
@@ -53,21 +76,34 @@ function Header() {
         </button>
 
         <nav className="hidden md:flex items-center gap-2 text-sm">
-          {user && (
-            <Link to="/inbox" className="px-2 py-1 rounded hover:bg-gray-100">
-              Inbox {unread > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center text-white bg-red-500 rounded-full text-[10px] px-1.5 py-0.5">{unread}</span>
-              )}
-            </Link>
-          )}
+          {generalItems.map((item: NavItem) => {
+            const target = resolvePath(item);
+            return (
+              <NavLink
+                key={target}
+                to={target}
+                className={({ isActive }) => `px-2 py-1 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`}
+              >
+                {item.label}
+                {target === '/inbox' && unread > 0 && (
+                  <span
+                    className="ml-1 inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
+                    style={{ background: '#E5DACC', color: '#3F4A3C' }}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="ml-auto flex items-center gap-2 text-sm">
           {!user ? (
-            <Link to="/login" className="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50">Entrar</Link>
+            <Link to="/login" className="px-3 py-1.5 rounded">Entrar</Link>
           ) : (
             <>
-              <span className="text-gray-600 hidden sm:inline">{user.email} · {user.role}</span>
-              <button onClick={logout} className="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50">Salir</button>
+              <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {user.role}</span>
+              <button onClick={logout} className="px-3 py-1.5 rounded">Salir</button>
             </>
           )}
         </div>
@@ -75,34 +111,50 @@ function Header() {
 
       {/* Panel de menú móvil */}
       {menuOpen && (
-        <div id="mobile-menu" className="md:hidden z-30 border-t border-gray-200 bg-white">
+        <div
+          id="mobile-menu"
+          className="md:hidden z-30 border-t"
+          style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
+        >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
-            <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">General</div>
+            <div className="text-xs uppercase tracking-wide mb-2" style={{ color: '#7A8273' }}>General</div>
             <div className="flex flex-wrap gap-2">
-              {(navConfig as any).general?.map((item: any) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({isActive})=>`px-3 py-1.5 rounded border ${isActive?'bg-gray-100 border-gray-300':'border-gray-200 hover:bg-gray-50'}`}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {item.label}
-                  {item.path === '/inbox' && user && unread > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center text-white bg-red-500 rounded-full text-[10px] px-1.5 py-0.5">{unread}</span>
-                  )}
-                </NavLink>
-              ))}
+              {generalItems.map((item: NavItem) => {
+                const target = resolvePath(item);
+                return (
+                  <NavLink
+                    key={target}
+                    to={target}
+                    className={({isActive})=>
+                      `px-3 py-1.5 rounded border ${isActive ? 'border-[#BEB6A6] bg-[#F4EFE7]' : 'border-transparent'}`
+                    }
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {item.label}
+                    {target === '/inbox' && user && unread > 0 && (
+                      <span
+                        className="ml-2 inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
+                        style={{ background: '#E5DACC', color: '#3F4A3C' }}
+                      >
+                        {unread}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
 
             {role && (navConfig as any)[role] && (
               <>
-                <div className="text-xs uppercase tracking-wide text-gray-500 mt-4 mb-2">{labelFor[role]}</div>
+                <div className="text-xs uppercase tracking-wide mt-4 mb-2" style={{ color: '#7A8273' }}>{labelFor[role]}</div>
                 <div className="flex flex-wrap gap-2">
                   {((navConfig as any)[role] as any[]).map((item) => (
                     <NavLink
                       key={item.path}
                       to={item.path}
-                      className={({isActive})=>`px-3 py-1.5 rounded border ${isActive?'bg-gray-100 border-gray-300':'border-gray-200 hover:bg-gray-50'}`}
+                      className={({isActive})=>
+                        `px-3 py-1.5 rounded border ${isActive ? 'border-[#BEB6A6] bg-[#F4EFE7]' : 'border-transparent'}`
+                      }
                       onClick={() => setMenuOpen(false)}
                     >
                       {item.label}
@@ -121,47 +173,73 @@ function Header() {
 function SideNav() {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
+  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | undefined;
+  const generalItems = getGeneralItems(role);
+  const showInbox = generalItems.some(item => item.path === '/inbox');
   useEffect(() => {
     let timer: any;
     const load = async () => {
       try {
-        if (!user?._id) { setUnread(0); return; }
+        if (!user?._id || !showInbox) { setUnread(0); return; }
         const list = await listConversations({ page: 1, limit: 50 });
         const total = list.reduce((acc: number, c: any) => acc + (c?.unread?.[user._id] || 0), 0);
         setUnread(total);
       } catch {}
     };
     load();
-    timer = setInterval(load, 30_000);
-    return () => clearInterval(timer);
-  }, [user?._id]);
-  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | undefined;
+    if (showInbox) {
+      timer = setInterval(load, 30_000);
+      return () => clearInterval(timer);
+    }
+    return () => {};
+  }, [user?._id, showInbox]);
   const labelFor: Record<string, string> = {
-    tenant: 'Inquilino',
-    landlord: 'Propietario',
+    tenant: 'Adoptante',
+    landlord: 'Protectora',
     pro: 'Profesional',
     admin: 'Administración',
   };
   return (
     <aside className="hidden lg:block w-60 shrink-0">
-      <div className="sticky top-16 p-3 border border-gray-200 rounded bg-gray-50">
-        <div className="text-xs uppercase tracking-wide text-gray-500 px-2 mb-2">General</div>
+      <div
+        className="sticky top-16 p-3 border rounded"
+        style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
+      >
+        <div className="text-xs uppercase tracking-wide px-2 mb-2" style={{ color: '#7A8273' }}>General</div>
         <div className="grid gap-1">
-          {(navConfig as any).general?.map((item: any) => (
-            <NavLink key={item.path} className={({isActive})=>`px-2 py-1.5 rounded hover:bg-gray-100 ${isActive?'bg-gray-100 font-semibold':''}`} to={item.path}>
-              {item.label}
-              {item.path === '/inbox' && unread > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center text-white bg-red-500 rounded-full text-[10px] px-1.5 py-0.5">{unread}</span>
-              )}
-            </NavLink>
-          ))}
+          {generalItems.map((item: NavItem) => {
+            const target = resolvePath(item);
+            return (
+              <NavLink
+                key={target}
+                className={({isActive})=>
+                  `px-2 py-1.5 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`
+                }
+                to={target}
+              >
+                {item.label}
+                {target === '/inbox' && unread > 0 && (
+                  <span
+                    className="ml-2 inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
+                    style={{ background: '#E5DACC', color: '#3F4A3C' }}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </div>
         {role && (navConfig as any)[role] && (
           <>
-            <div className="text-xs uppercase tracking-wide text-gray-500 px-2 mt-4 mb-2">{labelFor[role]}</div>
+            <div className="text-xs uppercase tracking-wide px-2 mt-4 mb-2" style={{ color: '#7A8273' }}>{labelFor[role]}</div>
             <div className="grid gap-1">
               {((navConfig as any)[role] as any[]).map((item) => (
-                <NavLink key={item.path} to={item.path} className={({isActive})=>`px-2 py-1.5 rounded hover:bg-gray-100 ${isActive?'bg-gray-100 font-semibold':''}`}>
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({isActive})=>`px-2 py-1.5 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`}
+                >
                   {item.label}
                 </NavLink>
               ))}
@@ -175,7 +253,7 @@ function SideNav() {
 
 export default function AppShell() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
       <Header />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
         <SideNav />

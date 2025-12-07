@@ -1,22 +1,23 @@
 {
   "general": [
     { "label": "Conversaciones", "path": "/inbox" },
-    { "label": "Coliving", "path": "/coliving" }
+    { "label": "Animales", "path": "/animals" },
+    { "label": "Coliving", "path": "/coliving" },
+    { "label": "Donar", "path": "/donate" },
+    { "label": "Cupones", "path": "/coupons" }
   ],
-  "tenant": [
-    { "label": "Inicio", "path": "/tenant" },
-    { "label": "Buscar pisos", "path": "/properties" },
-    { "label": "Favoritos", "path": "/me/favorites" },
-    { "label": "Solicitudes", "path": "/tenant/applications" },
-    { "label": "Contratos", "path": "/contracts" },
-    { "label": "Pagos", "path": "/tenant/payments" },
-    { "label": "Mis incidencias", "path": "/tickets" },
-    { "label": "Verificación KYC", "path": "/tenant/kyc" },
-    { "label": "Tenant PRO", "path": "/tenant-pro" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+  "tenantGeneral": [
+    { "label": "Inicio", "path": "/home", "to": "/home" },
+    { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
+    { "label": "Buscar animales", "path": "/animals", "to": "/animals" },
+    { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
   ],
+  "tenant": [],
   "landlord": [
     { "label": "Inicio", "path": "/landlord" },
+    { "label": "Mis animales", "path": "/landlord/animals" },
+    { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
+    { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
     { "label": "Mis propiedades", "path": "/owner/properties" },
     { "label": "Contratos", "path": "/contracts" },
     { "label": "Pagos", "path": "/landlord/payments" },
@@ -36,11 +37,20 @@
     { "label": "Inicio", "path": "/admin" },
     { "label": "Usuarios", "path": "/admin/users" },
     { "label": "Verificación KYC / Tenant PRO", "path": "/admin/tenant-pro" },
+    { "label": "Animales", "path": "/admin/animals" },
+    { "label": "Adopciones", "path": "/admin/adoptions" },
+    { "label": "Cupones", "path": "/admin/coupons" },
     { "label": "Propiedades", "path": "/admin/properties" },
     { "label": "Incidencias / Disputas", "path": "/admin/incidents" },
     { "label": "Pagos", "path": "/admin/payments" },
     { "label": "Reportes", "path": "/admin/reports" },
     { "label": "Ajustes", "path": "/admin/settings" },
     { "label": "Perfil y cuenta", "path": "/profile" }
+  ],
+  "store": [
+    { "label": "Inicio", "path": "/partner" }
+  ],
+  "vet": [
+    { "label": "Inicio", "path": "/partner" }
   ]
 }

@@ -28,18 +28,44 @@ function fileFilter(_req: any, file: Express.Multer.File, cb: multer.FileFilterC
 // 10MB por archivo; hasta 6 archivos
 const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// POST /api/uploads/images
+// Utility to build absolute base URL
+function getBaseUrl(req: any): string {
+  const envBase = process.env.APP_URL?.replace(/\/$/, '') || '';
+  if (envBase) return envBase;
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+  const host = req.get('host');
+  return `${proto}://${host}`;
+}
+
+// POST /api/uploads/images (multiple)
 router.post('/uploads/images', authenticate as any, (req, res) => {
   upload.array('files', 6)(req as any, res as any, (err: any) => {
     if (err) {
       const code = err?.message === 'invalid_file_type' ? 400 : 400;
       return res.status(code).json({ error: err.message || 'upload_error' });
     }
-  const files = ((req as any).files as Express.Multer.File[]) || [];
-  const base = process.env.APP_URL?.replace(/\/$/, '') || '';
-  const urls = files.map(f => `${base}/uploads/${path.basename(f.path)}`);
-  res.json({ urls });
+    const files = ((req as any).files as Express.Multer.File[]) || [];
+    const base = getBaseUrl(req);
+    const filenames = files.map(f => path.basename(f.path));
+    const urls = filenames.map(name => `${base}/uploads/${name}`);
+    res.json({ filenames, urls });
+  });
 });
+
+// POST /api/uploads (single file)
+router.post('/uploads', authenticate as any, (req, res) => {
+  upload.single('file')(req as any, res as any, (err: any) => {
+    if (err) {
+      const code = err?.message === 'invalid_file_type' ? 400 : 400;
+      return res.status(code).json({ error: err.message || 'upload_error' });
+    }
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) return res.status(400).json({ error: 'missing_file' });
+    const base = getBaseUrl(req);
+    const filename = path.basename(file.path);
+    const url = `${base}/uploads/${filename}`;
+    res.json({ url, filename });
+  });
 });
 
 export default router;

@@ -1,79 +1,184 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { User } from './models/user.model';
-import Ticket from './models/ticket.model';
-import { Property } from './models/property.model';
+import { Animal } from './models/animal.model';
+import { Coupon } from './models/coupon.model';
+import { PatitaLog } from './models/patitaLog.model';
 
 async function main() {
   const mongoUrl = process.env.MONGO_URL || process.env.MONGO_URI || 'mongodb://localhost:27017/rental-app';
   await mongoose.connect(mongoUrl);
 
   const password = 'password';
-  let landlord = await User.findOne({ email: 'landlord@example.com' });
-  if (!landlord) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    landlord = await User.create({ name: 'Demo Landlord', email: 'landlord@example.com', passwordHash, role: 'landlord' });
-  }
-  let tenant = await User.findOne({ email: 'tenant@example.com' });
-  if (!tenant) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    tenant = await User.create({ name: 'Demo Tenant', email: 'tenant@example.com', passwordHash, role: 'tenant' });
-  }
-  let pro = await User.findOne({ email: 'pro@example.com' });
-  if (!pro) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    pro = await User.create({ name: 'Demo Pro', email: 'pro@example.com', passwordHash, role: 'pro' });
-  }
 
-  const baseProperty = {
-    owner: landlord.id,
-    description: 'Nice flat',
-    address: 'Demo street 1',
-    region: 'madrid',
-    city: 'Madrid',
-    location: { type: 'Point', coordinates: [-3.70379, 40.41678] },
-    price: 500,
-    deposit: 500,
-    sizeM2: 70,
-    rooms: 2,
-    bathrooms: 1,
-    furnished: false,
-    petsAllowed: false,
-    availableFrom: new Date(),
-    images: ['https://example.com/p1.jpg', 'https://example.com/p2.jpg', 'https://example.com/p3.jpg'],
-    status: 'active',
-  };
+  // Protectora (role landlord para compatibilidad con permisos)
+  const protectoras = await Promise.all([
+    (async () => {
+      const email = 'protectora1@example.com';
+      const existing = await User.findOne({ email });
+      if (existing) return existing;
+      const passwordHash = await bcrypt.hash(password, 10);
+      return User.create({
+        name: 'Protectora Esperanza',
+        email,
+        passwordHash,
+        role: 'landlord',
+        patitas: 120,
+      });
+    })(),
+    (async () => {
+      const email = 'protectora2@example.com';
+      const existing = await User.findOne({ email });
+      if (existing) return existing;
+      const passwordHash = await bcrypt.hash(password, 10);
+      return User.create({
+        name: 'Refugio Patitas',
+        email,
+        passwordHash,
+        role: 'landlord',
+        patitas: 75,
+      });
+    })(),
+  ]);
 
-  const p1 = await Property.create({ ...baseProperty, title: 'Demo Apartment' });
-  const p2 = await Property.create({
-    ...baseProperty,
-    title: 'Second Property',
-    address: 'Sample avenue 2',
-    price: 800,
-    deposit: 800,
-    location: { type: 'Point', coordinates: [-3.69, 40.41] },
+  // Profesionales
+  const vet = await (async () => {
+    const email = 'vet@example.com';
+    const found = await User.findOne({ email });
+    if (found) return found;
+    const passwordHash = await bcrypt.hash(password, 10);
+    return User.create({ name: 'Clínica VetPlus', email, passwordHash, role: 'vet' });
+  })();
+
+  const store = await (async () => {
+    const email = 'store@example.com';
+    const found = await User.findOne({ email });
+    if (found) return found;
+    const passwordHash = await bcrypt.hash(password, 10);
+    return User.create({ name: 'Tienda Animalia', email, passwordHash, role: 'store' });
+  })();
+
+  // Adoptante / dueño de mascotas (tenant)
+  const adopter = await (async () => {
+    const email = 'adoptante@example.com';
+    const found = await User.findOne({ email });
+    if (found) return found;
+    const passwordHash = await bcrypt.hash(password, 10);
+    return User.create({ name: 'Adoptante Demo', email, passwordHash, role: 'tenant' });
+  })();
+
+  // Animales de ejemplo
+  const guardians = protectoras.filter(Boolean);
+  const shelterA = guardians[0];
+  const shelterB = guardians[1] || guardians[0];
+
+  const demoAnimals = [
+    {
+      name: 'Luna',
+      species: 'Perro',
+      breed: 'Mestiza',
+      sex: 'female',
+      age: '2 años',
+      size: 'medium',
+      status: 'available',
+      images: ['https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=800'],
+      shelter: shelterA.id,
+      createdByRole: 'protectora',
+    },
+    {
+      name: 'Max',
+      species: 'Perro',
+      breed: 'Labrador',
+      sex: 'male',
+      age: '1 año',
+      size: 'large',
+      status: 'available',
+      images: ['https://images.unsplash.com/photo-1507146426996-ef05306b995a?w=800'],
+      shelter: shelterA.id,
+      createdByRole: 'protectora',
+    },
+    {
+      name: 'Mia',
+      species: 'Gato',
+      breed: 'Europeo',
+      sex: 'female',
+      age: '6 meses',
+      size: 'small',
+      status: 'available',
+      images: ['https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=800'],
+      shelter: shelterB.id,
+      createdByRole: 'protectora',
+    },
+    {
+      name: 'Rocky',
+      species: 'Perro',
+      breed: 'Bulldog',
+      sex: 'male',
+      age: '3 años',
+      size: 'medium',
+      status: 'available',
+      images: ['https://images.unsplash.com/photo-1507149833265-60c372daea22?w=800'],
+      shelter: shelterB.id,
+      createdByRole: 'protectora',
+    },
+  ] as any[];
+
+  const animals = await Animal.insertMany(demoAnimals);
+
+  // Ofertas (cupones) para aplicar en tiendas/vets
+  const coupons = await Coupon.insertMany([
+    {
+      partnerId: store.id,
+      partnerType: 'store',
+      copy: '10% en piensos solidarios',
+      title: 'Pienso solidario',
+      discount: '10% en compra',
+      bonusPatitas: 8,
+      active: true,
+    },
+    {
+      partnerId: vet.id,
+      partnerType: 'vet',
+      copy: 'Consulta solidaria',
+      title: 'Consulta solidaria',
+      discount: '15€ en consulta',
+      bonusPatitas: 12,
+      targetAnimalCode: animals[0]?.code,
+      active: true,
+    },
+  ]);
+
+  // Log de Patitas pendiente (para ver en la pantalla de partners)
+  await PatitaLog.create({
+    shelterId: shelterA.id,
+    userId: store.id,
+    partnerId: store.id,
+    animalId: animals[0]?._id,
+    amount: 25,
+    source: 'store',
+    concept: 'Compra de cama y juguetes',
   });
 
-  // Crea un ticket de demo asignado al pro
-  const t = await Ticket.create({
-    contractId: new mongoose.Types.ObjectId().toString(),
-    propertyId: p1.id,
-    openedBy: tenant.id,
-    ownerId: landlord.id,
-    proId: pro.id,
-    service: 'plumbing',
-    title: 'Goteo en baño',
-    description: 'Latiguillo pierde agua',
-    status: 'awaiting_schedule',
-    history: [{ ts: new Date(), actor: String(tenant.id), action: 'opened' }],
-  } as any);
+  await PatitaLog.create({
+    shelterId: shelterB.id,
+    userId: vet.id,
+    partnerId: vet.id,
+    animalId: animals[2]?._id,
+    amount: 40,
+    source: 'vet',
+    concept: 'Vacunación y desparasitación',
+    couponId: coupons[1]?._id,
+  });
 
-  console.log('Seed completed');
-  console.log(`Landlord -> landlord@example.com / ${password}`);
-  console.log(`Tenant   -> tenant@example.com / ${password}`);
-  console.log(`Pro      -> pro@example.com / ${password}`);
-  console.log(`Properties created: ${p1.id}, ${p2.id}`);
-  console.log(`Ticket created: ${t.id}`);
+  console.log('Seed completado:');
+  console.log(`Protectora 1 -> ${protectoras[0]?.email} / ${password}`);
+  console.log(`Protectora 2 -> ${protectoras[1]?.email} / ${password}`);
+  console.log(`Tienda       -> ${store.email} / ${password}`);
+  console.log(`Veterinario  -> ${vet.email} / ${password}`);
+  console.log(`Adoptante    -> ${adopter.email} / ${password}`);
+  console.log(`Animales     -> ${animals.map(a => `${a.name} (${a.code})`).join(', ')}`);
+  console.log(`Cupones      -> ${coupons.map(c => c.copy).join(', ')}`);
   await mongoose.disconnect();
 }
 

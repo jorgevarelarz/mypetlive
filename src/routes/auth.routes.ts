@@ -11,7 +11,6 @@ router.post(
     body('name').isString().notEmpty(),
     body('email').isEmail(),
     body('password').isLength({ min: 6 }),
-    body('role').isIn(['landlord', 'tenant', 'pro']),
   ],
   validate,
   asyncHandler(register),

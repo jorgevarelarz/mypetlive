@@ -3,6 +3,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import morgan from 'morgan';
+import path from 'path';
 
 import { purgeOldTenantProDocs } from './jobs/tenantProRetention';
 import logger from './utils/logger';
@@ -38,6 +39,15 @@ import adminEarningsRoutes from './routes/admin.earnings.routes';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
 import applicationRoutes from './routes/application.routes';
 import colivingRoutes from './routes/coliving.routes';
+import animalRoutes from './routes/animal.routes';
+import adoptionRoutes from './routes/adoption.routes';
+import donationsRoutes from './routes/donations.routes';
+import patitasRoutes from './routes/patitas.routes';
+import couponRoutes from './routes/coupon.routes';
+import adminCouponRoutes from './routes/coupon.admin.routes';
+import purchaseRoutes from './routes/purchase.routes';
+import questionnaireRoutes from './routes/questionnaire.routes';
+import { ensureAnimalCodes } from './models/animal.model';
 
 import { errorHandler } from './middleware/errorHandler';
 import { requireAdmin } from './middleware/requireAdmin';
@@ -152,7 +162,7 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Proteger contra HTTP Parameter Pollution en query; no tocar body JSON para evitar falsos positivos
 app.use(hpp({ checkBody: false, checkQuery: true }));
 // Serve uploaded files
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const tenantProLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -199,21 +209,37 @@ app.use('/api', tenantProMeRoutes);
 app.use('/api', requireVerified, appointmentsRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/coliving', colivingRoutes);
+// Rental routes/UI preserved but hidden for tenants — kept for future reuse
+app.use('/api/animals', animalRoutes);
+app.use('/api/adoptions', adoptionRoutes);
+app.use('/api', donationsRoutes);
+app.use('/api', patitasRoutes);
+app.use('/api', couponRoutes);
+app.use('/api/purchases', purchaseRoutes);
+
+app.use(
+  '/api/admin/coupons',
+  authenticate,
+  requireVerified,
+  requireAdmin,
+  adminCouponRoutes,
+);
+app.use('/api', questionnaireRoutes);
 
 // Protected routes (verified users)
 app.use('/api/contracts', contractPublicRoutes);
-app.use('/api/contracts', requireVerified, contractRoutes);
-app.use('/api', requireVerified, contractPaymentsRoutes);
-app.use('/api/users', requireVerified, userRoutes);
-app.use('/api/pros', requireVerified, proRoutes);
+app.use('/api/contracts', authenticate, requireVerified, contractRoutes);
+app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
+app.use('/api/users', authenticate, requireVerified, userRoutes);
+app.use('/api/pros', authenticate, requireVerified, proRoutes);
 app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
-app.use('/api/reviews', requireVerified, reviewRoutes);
-app.use('/api/chat', requireVerified, chatRoutes);
+app.use('/api/reviews', authenticate, requireVerified, reviewRoutes);
+app.use('/api/chat', authenticate, requireVerified, chatRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
-app.use('/api', requireVerified, connectRoutes);
-app.use('/api', requireVerified, signatureRoutes);
-app.use('/api', requireVerified, serviceOffersRoutes);
+app.use('/api', authenticate, requireVerified, connectRoutes);
+app.use('/api', authenticate, requireVerified, signatureRoutes);
+app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
 
 // Admin
 app.use(
@@ -239,6 +265,7 @@ if (mongoUrl) {
     .connect(mongoUrl)
     .then(() => {
       if (process.env.NODE_ENV !== 'test') {
+        void ensureAnimalCodes().catch(err => logger.warn({ err }, 'No se pudieron asignar códigos a todos los animales'));
         server = app.listen(PORT, () => logger.info(`Servidor en http://localhost:${PORT}`));
         setInterval(() => purgeOldTenantProDocs().catch(() => {}), 6 * 60 * 60 * 1000);
       }

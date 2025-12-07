@@ -15,7 +15,7 @@ import {
 type AuthCtx = {
   token: string | null;
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   hasRole: (...roles: User["role"][]) => boolean;
   legalStatus: LegalStatus | null;
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const u = await apiLogin(email, password);
     setUser(u);
     await refreshLegalStatus();
+    return u;
   };
 
   const logout = () => {

@@ -46,7 +46,8 @@ function asUser(token: string) {
 }
 
 describe("E2E Smoke", () => {
-jest.setTimeout(180_000);
+  const prevSignProvider = process.env.SIGN_PROVIDER;
+  jest.setTimeout(180_000);
 
   let landlord: any;
   let tenant: any;
@@ -68,6 +69,11 @@ jest.setTimeout(180_000);
   afterAll(async () => {
     await clearDb();
     await disconnectDb();
+    if (prevSignProvider === undefined) {
+      delete process.env.SIGN_PROVIDER;
+    } else {
+      process.env.SIGN_PROVIDER = prevSignProvider;
+    }
   });
 
   it("bootstrap users & logins", async () => {
