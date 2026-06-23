@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, Link, NavLink } from 'react-router-dom';
+import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import navConfig from '../config/nav.config.json';
@@ -56,7 +56,7 @@ function Header() {
     : user?.role === 'pro' ? '/pro'
     : user?.role === 'admin' ? '/admin'
     : user?.role === 'store' || user?.role === 'vet' ? '/partner'
-    : '/animals';
+    : '/';
   return (
     <header
       className="sticky top-0 z-20 backdrop-blur"
@@ -258,16 +258,23 @@ function SideNav() {
 }
 
 export default function AppShell() {
+  const { pathname } = useLocation();
+  const isPublicCatalog = pathname === '/animals';
+
   return (
     <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
-      <Header />
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
-        <SideNav />
-        <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2">
-          <Breadcrumbs />
-          <Outlet />
-        </main>
-      </div>
+      {!isPublicCatalog && <Header />}
+      {isPublicCatalog ? (
+        <Outlet />
+      ) : (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
+          <SideNav />
+          <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2">
+            <Breadcrumbs />
+            <Outlet />
+          </main>
+        </div>
+      )}
     </div>
   );
 }
