@@ -113,6 +113,7 @@ export default function Sistema() {
           </Link>
           <div style={{ display: 'flex', gap: 22, fontSize: 14, fontWeight: 600 }}>
             <Link to="/sistema" style={{ textDecoration: 'none', color: '#1F6F6F' }}>Sistema</Link>
+            <Link to="/mood" style={{ textDecoration: 'none', color: '#6B7464' }}>Mood</Link>
             <Link to="/" style={{ textDecoration: 'none', color: '#6B7464' }}>Home</Link>
             <Link to="/animals" style={{ textDecoration: 'none', color: '#6B7464' }}>Catálogo</Link>
           </div>

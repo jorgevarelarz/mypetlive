@@ -8,6 +8,7 @@ import ErrorCard from '../../components/ui/ErrorCard';
 import { toAbsoluteUrl } from '../../utils/media';
 import { BrandWordmark, MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
+import { useAuthModal } from '../../context/AuthModalContext';
 
 const speciesOptions = [
   { label: 'Perro', value: 'dog' },
@@ -56,6 +57,7 @@ function Chip({
 }
 
 export default function AnimalsPublicList() {
+  const { openAuth } = useAuthModal();
   const [sp, setSp] = useSearchParams();
   const page = Number(sp.get('page') || '1');
   const limit = Number(sp.get('limit') || '12');
@@ -122,7 +124,7 @@ export default function AnimalsPublicList() {
             <Link className="catalog-link" to="/animals" style={{ color: MPL.teal }}>Adoptar</Link>
             <Link className="catalog-link" to="/#como">Cómo funciona</Link>
             <Link className="catalog-link" to="/#impacto">Impacto</Link>
-            <Link className="catalog-link" to="/landlord">Protectoras</Link>
+            <button type="button" className="catalog-link" onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })} style={{ border: 0, background: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}>Protectoras</button>
           </nav>
           <Link to="/animals" style={{ background: MPL.coral, color: '#fff', fontSize: 14.5, fontWeight: 800, padding: '11px 22px', borderRadius: 14, textDecoration: 'none' }}>
             Adoptar
