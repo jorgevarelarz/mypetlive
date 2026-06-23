@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import navConfig from '../config/nav.config.json';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
-import AuthModal from '../components/auth/AuthModal';
 import Brand from '../components/Brand';
 import { listConversations } from '../api/chat';
 
@@ -269,7 +268,6 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
-      <AuthModal />
     </div>
   );
 }

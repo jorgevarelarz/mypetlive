@@ -1,8 +1,11 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AuthModalProvider } from "./context/AuthModalContext";
+import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
+import Landing from "./pages/home/Landing";
+import Sistema from "./pages/Sistema";
 import LoginPage from "./pages/auth/LoginPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
@@ -39,14 +42,21 @@ const tenantHome = <Navigate to="/home" replace />;
 const protectoraHome = <Navigate to="/landlord" replace />;
 const adminHome = <Navigate to="/admin" replace />;
 
+// Entrada pública: usuarios anónimos ven la landing; los logueados van a su panel.
+function HomeGate() {
+  const { user } = useAuth();
+  return user ? <RedirectHome /> : <Landing />;
+}
+
 export default function AppRoutes() {
   return (
     <AuthProvider>
       <AuthModalProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<HomeGate />} />
+            <Route path="/sistema" element={<Sistema />} />
             <Route element={<AppShell />}>
-              <Route path="/" element={<RedirectHome />} />
               <Route path="/animals" element={<AnimalsPublicList />} />
               <Route path="/animals/:id" element={<AnimalDetail />} />
               <Route path="/coupons" element={<CouponsList />} />
@@ -112,6 +122,7 @@ export default function AppRoutes() {
               <Route path="/legal-consent" element={<ProtectedRoute><LegalConsentPage /></ProtectedRoute>} />
             </Route>
           </Routes>
+          <AuthModal />
         </BrowserRouter>
       </AuthModalProvider>
     </AuthProvider>
