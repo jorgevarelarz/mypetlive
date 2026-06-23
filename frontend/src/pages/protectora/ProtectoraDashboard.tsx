@@ -1,28 +1,47 @@
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { CheckCircle2, ClipboardList, HeartHandshake, Home, Inbox, LayoutGrid, Plus, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { searchAnimals } from '../../api/animals';
-import { listAdoptionsForMyAnimals } from '../../api/adoptions';
+import { ADOPTION_STATUS_LABEL, listAdoptionsForMyAnimals } from '../../api/adoptions';
 import { getPatitasBalance } from '../../api/patitas';
-
-const ANIMAL_STATUS_LABEL: Record<string, string> = {
-  borrador: 'Borrador',
-  publicado: 'Publicado',
-  reservado: 'Reservado',
-  preadoptado: 'Preadoptado',
-  adoptado: 'Adoptado',
-  no_disponible: 'No disponible',
-  archivado: 'Archivado',
-};
+import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 
 const OPEN_ADOPTION_STATES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada'];
+const KANBAN = [
+  { key: 'recibida', title: 'Recibida', color: MPL.goldDark },
+  { key: 'en_revision', title: 'En revisión', color: MPL.goldDark },
+  { key: 'cita_propuesta', title: 'Cita propuesta', color: MPL.coralDark },
+  { key: 'preaprobada', title: 'Preaprobada', color: MPL.tealDark },
+  { key: 'aprobada', title: 'Aprobada', color: MPL.oliveDark },
+];
 
-function Kpi({ label, value, tone = '#3F4A3C' }: { label: string; value: React.ReactNode; tone?: string }) {
+function StatCard({
+  icon,
+  value,
+  label,
+  note,
+  tone = MPL.teal,
+  dark = false,
+}: {
+  icon: React.ReactNode;
+  value: React.ReactNode;
+  label: string;
+  note?: string;
+  tone?: string;
+  dark?: boolean;
+}) {
   return (
-    <div className="rounded-2xl border p-4 bg-white" style={{ borderColor: '#E7E1D5' }}>
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1" style={{ color: tone }}>{value}</div>
+    <div style={{ background: dark ? MPL.teal : '#fff', border: dark ? 'none' : `1px solid ${MPL.border}`, borderRadius: 20, padding: 22, color: dark ? '#fff' : MPL.ink }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <span style={{ width: 36, height: 36, borderRadius: 11, background: dark ? 'rgba(255,255,255,.18)' : `${tone}18`, color: dark ? '#fff' : tone, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {icon}
+        </span>
+        {note && <span style={{ fontSize: 12, color: dark ? '#F6D78A' : MPL.oliveDark, fontWeight: 800 }}>{note}</span>}
+      </div>
+      <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 34, fontWeight: 800, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 13.5, color: dark ? 'rgba(255,255,255,.82)' : MPL.muted, marginTop: 5 }}>{label}</div>
     </div>
   );
 }
@@ -50,85 +69,155 @@ export default function ProtectoraDashboard() {
 
   const animals = useMemo(() => animalsQ.data?.items || [], [animalsQ.data?.items]);
   const adoptions = useMemo(() => adoptionsQ.data?.items || [], [adoptionsQ.data?.items]);
-
-  const byStatus = useMemo(() => {
-    const acc: Record<string, number> = {};
-    for (const a of animals) acc[a.status] = (acc[a.status] || 0) + 1;
+  const published = animals.filter((animal: any) => animal.status === 'publicado').length;
+  const adopted = animals.filter((animal: any) => animal.status === 'adoptado').length;
+  const openAdoptions = adoptions.filter((a: any) => OPEN_ADOPTION_STATES.includes(a.status)).length;
+  const grouped = useMemo(() => {
+    const acc: Record<string, any[]> = {};
+    for (const column of KANBAN) acc[column.key] = [];
+    for (const adoption of adoptions) {
+      if (acc[adoption.status]) acc[adoption.status].push(adoption);
+    }
     return acc;
-  }, [animals]);
-
-  const openAdoptions = useMemo(
-    () => adoptions.filter((a: any) => OPEN_ADOPTION_STATES.includes(a.status)).length,
-    [adoptions],
-  );
+  }, [adoptions]);
 
   return (
-    <div className="p-4 grid gap-5">
-      <header>
-        <h1 className="text-2xl font-semibold">Hola{user?.name ? `, ${user.name}` : ''}</h1>
-        <p className="text-gray-600">Resumen de tu protectora y accesos rápidos.</p>
-      </header>
+    <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
+      <style>{`
+        .shelter-shell{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh;}
+        .shelter-main{padding:34px 36px 56px;}
+        .shelter-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;}
+        .shelter-kanban{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px;}
+        @media (max-width: 1080px){.shelter-shell{grid-template-columns:1fr}.shelter-aside{display:none}.shelter-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.shelter-main{padding:26px 16px 48px}}
+        @media (max-width: 620px){.shelter-stats{grid-template-columns:1fr}.shelter-head{display:grid!important;gap:16px}.shelter-head a{width:100%;justify-content:center}}
+      `}</style>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Animales totales" value={animalsQ.isLoading ? '…' : animals.length} />
-        <Kpi label="Publicados" value={animalsQ.isLoading ? '…' : (byStatus.publicado || 0)} tone="#2F855A" />
-        <Kpi label="Solicitudes en proceso" value={adoptionsQ.isLoading ? '…' : openAdoptions} tone="#2B6CB0" />
-        <Kpi label="Patitas disponibles" value={patitasQ.isLoading ? '…' : (patitasQ.data?.patitas ?? 0)} tone="#6A7B4F" />
+      <div className="shelter-shell">
+        <aside className="shelter-aside" style={{ background: '#fff', borderRight: `1px solid ${MPL.border}`, padding: 22, display: 'flex', flexDirection: 'column', gap: 26 }}>
+          <Link to="/landlord" style={{ textDecoration: 'none', color: MPL.ink, display: 'flex', alignItems: 'center', gap: 9 }}>
+            <PawMark size={23} color={MPL.teal} />
+            <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800 }}>MyPet<span style={{ color: MPL.coral }}>Live</span></span>
+          </Link>
+          <nav style={{ display: 'grid', gap: 5 }}>
+            {[
+              { label: 'Dashboard', to: '/landlord', icon: <LayoutGrid size={18} />, active: true },
+              { label: 'Animales', to: '/landlord/animals', icon: <PawMark size={18} /> },
+              { label: 'Solicitudes', to: '/landlord/adoptions', icon: <Inbox size={18} /> },
+              { label: 'Cuestionarios', to: '/landlord/questionnaire', icon: <ClipboardList size={18} /> },
+              { label: 'Configuración', to: '/profile', icon: <Settings size={18} /> },
+            ].map(item => (
+              <Link key={item.to} to={item.to} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', borderRadius: 12, background: item.active ? MPL.teal100 : 'transparent', color: item.active ? MPL.tealDark : MPL.muted, fontSize: 14.5, fontWeight: 800, textDecoration: 'none' }}>
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <div style={{ marginTop: 'auto', background: MPL.bg, borderRadius: 16, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 11, background: MPL.teal, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Home size={17} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name || 'Protectora'}</div>
+                <div style={{ fontSize: 11.5, color: MPL.faint }}>Protectora · Pro</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="shelter-main">
+          <header className="shelter-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, marginBottom: 26 }}>
+            <div>
+              <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 4 }}>Hola de nuevo</div>
+              <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, fontWeight: 800, margin: 0 }}>Dashboard</h1>
+            </div>
+            <Link to="/landlord/animals" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.coral, color: '#fff', fontSize: 14.5, fontWeight: 800, padding: '12px 22px', borderRadius: 14, textDecoration: 'none', boxShadow: '0 6px 16px -8px rgba(232,101,74,.7)' }}>
+              <Plus size={17} />
+              Publicar animal
+            </Link>
+          </header>
+
+          <section className="shelter-stats">
+            <StatCard icon={<PawMark size={18} />} value={animalsQ.isLoading ? '...' : animals.length} label="animales publicados" note={`${published} visibles`} tone={MPL.teal} />
+            <StatCard icon={<Inbox size={18} />} value={adoptionsQ.isLoading ? '...' : openAdoptions} label="solicitudes en proceso" note={`${adoptions.length} total`} tone={MPL.gold} />
+            <StatCard icon={<CheckCircle2 size={18} />} value={animalsQ.isLoading ? '...' : adopted} label="adopciones cerradas" note="histórico" tone={MPL.olive} />
+            <StatCard icon={<PawMark size={18} />} value={patitasQ.isLoading ? '...' : (patitasQ.data?.patitas ?? 0)} label="Patitas disponibles" note="impacto" dark />
+          </section>
+
+          <section style={{ marginTop: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 14 }}>
+              <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, fontWeight: 800, margin: 0 }}>Solicitudes de adopción</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Link to="/landlord/adoptions" style={{ background: '#fff', border: `1px solid ${MPL.border}`, fontSize: 13, fontWeight: 800, color: MPL.muted, padding: '8px 14px', borderRadius: 10, textDecoration: 'none' }}>
+                  Ver lista
+                </Link>
+                <span style={{ background: '#fff', border: `1px solid ${MPL.border}`, fontSize: 13, fontWeight: 800, color: MPL.muted, padding: '8px 14px', borderRadius: 10 }}>
+                  Kanban
+                </span>
+              </div>
+            </div>
+
+            <div style={{ background: '#EAE6DC', borderRadius: 18, padding: 12 }}>
+              {adoptionsQ.isLoading ? (
+                <div style={{ color: MPL.muted, padding: 18 }}>Cargando solicitudes...</div>
+              ) : (
+                <div className="shelter-kanban">
+                  {KANBAN.map(column => {
+                    const cards = grouped[column.key] || [];
+                    return (
+                      <div key={column.key} style={{ minWidth: 220 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 7px 12px' }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 800, color: column.color }}>{column.title}</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: MPL.faint, background: '#fff', padding: '2px 9px', borderRadius: 999 }}>{cards.length}</span>
+                        </div>
+                        <div style={{ display: 'grid', gap: 9 }}>
+                          {cards.slice(0, 4).map((card: any) => (
+                            <Link key={card.id || card._id} to={`/adoptions/${card.id || card._id}`} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 14, padding: 13, textDecoration: 'none', color: MPL.ink, boxShadow: '0 1px 2px rgba(31,55,40,.05)' }}>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 9 }}>
+                                <div style={{ width: 34, height: 34, borderRadius: 9, background: '#E6E0D2', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.teal }}>
+                                  <HeartHandshake size={17} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.adopter?.name || 'Adoptante'}</div>
+                                  <div style={{ fontSize: 11.5, color: MPL.faint }}>para {card.animal?.name || 'Animal'}</div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                <span style={{ fontSize: 11.5, color: MPL.muted }}>{ADOPTION_STATUS_LABEL[card.status as keyof typeof ADOPTION_STATUS_LABEL] || card.status}</span>
+                                <span style={{ fontSize: 11, color: MPL.faint, fontFamily: MPL_FONT_MONO }}>
+                                  {card.createdAt ? new Date(card.createdAt).toLocaleDateString() : ''}
+                                </span>
+                              </div>
+                            </Link>
+                          ))}
+                          {cards.length === 0 && (
+                            <div style={{ background: 'rgba(255,255,255,.55)', border: `1px dashed ${MPL.border}`, borderRadius: 14, padding: 14, color: MPL.faint, fontSize: 13 }}>
+                              Sin solicitudes.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16, marginTop: 24 }}>
+            <Link to="/landlord/animals" style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 20, textDecoration: 'none', color: MPL.ink }}>
+              <PawMark size={22} color={MPL.teal} />
+              <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, marginTop: 12 }}>Mis animales</div>
+              <div style={{ color: MPL.muted, fontSize: 14, marginTop: 4 }}>Crea, edita y publica fichas.</div>
+            </Link>
+            <Link to="/landlord/questionnaire" style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 20, textDecoration: 'none', color: MPL.ink }}>
+              <ShieldCheck size={22} color={MPL.teal} />
+              <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, marginTop: 12 }}>Cuestionario</div>
+              <div style={{ color: MPL.muted, fontSize: 14, marginTop: 4 }}>Define preguntas para candidaturas.</div>
+            </Link>
+          </section>
+        </main>
       </div>
-
-      <section className="grid md:grid-cols-3 gap-3">
-        <Link to="/landlord/animals" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">Mis animales</div>
-          <div className="text-sm text-gray-600 mt-1">Crea, edita, publica y archiva fichas.</div>
-        </Link>
-        <Link to="/landlord/adoptions" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">Solicitudes de adopción</div>
-          <div className="text-sm text-gray-600 mt-1">Gestiona candidaturas por estados.</div>
-        </Link>
-        <Link to="/landlord/questionnaire" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">Cuestionario</div>
-          <div className="text-sm text-gray-600 mt-1">Define las preguntas para adoptantes.</div>
-        </Link>
-      </section>
-
-      <section className="grid md:grid-cols-2 gap-4">
-        <div className="rounded-2xl border p-4 bg-white" style={{ borderColor: '#E7E1D5' }}>
-          <h2 className="font-semibold mb-2">Animales por estado</h2>
-          {animalsQ.isLoading ? (
-            <div className="text-gray-500">Cargando…</div>
-          ) : animals.length === 0 ? (
-            <div className="text-gray-600">Aún no tienes animales. <Link to="/landlord/animals" className="text-emerald-700 underline">Crea el primero</Link>.</div>
-          ) : (
-            <ul className="grid gap-1 text-sm">
-              {Object.entries(ANIMAL_STATUS_LABEL).map(([key, label]) => (
-                <li key={key} className="flex justify-between border-b last:border-0 py-1" style={{ borderColor: '#F0ECE2' }}>
-                  <span className="text-gray-600">{label}</span>
-                  <span className="font-medium">{byStatus[key] || 0}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="rounded-2xl border p-4 bg-white" style={{ borderColor: '#E7E1D5' }}>
-          <h2 className="font-semibold mb-2">Solicitudes recientes</h2>
-          {adoptionsQ.isLoading ? (
-            <div className="text-gray-500">Cargando…</div>
-          ) : adoptions.length === 0 ? (
-            <div className="text-gray-600">Sin solicitudes todavía.</div>
-          ) : (
-            <ul className="grid gap-2 text-sm">
-              {adoptions.slice(0, 6).map((it: any) => (
-                <li key={it.id} className="flex justify-between">
-                  <span className="text-gray-700">{it.animal?.name || 'Animal'} · {it.adopter?.name || 'Adoptante'}</span>
-                  <span className="text-xs uppercase tracking-wide text-gray-500">{it.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link to="/landlord/adoptions" className="inline-block mt-3 text-emerald-700 underline text-sm">Ver todas</Link>
-        </div>
-      </section>
     </div>
   );
 }
