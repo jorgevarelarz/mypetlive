@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { getAnimal } from '../../api/animals';
 import { createAdoption } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
+import { useAuthModal } from '../../context/AuthModalContext';
 import { toast } from 'react-hot-toast';
 import { echoPatita } from '../../api/patitas';
 import { getQuestionnaireByProtectora } from '../../api/questionnaire';
@@ -12,6 +13,7 @@ import { toAbsoluteUrl } from '../../utils/media';
 export default function AnimalDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { openAuth } = useAuthModal();
   const nav = useNavigate();
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['animal', id],
@@ -68,12 +70,24 @@ export default function AnimalDetail() {
     },
   });
 
-  const handleAdoptClick = () => {
+  const proceedAdopt = () => {
     if (questions.length > 0) {
       setQuestionnaireOpen(true);
       return;
     }
     adoptionMutation.mutate(undefined);
+  };
+
+  const handleAdoptClick = () => {
+    if (!user) {
+      openAuth({
+        mode: 'register',
+        message: 'Crea tu cuenta para solicitar la adopción.',
+        onSuccess: proceedAdopt,
+      });
+      return;
+    }
+    proceedAdopt();
   };
 
   const submitAnswers = () => {
@@ -105,7 +119,7 @@ export default function AnimalDetail() {
     return <Navigate to="/pet" replace />;
   }
   const a: any = data;
-  const canAdopt = a.status === 'available';
+  const canAdopt = a.status === 'publicado';
   const images = Array.isArray(a.images) ? a.images : [];
   const currentImage = images[activeIndex] || images[0];
   const personality = Array.isArray(a.personality) ? a.personality.slice(0, 3) : [];

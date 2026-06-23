@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
 
-const allowedStatuses = ['available', 'foster', 'pending', 'adopted', 'unavailable'];
+const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
 export async function create(req: Request, res: Response) {
   const b: any = req.body || {};
@@ -60,13 +60,50 @@ export async function getByCode(req: Request, res: Response) {
   res.json(animal);
 }
 
-export async function search(req: Request, res: Response) {
-  const animals = await Animal.find({
-    createdByRole: 'protectora',
-    status: 'available',
-  }).lean();
+const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
 
-  res.json(animals);
+export async function search(req: Request, res: Response) {
+  const { q, species, size, sex, shelter, code, status, sort, dir } = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '24'), 10) || 24));
+
+  const filter: any = { createdByRole: 'protectora', isPersonalPet: { $ne: true } };
+
+  // Visibilidad: admin ve todo; la protectora dueña ve todos sus estados; el público solo los publicados.
+  const user: any = (req as any).user;
+  const isAdmin = user?.role === 'admin';
+  const isOwnerView = shelter && user && String(user._id || user.id) === String(shelter);
+
+  if (shelter) filter.shelter = shelter;
+
+  if (isAdmin || isOwnerView) {
+    if (status) filter.status = status;
+  } else {
+    filter.status = status && PUBLIC_STATUSES.includes(status) ? status : { $in: PUBLIC_STATUSES };
+  }
+
+  if (species) filter.species = species;
+  if (size) filter.size = size;
+  if (sex) filter.sex = sex;
+  if (code) filter.code = String(code).trim().toUpperCase();
+  if (q) {
+    const rx = new RegExp(String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ name: rx }, { breed: rx }, { species: rx }, { description: rx }];
+  }
+
+  const sortField = sort === 'name' ? 'name' : 'createdAt';
+  const sortDir = dir === 'asc' ? 1 : -1;
+
+  const [items, total] = await Promise.all([
+    Animal.find(filter)
+      .sort({ [sortField]: sortDir })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Animal.countDocuments(filter),
+  ]);
+
+  res.json({ items, page, limit, total });
 }
 
 export async function updateStatus(req: Request, res: Response) {
@@ -128,7 +165,7 @@ export async function createPersonal(req: Request, res: Response) {
     mood: mood || undefined,
     sex: sex || undefined,
     size: size || undefined,
-    status: 'available',
+    status: 'no_disponible',
   });
 
   res.status(201).json(doc);
@@ -141,7 +178,7 @@ export async function listMine(req: Request, res: Response) {
 
   const [personalDocs, adoptions] = await Promise.all([
     Animal.find({ ownerId: userId, isPersonalPet: true }),
-    Adoption.find({ adopterId: userId, status: 'accepted' }).lean(),
+    Adoption.find({ adopterId: userId, status: 'aprobada' }).lean(),
   ]);
 
   const personal = [] as any[];

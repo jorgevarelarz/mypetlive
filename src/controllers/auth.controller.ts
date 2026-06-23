@@ -50,11 +50,24 @@ export const register = async (req: Request, res: Response) => {
     if (!rawName || !rawEmail || !password) {
       throw badRequest('missing_fields');
     }
-    const allowedRoles = ['tenant', 'landlord', 'pro', 'admin', 'store', 'vet'];
+    // Roles a los que un usuario puede auto-registrarse (plataforma de mascotas).
+    // landlord/pro/admin quedan excluidos: no son auto-asignables.
+    // Alias: protectora->landlord, adoptante->tenant (ver role.middleware.normalizeRole).
+    const selfRegisterRoles: Record<string, string> = {
+      tenant: 'tenant',
+      adoptante: 'tenant',
+      protectora: 'landlord',
+      vet: 'vet',
+      store: 'store',
+    };
+    // En tests se permite además fijar roles privilegiados para preparar fixtures.
+    const testOnlyRoles = ['landlord', 'pro', 'admin'];
     let normalizedRole: string = 'tenant';
-    if (process.env.NODE_ENV === 'test') {
-      const requested = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
-      if (allowedRoles.includes(requested)) normalizedRole = requested;
+    const requested = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
+    if (requested in selfRegisterRoles) {
+      normalizedRole = selfRegisterRoles[requested];
+    } else if (process.env.NODE_ENV === 'test' && testOnlyRoles.includes(requested)) {
+      normalizedRole = requested;
     }
     // Generate the password hash
     const passwordHash = await bcrypt.hash(password, 10);

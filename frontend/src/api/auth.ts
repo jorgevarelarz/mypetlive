@@ -23,8 +23,8 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
-export async function register(name: string, email: string, password: string) {
-  await axios.post("/api/auth/register", { name, email, password });
+export async function register(name: string, email: string, password: string, role?: string) {
+  await axios.post("/api/auth/register", { name, email, password, role });
 }
 
 export function logout() {

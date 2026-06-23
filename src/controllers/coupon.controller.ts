@@ -51,21 +51,33 @@ export async function listCoupons(req: Request, res: Response) {
 export async function createCoupon(req: Request, res: Response) {
   const {
     partnerId,
+    partnerType,
     copy,
     title,
+    description,
     discount,
     active,
     targetAnimalCode,
     expiresAt,
     bonusPatitas,
   } = pickFields(req.body);
-  if (!partnerId || !isValidObjectId(partnerId)) {
-    return res.status(400).json({ error: 'invalid_partner' });
+
+  // Dos caminos: un partner concreto (se toma su rol) o un cupón
+  // creado por admin indicando el tipo de partner (store/vet).
+  let resolvedPartnerType: string | undefined = partnerType;
+  if (partnerId) {
+    if (!isValidObjectId(partnerId)) {
+      return res.status(400).json({ error: 'invalid_partner' });
+    }
+    const partner = await User.findById(partnerId).select('role');
+    if (!partner || !['store', 'vet'].includes(partner.role)) {
+      return res.status(400).json({ error: 'invalid_partner' });
+    }
+    resolvedPartnerType = partner.role;
+  } else if (!resolvedPartnerType || !['store', 'vet'].includes(resolvedPartnerType)) {
+    return res.status(400).json({ error: 'invalid_partner_type' });
   }
-  const partner = await User.findById(partnerId).select('role');
-  if (!partner || !['store', 'vet'].includes(partner.role)) {
-    return res.status(400).json({ error: 'invalid_partner' });
-  }
+
   const copyValue = copy || title;
   if (!copyValue || !discount) {
     return res.status(400).json({ error: 'missing_fields' });
@@ -78,10 +90,11 @@ export async function createCoupon(req: Request, res: Response) {
   }
 
   const coupon = await Coupon.create({
-    partnerId,
-    partnerType: partner.role,
+    ...(partnerId ? { partnerId } : {}),
+    partnerType: resolvedPartnerType,
     copy: copyValue,
-    title: copyValue,
+    title: title || copyValue,
+    description: description || undefined,
     discount,
     bonusPatitas: Number.isFinite(bonusPatitas as number) ? Number(bonusPatitas) : 0,
     targetAnimalCode: targetAnimalCode || undefined,

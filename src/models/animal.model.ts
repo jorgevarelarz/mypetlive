@@ -69,8 +69,8 @@ const animalSchema = new Schema(
     size: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
     status: {
       type: String,
-      enum: ['available', 'foster', 'pending', 'adopted', 'unavailable'],
-      default: 'available',
+      enum: ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'],
+      default: 'borrador',
       index: true,
     },
     personality: {

@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { AuthModalProvider } from "./context/AuthModalContext";
 import AppShell from "./layout/AppShell";
 import LoginPage from "./pages/auth/LoginPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -58,6 +59,7 @@ import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
 import MyAdoptions from "./pages/animals/MyAdoptions";
 import AdoptionDetail from "./pages/animals/AdoptionDetail";
+import ProtectoraDashboard from "./pages/protectora/ProtectoraDashboard";
 import AnimalsPage from "./pages/landlord/AnimalsPage";
 import AdoptionsPage from "./pages/landlord/AdoptionsPage";
 import QuestionnairePage from "./pages/landlord/QuestionnairePage";
@@ -70,6 +72,7 @@ import PetPage from "./pages/pet/PetPage";
 export default function AppRoutes() {
   return (
     <AuthProvider>
+      <AuthModalProvider>
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell />}>
@@ -80,7 +83,7 @@ export default function AppRoutes() {
             <Route path="/animals/:id" element={<AnimalDetail />} />
             <Route path="/adoptions/mine" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><MyAdoptions /></RoleGuard></ProtectedRoute>} />
             <Route path="/adoptions/:id" element={<ProtectedRoute><AdoptionDetail /></ProtectedRoute>} />
-            {/* <Route path="/donate" element={<DonationsPage />} /> */}
+            <Route path="/donate" element={<ProtectedRoute><DonationsPage /></ProtectedRoute>} />
             <Route path="/coupons" element={<CouponsList />} />
             <Route path="/pet" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><PetPage /></RoleGuard></ProtectedRoute>} />
             <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
@@ -92,7 +95,7 @@ export default function AppRoutes() {
             <Route path="/tenant/payments" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><TenantPayments /></RoleGuard></ProtectedRoute>} />
             <Route path="/tenant/applications" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><TenantApplications /></RoleGuard></ProtectedRoute>} />
             <Route path="/tenant/kyc" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><TenantKyc /></RoleGuard></ProtectedRoute>} />
-            <Route path="/landlord" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><LandlordDashboard /></RoleGuard></ProtectedRoute>} />
+            <Route path="/landlord" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><ProtectoraDashboard /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/animals" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AnimalsPage /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/adoptions" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AdoptionsPage /></RoleGuard></ProtectedRoute>} />
             <Route path="/landlord/questionnaire" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><QuestionnairePage /></RoleGuard></ProtectedRoute>} />
@@ -272,6 +275,7 @@ export default function AppRoutes() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </AuthModalProvider>
     </AuthProvider>
   );
 }

@@ -11,10 +11,27 @@ export default function AnimalsPublicList() {
   const page = Number(sp.get('page') || '1');
   const limit = Number(sp.get('limit') || '12');
   const q = sp.get('q') || undefined;
+  const species = sp.get('species') || undefined;
+  const size = (sp.get('size') as 'small' | 'medium' | 'large' | null) || undefined;
+  const sex = (sp.get('sex') as 'male' | 'female' | null) || undefined;
+
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(sp);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    next.set('page', '1');
+    setSp(next, { replace: false });
+  };
+
+  const setFilterPage = (p: number) => {
+    const next = new URLSearchParams(sp);
+    next.set('page', String(p));
+    setSp(next, { replace: false });
+  };
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['animals-public', { q, page, limit }],
-    queryFn: () => searchAnimals({ q, page, limit }),
+    queryKey: ['animals-public', { q, species, size, sex, page, limit }],
+    queryFn: () => searchAnimals({ q, species, size, sex, page, limit }),
     placeholderData: keepPreviousData,
     staleTime: 20_000,
   });
@@ -32,7 +49,7 @@ export default function AnimalsPublicList() {
             <span className="text-sm" style={{ color: '#7A8273' }}>{isFetching ? 'Actualizando…' : null}</span>
           </div>
           <p className="text-sm" style={{ color: '#7A8273' }}>Encuentra a tu próximo compañero.</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap items-center">
             <input
               className="border rounded px-3 py-2 w-full max-w-md"
               style={{ borderColor: '#E7E1D5' }}
@@ -40,15 +57,40 @@ export default function AnimalsPublicList() {
               defaultValue={q || ''}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
-                  const v = (e.target as HTMLInputElement).value;
-                  const next = new URLSearchParams(sp);
-                  if (v) next.set('q', v);
-                  else next.delete('q');
-                  next.set('page', '1');
-                  setSp(next, { replace: false });
+                  setFilter('q', (e.target as HTMLInputElement).value);
                 }
               }}
             />
+            <select
+              className="border rounded px-3 py-2"
+              style={{ borderColor: '#E7E1D5' }}
+              value={size || ''}
+              onChange={e => setFilter('size', e.target.value)}
+            >
+              <option value="">Tamaño</option>
+              <option value="small">Pequeño</option>
+              <option value="medium">Mediano</option>
+              <option value="large">Grande</option>
+            </select>
+            <select
+              className="border rounded px-3 py-2"
+              style={{ borderColor: '#E7E1D5' }}
+              value={sex || ''}
+              onChange={e => setFilter('sex', e.target.value)}
+            >
+              <option value="">Sexo</option>
+              <option value="female">Hembra</option>
+              <option value="male">Macho</option>
+            </select>
+            {(q || size || sex || species) && (
+              <button
+                className="text-sm underline"
+                style={{ color: '#7A8273' }}
+                onClick={() => setSp({ page: '1', limit: String(limit) }, { replace: false })}
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         </header>
 
@@ -105,11 +147,11 @@ export default function AnimalsPublicList() {
               })}
             </div>
             <nav className="flex items-center justify-center gap-2 mt-4" aria-label="Paginación">
-              <button className="px-3 py-1.5 rounded border" style={{ borderColor: '#E7E1D5' }} onClick={() => setSp({ q: q || '', page: String(Math.max(1, page - 1)), limit: String(limit) })} disabled={page <= 1}>
+              <button className="px-3 py-1.5 rounded border" style={{ borderColor: '#E7E1D5' }} onClick={() => setFilterPage(Math.max(1, page - 1))} disabled={page <= 1}>
                 Anterior
               </button>
               <span className="text-sm" style={{ color: '#7A8273' }}>Página {page} / {pages}</span>
-              <button className="px-3 py-1.5 rounded border" style={{ borderColor: '#E7E1D5' }} onClick={() => setSp({ q: q || '', page: String(Math.min(pages, page + 1)), limit: String(limit) })} disabled={page >= pages}>
+              <button className="px-3 py-1.5 rounded border" style={{ borderColor: '#E7E1D5' }} onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages}>
                 Siguiente
               </button>
             </nav>

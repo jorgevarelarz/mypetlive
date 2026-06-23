@@ -5,7 +5,7 @@ import * as ctrl from '../controllers/animal.controller';
 import { animalCreateSchema, animalUpdateSchema, animalStatusSchema } from '../validators/animal.schema';
 import asyncHandler from '../utils/asyncHandler';
 import { markFeeding, markLitter } from '../controllers/animalCare.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 
 const r = Router();
 
@@ -21,7 +21,7 @@ r.get('/mine', authenticate, asyncHandler(ctrl.listMine));
 // Public
 r.get('/code/:code', authenticate, asyncHandler(ctrl.getByCode));
 r.get('/:id', asyncHandler(ctrl.getById));
-r.get('/', asyncHandler(ctrl.search));
+r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));
 r.post('/:id/care/feed', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markFeeding));
 r.post('/:id/care/litter', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markLitter));
 

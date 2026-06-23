@@ -1,15 +1,14 @@
 {
   "general": [
-    { "label": "Conversaciones", "path": "/inbox" },
     { "label": "Animales", "path": "/animals" },
-    { "label": "Coliving", "path": "/coliving" },
-    { "label": "Donar", "path": "/donate" },
-    { "label": "Cupones", "path": "/coupons" }
+    { "label": "Cupones", "path": "/coupons" },
+    { "label": "Donar", "path": "/donate" }
   ],
   "tenantGeneral": [
     { "label": "Inicio", "path": "/home", "to": "/home" },
-    { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
     { "label": "Buscar animales", "path": "/animals", "to": "/animals" },
+    { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
+    { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
   ],
   "tenant": [],
@@ -18,39 +17,29 @@
     { "label": "Mis animales", "path": "/landlord/animals" },
     { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
-    { "label": "Mis propiedades", "path": "/owner/properties" },
-    { "label": "Contratos", "path": "/contracts" },
-    { "label": "Pagos", "path": "/landlord/payments" },
-    { "label": "Incidencias de mis propiedades", "path": "/landlord/issues" },
-    { "label": "Visitas", "path": "/landlord/showings" },
-    { "label": "Servicios", "path": "/landlord/services" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "pro": [
-    { "label": "Inicio", "path": "/pro" },
-    { "label": "Incidencias asignadas", "path": "/pro/tickets" },
-    { "label": "Presupuestos", "path": "/pro/quotes" },
-    { "label": "Facturación", "path": "/pro/billing" },
-    { "label": "Perfil profesional", "path": "/pro/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "admin": [
     { "label": "Inicio", "path": "/admin" },
     { "label": "Usuarios", "path": "/admin/users" },
-    { "label": "Verificación KYC / Tenant PRO", "path": "/admin/tenant-pro" },
     { "label": "Animales", "path": "/admin/animals" },
     { "label": "Adopciones", "path": "/admin/adoptions" },
     { "label": "Cupones", "path": "/admin/coupons" },
-    { "label": "Propiedades", "path": "/admin/properties" },
-    { "label": "Incidencias / Disputas", "path": "/admin/incidents" },
-    { "label": "Pagos", "path": "/admin/payments" },
     { "label": "Reportes", "path": "/admin/reports" },
     { "label": "Ajustes", "path": "/admin/settings" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "store": [
-    { "label": "Inicio", "path": "/partner" }
+    { "label": "Inicio", "path": "/partner" },
+    { "label": "Validar cupones", "path": "/coupons" },
+    { "label": "Patitas pendientes", "path": "/partner" }
   ],
   "vet": [
-    { "label": "Inicio", "path": "/partner" }
+    { "label": "Inicio", "path": "/partner" },
+    { "label": "Validar cupones", "path": "/coupons" },
+    { "label": "Patitas pendientes", "path": "/partner" }
   ]
 }

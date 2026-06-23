@@ -200,6 +200,7 @@ export default function PatitasPending() {
   });
 
   const isVet = user?.role === 'vet';
+  const treatmentMissing = isVet && selected?.source === 'vet' && !form.treatmentType.trim();
 
   const uploadProof = async (file?: File) => {
     if (!file) return;
@@ -473,4 +474,3 @@ export default function PatitasPending() {
     </div>
   );
 }
-  const treatmentMissing = isVet && selected?.source === 'vet' && !form.treatmentType.trim();

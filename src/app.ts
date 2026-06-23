@@ -196,19 +196,22 @@ app.get('/metrics', metricsHandler);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/kyc', identityRoutes);
-app.use('/api', propertyRoutes);
-app.use('/api', clausesRoutes);
 app.use('/api', legalRoutes);
 app.use('/api', uploadRoutes);
-app.use('/api', demoContractRoutes);
 app.use('/api/notify', notifyRoutes);
-app.use('/api', authenticate, postsignRouter);
-app.use('/api/tenant-pro', tenantProLimiter);
-app.use('/api', tenantProRoutes);
-app.use('/api', tenantProMeRoutes);
-app.use('/api', requireVerified, appointmentsRoutes);
-app.use('/api/applications', applicationRoutes);
-app.use('/api/coliving', colivingRoutes);
+// [FROZEN RentalApp] Mounts de alquiler desactivados durante la migración a MyPetLive.
+// OJO: postsign y appointments montaban authenticate/requireVerified sobre '/api' global,
+// lo que bloqueaba el catálogo público de animales. Congelados aquí.
+// app.use('/api', propertyRoutes);
+// app.use('/api', clausesRoutes);
+// app.use('/api', demoContractRoutes);
+// app.use('/api', authenticate, postsignRouter);
+// app.use('/api/tenant-pro', tenantProLimiter);
+// app.use('/api', tenantProRoutes);
+// app.use('/api', tenantProMeRoutes);
+// app.use('/api', requireVerified, appointmentsRoutes);
+// app.use('/api/applications', applicationRoutes);
+// app.use('/api/coliving', colivingRoutes);
 // Rental routes/UI preserved but hidden for tenants — kept for future reuse
 app.use('/api/animals', animalRoutes);
 app.use('/api/adoptions', adoptionRoutes);
@@ -227,19 +230,20 @@ app.use(
 app.use('/api', questionnaireRoutes);
 
 // Protected routes (verified users)
-app.use('/api/contracts', contractPublicRoutes);
-app.use('/api/contracts', authenticate, requireVerified, contractRoutes);
-app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
 app.use('/api/users', authenticate, requireVerified, userRoutes);
-app.use('/api/pros', authenticate, requireVerified, proRoutes);
-app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
 app.use('/api/reviews', authenticate, requireVerified, reviewRoutes);
 app.use('/api/chat', authenticate, requireVerified, chatRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
-app.use('/api', authenticate, requireVerified, connectRoutes);
-app.use('/api', authenticate, requireVerified, signatureRoutes);
-app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
+// [FROZEN RentalApp] Rutas protegidas de alquiler congeladas.
+// app.use('/api/contracts', contractPublicRoutes);
+// app.use('/api/contracts', authenticate, requireVerified, contractRoutes);
+// app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
+// app.use('/api/pros', authenticate, requireVerified, proRoutes);
+// app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
+// app.use('/api', authenticate, requireVerified, connectRoutes);
+// app.use('/api', authenticate, requireVerified, signatureRoutes);
+// app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
 
 // Admin
 app.use(

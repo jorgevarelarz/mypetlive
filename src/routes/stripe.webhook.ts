@@ -145,11 +145,41 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
         const amount = session.amount_total || 0;
         const paymentRef = session.payment_intent as string | undefined;
         const { Donation } = await import('../models/donation.model');
-        await Donation.findOneAndUpdate(
+        const donation = await Donation.findOneAndUpdate(
           { sessionId: session.id },
           { status: 'completed', paymentRef, amount, currency: session.currency?.toLowerCase() || 'eur' },
           { new: true }
         );
+        // Patitas de impacto por la donación (1 Patita por euro) a la protectora del animal.
+        try {
+          const animalId = donation?.animalId || (session.metadata?.animalId as string | undefined);
+          const patitas = Math.max(0, Math.round(amount / 100));
+          if (animalId && Types.ObjectId.isValid(animalId) && patitas > 0) {
+            const { Animal } = await import('../models/animal.model');
+            const animal = await Animal.findById(animalId).select('shelter').lean();
+            if (animal?.shelter) {
+              const { User } = await import('../models/user.model');
+              const { PatitaLog } = await import('../models/patitaLog.model');
+              await User.updateOne(
+                { _id: animal.shelter, role: { $in: ['landlord', 'protectora'] } },
+                { $inc: { patitas } },
+              );
+              const donorId = donation?.userId && Types.ObjectId.isValid(String(donation.userId))
+                ? String(donation.userId)
+                : String(animal.shelter);
+              await PatitaLog.create({
+                shelterId: animal.shelter,
+                userId: donorId,
+                animalId,
+                amount: patitas,
+                source: 'donation',
+                concept: 'Donación directa',
+              });
+            }
+          }
+        } catch (err: any) {
+          logger.error({ err, sessionId: session.id }, 'Error generando Patitas por donación');
+        }
       } else if (session.metadata?.deposit === 'true') {
         const contractId = session.metadata?.contractId;
         if (contractId) {

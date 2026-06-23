@@ -1,10 +1,11 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getAdoption } from '../../api/adoptions';
+import { getAdoption, setAdoptionStatus, ADOPTION_STATUS_LABEL, AdoptionShelterStatus } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
-import { setAdoptionStatus } from '../../api/adoptions';
 import { toast } from 'react-hot-toast';
+
+const MANAGE_ACTIONS: AdoptionShelterStatus[] = ['en_revision', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada'];
 
 export default function AdoptionDetail() {
   const { id } = useParams();
@@ -12,15 +13,15 @@ export default function AdoptionDetail() {
   const { data, isLoading, refetch } = useQuery({ queryKey: ['adoption', id], queryFn: ()=> getAdoption(id||''), enabled: !!id });
   if (isLoading || !data) return <div className="p-4">Cargando…</div>;
   const a: any = data;
-  const canManage = user?.role === 'landlord';
-  const decide = async (st: 'accepted'|'rejected') => {
+  const canManage = user?.role === 'landlord' || user?.role === 'admin';
+  const decide = async (st: AdoptionShelterStatus) => {
     try { await setAdoptionStatus(String(id), st); toast.success('Estado actualizado'); refetch(); } catch { toast.error('Error actualizando'); }
   };
   return (
     <div className="p-4 grid gap-2">
       <h1 className="text-xl font-semibold">Solicitud de adopción</h1>
       <div className="text-sm text-gray-700">ID: {a._id || a.id}</div>
-      <div className="text-sm text-gray-700">Estado: {a.status}</div>
+      <div className="text-sm text-gray-700">Estado: {ADOPTION_STATUS_LABEL[a.status as keyof typeof ADOPTION_STATUS_LABEL] || a.status}</div>
       {a.animal && (
         <div className="mt-2 border rounded p-2">
           <div className="font-medium">{a.animal.name}</div>
@@ -29,9 +30,12 @@ export default function AdoptionDetail() {
         </div>
       )}
       {canManage && (
-        <div className="mt-3 flex gap-2">
-          <button className="px-3 py-1 border rounded" onClick={()=>decide('accepted')}>Aceptar</button>
-          <button className="px-3 py-1 border rounded" onClick={()=>decide('rejected')}>Rechazar</button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {MANAGE_ACTIONS.map((st) => (
+            <button key={st} className="px-3 py-1 border rounded text-sm" onClick={()=>decide(st)}>
+              {ADOPTION_STATUS_LABEL[st]}
+            </button>
+          ))}
         </div>
       )}
     </div>

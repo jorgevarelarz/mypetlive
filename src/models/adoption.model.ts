@@ -1,6 +1,15 @@
 import { Schema, model, Document } from 'mongoose';
 
-export type AdoptionStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
+export type AdoptionStatus =
+  | 'recibida'
+  | 'cuestionario_pendiente'
+  | 'en_revision'
+  | 'info_adicional'
+  | 'cita_propuesta'
+  | 'preaprobada'
+  | 'aprobada'
+  | 'rechazada'
+  | 'cancelada';
 
 export interface IAdoptionHistoryItem {
   ts: Date;
@@ -31,7 +40,21 @@ const schema = new Schema<IAdoption>(
   {
     animalId: { type: String, required: true },
     adopterId: { type: String, required: true },
-    status: { type: String, enum: ['pending', 'accepted', 'rejected', 'cancelled'], default: 'pending' },
+    status: {
+      type: String,
+      enum: [
+        'recibida',
+        'cuestionario_pendiente',
+        'en_revision',
+        'info_adicional',
+        'cita_propuesta',
+        'preaprobada',
+        'aprobada',
+        'rechazada',
+        'cancelada',
+      ],
+      default: 'recibida',
+    },
     answers: { type: [answerSchema], default: [] },
   },
   { timestamps: true },

@@ -1,13 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { listAdoptionsForMyAnimals, setAdoptionStatus } from '../../api/adoptions';
+import {
+  listAdoptionsForMyAnimals,
+  setAdoptionStatus,
+  ADOPTION_STATUS_LABEL,
+  AdoptionShelterStatus,
+} from '../../api/adoptions';
 import { toast } from 'react-hot-toast';
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Pendiente',
-  accepted: 'Aceptada',
-  rejected: 'Rechazada',
-  cancelled: 'Cancelada',
+// Transiciones que ofrece el panel según el estado actual de la solicitud (dossier p.9).
+const NEXT_ACTIONS: Record<string, AdoptionShelterStatus[]> = {
+  recibida: ['en_revision', 'info_adicional', 'rechazada'],
+  cuestionario_pendiente: ['en_revision', 'info_adicional', 'rechazada'],
+  en_revision: ['cita_propuesta', 'info_adicional', 'preaprobada', 'rechazada'],
+  info_adicional: ['en_revision', 'cita_propuesta', 'rechazada'],
+  cita_propuesta: ['preaprobada', 'rechazada', 'cancelada'],
+  preaprobada: ['aprobada', 'rechazada', 'cancelada'],
+  aprobada: [],
+  rechazada: [],
+  cancelada: [],
+};
+
+const STATUS_TONE: Record<string, string> = {
+  aprobada: '#2F855A',
+  rechazada: '#C53030',
+  cancelada: '#718096',
+  preaprobada: '#2B6CB0',
 };
 
 export default function AdoptionsPage() {
@@ -15,21 +33,35 @@ export default function AdoptionsPage() {
     queryKey: ['adoptions-for-my-animals'],
     queryFn: () => listAdoptionsForMyAnimals({ page: 1, limit: 100 }),
   });
-  const onDecision = async (id: string, status: 'accepted' | 'rejected') => {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const onTransition = async (id: string, status: AdoptionShelterStatus) => {
+    let note: string | undefined;
+    if (status === 'info_adicional' || status === 'rechazada') {
+      note = window.prompt(
+        status === 'rechazada' ? 'Motivo del rechazo (opcional):' : '¿Qué información necesitas del adoptante?',
+      ) || undefined;
+    }
+    setBusyId(id);
     try {
-      await setAdoptionStatus(id, status);
+      await setAdoptionStatus(id, status, note);
       toast.success('Estado actualizado');
       refetch();
     } catch (e: any) {
-      toast.error('No se pudo actualizar');
+      toast.error(e?.response?.data?.error || 'No se pudo actualizar');
+    } finally {
+      setBusyId(null);
     }
   };
+
   const items = data?.items || [];
   return (
     <div className="p-4 grid gap-4">
       <div>
         <h1 className="text-xl font-semibold">Solicitudes de adopción</h1>
-        <p className="text-sm text-gray-600">Revisa las solicitudes pendientes y responde con un clic.</p>
+        <p className="text-sm text-gray-600">
+          Gestiona cada solicitud por estados: revisión, información adicional, cita, preaprobación y aprobación final.
+        </p>
       </div>
       {isLoading ? (
         <div>Cargando…</div>
@@ -37,35 +69,71 @@ export default function AdoptionsPage() {
         <div className="text-gray-600">No hay solicitudes.</div>
       ) : (
         <div className="grid gap-3">
-          {items.map((it: any) => (
-            <div key={it.id || it._id} className="border rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-              <div className="grid gap-2 flex-1">
-                <div className="font-semibold text-lg">{it.animal?.name || 'Animal'}</div>
-                <div className="text-sm text-gray-600">{it.adopter?.name || 'Adoptante'}{it.adopter?.email ? ` · ${it.adopter.email}` : ''}</div>
-                <div className="text-xs uppercase tracking-wide text-gray-500">{STATUS_LABEL[it.status] || it.status}</div>
-                {Array.isArray(it.answers) && it.answers.length > 0 && (
-                  <div className="mt-1">
-                    <div className="text-sm font-semibold" style={{ color: '#3F4A3C' }}>Respuestas del cuestionario</div>
-                    <ul className="mt-1 space-y-1 text-sm text-gray-700">
-                      {it.answers.map((ans: any, idx: number) => (
-                        <li key={idx}>
-                          <span className="font-medium">{ans.question}:</span> {ans.answer || '—'}
-                        </li>
-                      ))}
-                    </ul>
+          {items.map((it: any) => {
+            const id = it.id || it._id;
+            const actions = NEXT_ACTIONS[it.status] || [];
+            return (
+              <div
+                key={id}
+                className="border rounded-2xl p-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3"
+                style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
+              >
+                <div className="grid gap-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-lg">{it.animal?.name || 'Animal'}</span>
+                    {it.animal?.code && <span className="text-xs text-gray-500">#{it.animal.code}</span>}
                   </div>
-                )}
+                  <div className="text-sm text-gray-600">
+                    {it.adopter?.name || 'Adoptante'}
+                    {it.adopter?.email ? ` · ${it.adopter.email}` : ''}
+                  </div>
+                  <div
+                    className="text-xs uppercase tracking-wide font-semibold"
+                    style={{ color: STATUS_TONE[it.status] || '#6B7280' }}
+                  >
+                    {ADOPTION_STATUS_LABEL[it.status as keyof typeof ADOPTION_STATUS_LABEL] || it.status}
+                  </div>
+                  {Array.isArray(it.answers) && it.answers.length > 0 && (
+                    <div className="mt-1">
+                      <div className="text-sm font-semibold" style={{ color: '#3F4A3C' }}>
+                        Respuestas del cuestionario
+                      </div>
+                      <ul className="mt-1 space-y-1 text-sm text-gray-700">
+                        {it.answers.map((ans: any, idx: number) => (
+                          <li key={idx}>
+                            <span className="font-medium">{ans.question}:</span> {ans.answer || '—'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 md:justify-end md:max-w-[300px]">
+                  {actions.length === 0 ? (
+                    <span className="text-xs text-gray-400">Proceso cerrado</span>
+                  ) : (
+                    actions.map((action) => (
+                      <button
+                        key={action}
+                        disabled={busyId === id}
+                        className="px-3 py-1.5 rounded border text-sm disabled:opacity-50"
+                        style={
+                          action === 'aprobada'
+                            ? { background: '#2F855A', color: '#fff', borderColor: '#2F855A' }
+                            : action === 'rechazada'
+                            ? { color: '#C53030', borderColor: '#FEB2B2' }
+                            : { borderColor: '#E7E1D5' }
+                        }
+                        onClick={() => onTransition(id, action)}
+                      >
+                        {ADOPTION_STATUS_LABEL[action]}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button className="px-3 py-1.5 rounded border" onClick={() => onDecision(it.id || it._id, 'accepted')}>
-                  Aceptar
-                </button>
-                <button className="px-3 py-1.5 rounded border" onClick={() => onDecision(it.id || it._id, 'rejected')}>
-                  Rechazar
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

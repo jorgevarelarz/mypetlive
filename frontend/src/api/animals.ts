@@ -1,6 +1,13 @@
 import { api as client } from './client';
 
-export type AnimalStatus = 'available' | 'foster' | 'pending' | 'adopted' | 'unavailable';
+export type AnimalStatus =
+  | 'borrador'
+  | 'publicado'
+  | 'reservado'
+  | 'preadoptado'
+  | 'adoptado'
+  | 'no_disponible'
+  | 'archivado';
 export type AnimalMood = 'relajado' | 'timido' | 'energico' | 'en_adaptacion';
 
 export type AnimalSearchParams = {

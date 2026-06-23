@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 
 const couponSchema = new Schema(
   {
-    partnerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    partnerId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     partnerType: { type: String, enum: ['store', 'vet'], required: true },
     copy: { type: String, required: true },
     title: { type: String },

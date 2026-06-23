@@ -8,6 +8,15 @@ export const adoptionCreateSchema = z.object({
 });
 
 export const adoptionStatusSchema = z.object({
-  status: z.enum(['accepted', 'rejected']),
+  status: z.enum([
+    'en_revision',
+    'info_adicional',
+    'cita_propuesta',
+    'preaprobada',
+    'aprobada',
+    'rechazada',
+    'cancelada',
+  ]),
+  note: z.string().max(1000).optional(),
 });
 

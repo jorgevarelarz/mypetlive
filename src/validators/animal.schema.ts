@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
-const statusEnum = z.enum(['available', 'foster', 'pending', 'adopted', 'unavailable']);
+const statusEnum = z.enum(['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado']);
 const moodEnum = z.enum(['relajado', 'timido', 'energico', 'en_adaptacion']);
 
 export const animalCreateSchema = z.object({

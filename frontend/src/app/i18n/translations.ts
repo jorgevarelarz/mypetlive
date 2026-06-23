@@ -3,7 +3,7 @@ export type Locale = 'es' | 'en';
 export const messages: Record<Locale, Record<string, string>> = {
   es: {
     'app.loading': 'Cargando…',
-    'app.search.placeholder': 'Buscar en RentalApp',
+    'app.search.placeholder': 'Buscar en MyPetLive',
     'app.notifications': 'Notificaciones',
     'app.help': 'Ayuda',
     'app.profile': 'Perfil',
@@ -60,7 +60,7 @@ export const messages: Record<Locale, Record<string, string>> = {
   },
   en: {
     'app.loading': 'Loading…',
-    'app.search.placeholder': 'Search RentalApp',
+    'app.search.placeholder': 'Search MyPetLive',
     'app.notifications': 'Notifications',
     'app.help': 'Help',
     'app.profile': 'Profile',

@@ -1,0 +1,54 @@
+services:
+  mongo:
+    image: mongo:6
+    container_name: mypetlive_mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks: [mypetlive]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: mypetlive_api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      ALLOW_UNVERIFIED: "true"
+      PORT: "3000"
+      MONGO_URI: "mongodb://mongo:27017/mypetlive"
+      JWT_SECRET: "${JWT_SECRET}"
+      CORS_ORIGIN: "${CORS_ORIGIN}"
+      ESCROW_DRIVER: mock
+      SIGN_PROVIDER: mock
+      SMS_PROVIDER: mock
+    ports:
+      - "3000:3000"
+    networks: [mypetlive]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        REACT_APP_API_URL: "${REACT_APP_API_URL}"
+    container_name: mypetlive_web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks: [mypetlive]
+
+networks:
+  mypetlive:
+
+volumes:
+  mongo_data:

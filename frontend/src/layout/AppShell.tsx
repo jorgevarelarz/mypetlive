@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAuthModal } from '../context/AuthModalContext';
 import navConfig from '../config/nav.config.json';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
+import AuthModal from '../components/auth/AuthModal';
+import Brand from '../components/Brand';
 import { listConversations } from '../api/chat';
 
 type NavItem = { label: string; path?: string; to?: string };
@@ -17,6 +20,7 @@ const resolvePath = (item: NavItem) => item.path || item.to || '#';
 
 function Header() {
   const { user, logout } = useAuth();
+  const { openAuth } = useAuthModal();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
@@ -44,7 +48,7 @@ function Header() {
     : user?.role === 'pro' ? '/pro'
     : user?.role === 'admin' ? '/admin'
     : user?.role === 'store' || user?.role === 'vet' ? '/partner'
-    : '/login';
+    : '/animals';
   const labelFor: Record<string, string> = {
     tenant: 'Adoptante',
     landlord: 'Protectora',
@@ -62,7 +66,7 @@ function Header() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3"
         style={{ color: '#3F4A3C' }}
       >
-        <Link to={roleHome} className="text-lg" style={{ fontWeight: 500 }}>AnimalApp</Link>
+        <Link to={roleHome} aria-label="MyPetLive — inicio"><Brand size={19} /></Link>
 
         {/* Menú compacto en móviles */}
         <button
@@ -99,7 +103,16 @@ function Header() {
         </nav>
         <div className="ml-auto flex items-center gap-2 text-sm">
           {!user ? (
-            <Link to="/login" className="px-3 py-1.5 rounded">Entrar</Link>
+            <>
+              <button onClick={() => openAuth({ mode: 'login' })} className="px-3 py-1.5 rounded">Entrar</button>
+              <button
+                onClick={() => openAuth({ mode: 'register' })}
+                className="px-3 py-1.5 rounded font-medium"
+                style={{ background: '#6A7B4F', color: '#fff' }}
+              >
+                Crear cuenta
+              </button>
+            </>
           ) : (
             <>
               <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {user.role}</span>
@@ -262,6 +275,7 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+      <AuthModal />
     </div>
   );
 }

@@ -11,7 +11,7 @@ export default function RedirectHome() {
       : user?.role === 'pro' ? '/pro'
       : user?.role === 'admin' ? '/admin'
       : user?.role === 'store' || user?.role === 'vet' ? '/partner'
-      : '/login';
+      : '/animals';
     nav(path, { replace: true });
   }, [user, nav]);
   return null;

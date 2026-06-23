@@ -21,7 +21,7 @@ export async function create(req: Request, res: Response) {
   if (animal.isPersonalPet === true || animal.createdByRole !== 'protectora') {
     return res.status(400).json({ error: 'animal_not_available' });
   }
-  if (animal.status !== 'available') return res.status(400).json({ error: 'animal_not_available' });
+  if (animal.status !== 'publicado') return res.status(400).json({ error: 'animal_not_available' });
 
   let requiredQuestions: string[] = [];
   if (animal.shelter) {
@@ -57,9 +57,12 @@ export async function create(req: Request, res: Response) {
   const created = await Adoption.create({
     animalId: String(animal._id),
     adopterId: String(userId),
-    status: 'pending',
+    status: 'recibida',
     answers: normalizedAnswers,
-    history: message ? [{ action: 'message', payload: { message: message.slice(0, 500) } }] : [],
+    history: [
+      { action: 'created' },
+      ...(message ? [{ action: 'message', payload: { message: message.slice(0, 500) } }] : []),
+    ],
   });
   res.status(201).json({ ok: true, id: created._id, status: created.status });
 }
@@ -141,11 +144,24 @@ export async function listForMyAnimals(req: Request, res: Response) {
   });
 }
 
+// Etiquetas legibles para el correo al adoptante.
+const STATUS_LABEL_ES: Record<string, string> = {
+  recibida: 'recibida',
+  cuestionario_pendiente: 'cuestionario pendiente',
+  en_revision: 'en revisión',
+  info_adicional: 'pendiente de información adicional',
+  cita_propuesta: 'cita propuesta',
+  preaprobada: 'preaprobada',
+  aprobada: 'aprobada',
+  rechazada: 'rechazada',
+  cancelada: 'cancelada',
+};
+
 export async function setStatus(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
   const { id } = req.params;
-  const { status } = req.body as { status: 'accepted' | 'rejected' };
+  const { status, note } = req.body as { status: import('../models/adoption.model').AdoptionStatus; note?: string };
 
   const app = await Adoption.findById(id);
   if (!app) return res.status(404).json({ error: 'not_found' });
@@ -153,31 +169,48 @@ export async function setStatus(req: Request, res: Response) {
   // Ensure this adoption belongs to an animal of the shelter
   const animal = await Animal.findById(app.animalId);
   if (!animal) return res.status(404).json({ error: 'animal_not_found' });
-  if (String(animal.shelter) !== String(userId)) return res.status(403).json({ error: 'forbidden' });
+  const user: any = (req as any).user;
+  const isAdmin = user?.role === 'admin';
+  if (!isAdmin && String(animal.shelter) !== String(userId)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
 
   app.status = status;
   app.history = app.history || [];
-  app.history.push({ ts: new Date(), actorId: String(userId), action: 'status_change', payload: { status } });
+  app.history.push({
+    ts: new Date(),
+    actorId: String(userId),
+    action: 'status_change',
+    payload: { status, ...(note ? { note: note.slice(0, 1000) } : {}) },
+  });
   await app.save();
 
-  if (status === 'accepted') {
+  if (status === 'aprobada') {
+    // Cierre de adopción: la mascota pasa a ser del adoptante.
     if (app.adopterId) {
       animal.ownerId = new Types.ObjectId(String(app.adopterId));
     }
     animal.createdByRole = 'tenant';
     animal.isPersonalPet = true;
-    animal.status = 'adopted';
+    animal.status = 'adoptado';
     await animal.save();
-  } else if (animal.status !== 'adopted') {
+  } else if (['preaprobada', 'cita_propuesta'].includes(status) && animal.status === 'publicado') {
+    // Proceso avanzado: el animal deja de estar libremente disponible.
+    animal.status = 'reservado';
+    await animal.save();
+  } else if ((status === 'rechazada' || status === 'cancelada') && animal.status === 'reservado') {
+    // Se libera de nuevo si el proceso se detiene.
+    animal.status = 'publicado';
     await animal.save();
   }
+
   try {
     const adopter = await User.findById(app.adopterId);
     if (adopter?.email) {
-      const subject = status === 'accepted' ? '¡Tu adopción ha sido aceptada!' : 'Estado de tu solicitud de adopción';
-      const msg = status === 'accepted'
-        ? `¡Enhorabuena! La protectora ha aceptado tu adopción para ${animal.name}.`
-        : `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${status}.`;
+      const subject = status === 'aprobada' ? '¡Tu adopción ha sido aprobada!' : 'Estado de tu solicitud de adopción';
+      const msg = status === 'aprobada'
+        ? `¡Enhorabuena! La protectora ha aprobado tu adopción para ${animal.name}.`
+        : `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
       await sendEmail(adopter.email, subject, msg);
     }
   } catch {}

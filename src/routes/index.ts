@@ -27,6 +27,12 @@ import proRoutes from './pro.routes';
 import propertyRoutes from './property.routes';
 import animalRoutes from './animal.routes';
 import adoptionRoutes from './adoption.routes';
+import couponRoutes from './coupon.routes';
+import couponAdminRoutes from './coupon.admin.routes';
+import donationsRoutes from './donations.routes';
+import patitasRoutes from './patitas.routes';
+import questionnaireRoutes from './questionnaire.routes';
+import purchaseRoutes from './purchase.routes';
 import reviewRoutes from './review.routes';
 import serviceOffersRoutes from './serviceOffers.routes';
 import signatureRoutes from './signature.routes';
@@ -65,38 +71,50 @@ const tenantProLimiter = rateLimit({
 router.use('/auth', authLimiter, authRoutes);
 router.use('/verification', verificationRoutes);
 router.use('/kyc', identityRoutes);
-router.use('/properties', propertyRoutes);
 router.use('/animals', animalRoutes);
 router.use('/adoptions', adoptionRoutes);
-router.use('/coliving', colivingRoutes);
-router.use('/clauses', clausesRoutes);
+router.use('/', couponRoutes);
+router.use('/', donationsRoutes);
+router.use('/', patitasRoutes);
+router.use('/', questionnaireRoutes);
 router.use('/legal', legalRoutes);
 router.use('/upload', uploadRoutes);
-router.use('/demo-contract', demoContractRoutes);
-router.use('/applications', applicationRoutes);
 router.use('/notify', notifyRoutes);
-router.use('/postsign', authenticate, postsignRoutes);
-router.use('/tenant-pro', tenantProLimiter, tenantProRoutes);
-router.use('/tenant-pro/me', tenantProMeRoutes);
 router.use('/appointments', requireVerified, appointmentsRoutes);
 
+// [FROZEN RentalApp] Rutas de alquiler congeladas durante la migración a MyPetLive.
+// router.use('/properties', propertyRoutes);
+// router.use('/coliving', colivingRoutes);
+// router.use('/clauses', clausesRoutes);
+// router.use('/demo-contract', demoContractRoutes);
+// router.use('/applications', applicationRoutes);
+// router.use('/postsign', authenticate, postsignRoutes);
+// router.use('/tenant-pro', tenantProLimiter, tenantProRoutes);
+// router.use('/tenant-pro/me', tenantProMeRoutes);
+
 // Protected routes (verified users)
-router.use('/contracts', authenticate, requireVerified, contractRoutes);
 router.use('/users', authenticate, requireVerified, userRoutes);
-router.use('/pros', authenticate, requireVerified, proRoutes);
-router.use('/tickets', authenticate, requireVerified, ticketRoutes);
 router.use('/reviews', authenticate, requireVerified, reviewRoutes);
 router.use('/chat', authenticate, requireVerified, chatRoutes);
-router.use('/contract-payments', authenticate, requireVerified, contractPaymentsRoutes);
 router.use('/payments', paymentsLimiter, paymentsRoutes);
-router.use('/connect', authenticate, requireVerified, connectRoutes);
-router.use('/signature', authenticate, requireVerified, signatureRoutes);
-router.use('/service-offers', authenticate, requireVerified, serviceOffersRoutes);
+router.use('/purchases', purchaseRoutes);
+
+// [FROZEN RentalApp] Rutas protegidas de alquiler congeladas.
+// router.use('/contracts', authenticate, requireVerified, contractRoutes);
+// router.use('/pros', authenticate, requireVerified, proRoutes);
+// router.use('/tickets', authenticate, requireVerified, ticketRoutes);
+// router.use('/contract-payments', authenticate, requireVerified, contractPaymentsRoutes);
+// router.use('/connect', authenticate, requireVerified, connectRoutes);
+// router.use('/signature', authenticate, requireVerified, signatureRoutes);
+// router.use('/service-offers', authenticate, requireVerified, serviceOffersRoutes);
 
 // Admin
 router.use('/admin', authenticate, requireVerified, requireAdmin, adminRoutes);
-router.use('/admin/earnings', authenticate, requireVerified, requireAdmin, adminEarningsRoutes);
-router.use('/admin/tenant-pro', authenticate, requireVerified, requireAdmin, adminTenantProRoutes);
+router.use('/admin/coupons', authenticate, requireVerified, requireAdmin, couponAdminRoutes);
+
+// [FROZEN RentalApp] Admin de alquiler congelado.
+// router.use('/admin/earnings', authenticate, requireVerified, requireAdmin, adminEarningsRoutes);
+// router.use('/admin/tenant-pro', authenticate, requireVerified, requireAdmin, adminTenantProRoutes);
 
 // Stripe webhook
 

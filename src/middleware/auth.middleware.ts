@@ -63,3 +63,32 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     res.status(401).json({ error: 'Token inválido' });
   }
 };
+
+/**
+ * Optional authentication: if a valid Bearer token (or test headers) is present,
+ * attaches req.user; otherwise continues anonymously without a 401.
+ * Useful for public endpoints whose response varies for the owner (e.g. catálogo
+ * de animales que para la protectora dueña muestra también borradores).
+ */
+export const optionalAuthenticate = (req: Request, _res: Response, next: NextFunction) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    if (process.env.NODE_ENV === 'test' && req.headers['x-user-id']) {
+      (req as any).user = {
+        id: req.headers['x-user-id'] as string,
+        _id: req.headers['x-user-id'] as string,
+        role: (req.headers['x-user-role'] as string) || 'tenant',
+        isVerified: true,
+      };
+    }
+    return next();
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const resolvedId = decoded._id || decoded.id;
+    (req as any).user = { ...decoded, id: resolvedId, _id: resolvedId };
+  } catch {
+    // Token inválido en endpoint público: continuar como anónimo.
+  }
+  next();
+};

@@ -16,11 +16,13 @@ import { getPatitasBalance, spendPatitas } from '../../api/patitas';
 import { listCoupons, type Coupon } from '../../api/coupons';
 
 const STATUS_OPTIONS: Array<{ value: AnimalStatus; label: string }> = [
-  { value: 'available', label: 'Disponible' },
-  { value: 'pending', label: 'Pendiente' },
-  { value: 'foster', label: 'En acogida' },
-  { value: 'adopted', label: 'Adoptado' },
-  { value: 'unavailable', label: 'No disponible' },
+  { value: 'borrador', label: 'Borrador' },
+  { value: 'publicado', label: 'Publicado' },
+  { value: 'reservado', label: 'Reservado' },
+  { value: 'preadoptado', label: 'Preadoptado' },
+  { value: 'adoptado', label: 'Adoptado' },
+  { value: 'no_disponible', label: 'No disponible' },
+  { value: 'archivado', label: 'Archivado' },
 ];
 
 const PERSONALITY_OPTIONS = ['Juguetón', 'Curioso', 'Sociable', 'Tranquilo', 'Independiente', 'Cariñoso'];
@@ -40,7 +42,7 @@ const INITIAL_FORM = {
   age: '',
   size: 'medium',
   description: '',
-  status: 'available' as AnimalStatus,
+  status: 'borrador' as AnimalStatus,
   personality: [] as string[],
   mood: '' as '' | AnimalMood,
 };

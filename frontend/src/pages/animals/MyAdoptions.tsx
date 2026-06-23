@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { listMyAdoptions } from '../../api/adoptions';
+import { listMyAdoptions, ADOPTION_STATUS_LABEL } from '../../api/adoptions';
 import { Link } from 'react-router-dom';
 
 export default function MyAdoptions() {
@@ -21,7 +21,7 @@ export default function MyAdoptions() {
                   <div className="font-medium">{it.animal?.name || 'Animal'}</div>
                   <div className="text-sm text-gray-600">{it.animal?.species}{it.animal?.breed ? ` · ${it.animal.breed}` : ''}</div>
                 </div>
-                <div className="text-sm text-gray-700">Estado: {it.status}</div>
+                <div className="text-sm text-gray-700">Estado: {ADOPTION_STATUS_LABEL[it.status as keyof typeof ADOPTION_STATUS_LABEL] || it.status}</div>
               </div>
               <div className="flex gap-3">
                 <Link to={`/animals/${it.animal?._id || it.animal?.id || ''}`} className="text-emerald-700 hover:underline text-sm">Ver animal</Link>
