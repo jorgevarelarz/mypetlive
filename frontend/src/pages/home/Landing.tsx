@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { searchAnimals } from '../../api/animals';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
+import MobileBottomNav from '../../components/MobileBottomNav';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
@@ -55,17 +56,45 @@ export default function Landing() {
         .lp-card{transition:transform .18s ease, box-shadow .18s ease;}
         .lp-card:hover{transform:translateY(-4px);box-shadow:0 1px 3px rgba(31,55,40,.06),0 22px 44px -22px rgba(31,55,40,.28) !important;}
         .lp-cta:hover{filter:brightness(1.05);}
+        @media (max-width: 900px){
+          .lp-navlinks{display:none!important;}
+          .lp-topbar{padding:14px 20px!important;}
+          .lp-hero-section{padding:28px 20px 20px!important;}
+          .lp-hero-grid,.lp-impact-grid{grid-template-columns:1fr!important;gap:24px!important;}
+          .lp-hero-grid h1{font-size:34px!important;letter-spacing:0!important;}
+          .lp-hero-grid p{font-size:14px!important;}
+          .lp-hero-visual{display:none!important;}
+          .lp-actions{flex-direction:column!important;}
+          .lp-actions a,.lp-actions button{width:100%;text-align:center!important;}
+          .lp-stats{gap:18px!important;overflow-x:auto;padding-bottom:4px;}
+          .lp-featured-section{padding:24px 20px!important;}
+          .lp-featured-head p{display:none!important;}
+          .lp-pets-grid{display:flex!important;overflow-x:auto;gap:12px!important;padding-bottom:6px;scroll-snap-type:x proximity;}
+          .lp-pets-grid a{width:150px!important;min-width:150px!important;border-radius:18px!important;scroll-snap-align:start;}
+          .lp-pets-grid a > div:first-child{height:120px!important;}
+          .lp-pets-grid a > div:last-child{padding:11px 13px 14px!important;}
+          .lp-steps-wrap{padding:42px 20px!important;}
+          .lp-steps-wrap h2{font-size:28px!important;letter-spacing:0!important;}
+          .lp-steps-grid{grid-template-columns:1fr!important;}
+          .lp-impact-section{padding:42px 20px!important;}
+          .lp-impact-section h2{font-size:30px!important;letter-spacing:0!important;}
+          .lp-impact-metrics{grid-template-columns:1fr 1fr!important;}
+          .lp-cta-section{padding:0 20px 88px!important;margin-bottom:0!important;}
+          .lp-cta-band{display:grid!important;padding:28px!important;border-radius:22px!important;}
+          .lp-cta-band h2{font-size:28px!important;letter-spacing:0!important;}
+          .lp-footer{display:none!important;}
+        }
       `}</style>
 
       <div className="lp">
         {/* NAV */}
         <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'rgba(246,243,236,.86)', backdropFilter: 'blur(10px)', borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ maxWidth: 1180, margin: '0 auto', padding: '15px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="lp-topbar" style={{ maxWidth: 1180, margin: '0 auto', padding: '15px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ color: C.teal, display: 'inline-flex' }}><Paw size={24} /></span>
               <span style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, letterSpacing: '-.02em' }}>MyPet<span style={{ color: C.coral }}>Live</span></span>
             </Link>
-            <div style={{ display: 'flex', gap: 28, fontSize: 14.5, fontWeight: 600, color: '#6B7464', alignItems: 'center' }}>
+            <div className="lp-navlinks" style={{ display: 'flex', gap: 28, fontSize: 14.5, fontWeight: 600, color: '#6B7464', alignItems: 'center' }}>
               <Link className="lp-navlink" to="/animals">Adoptar</Link>
               <a className="lp-navlink" href="#como">Cómo funciona</a>
               <a className="lp-navlink" href="#impacto">Impacto</a>
@@ -79,8 +108,8 @@ export default function Landing() {
         </div>
 
         {/* HERO */}
-        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '60px 32px 40px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 48, alignItems: 'center' }}>
+        <section className="lp-hero-section" style={{ maxWidth: 1180, margin: '0 auto', padding: '60px 32px 40px' }}>
+          <div className="lp-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 48, alignItems: 'center' }}>
             <div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: C.teal100, color: '#176363', fontSize: 13, fontWeight: 700, padding: '8px 15px', borderRadius: 999, marginBottom: 24 }}>
                 <Paw size={15} />
@@ -88,18 +117,18 @@ export default function Landing() {
               </div>
               <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 62, lineHeight: .98, fontWeight: 800, letterSpacing: '-.03em', margin: '0 0 22px' }}>Encuentra a tu <span style={{ color: C.teal }}>nuevo mejor</span> <span style={{ color: C.coral }}>amigo</span></h1>
               <p style={{ fontSize: 19, lineHeight: 1.55, color: C.muted, margin: '0 0 32px', maxWidth: 480 }}>Adopción responsable, simple y transparente. Conectamos protectoras y familias, y acompañamos cada paso después de adoptar.</p>
-              <div style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
+              <div className="lp-actions" style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
                 <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
                 <button className="lp-cta" onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })} style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14, cursor: 'pointer' }}>Soy protectora</button>
               </div>
-              <div style={{ display: 'flex', gap: 32 }}>
+              <div className="lp-stats" style={{ display: 'flex', gap: 32 }}>
                 <div><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{data?.total ?? '—'}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>animales</div></div>
                 <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>+85</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>protectoras</div></div>
                 <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.gold }}>126k</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Patitas generadas</div></div>
               </div>
             </div>
             {/* hero visual */}
-            <div style={{ position: 'relative' }}>
+            <div className="lp-hero-visual" style={{ position: 'relative' }}>
               <div className={heroImg ? '' : 'lp-ph'} style={{ aspectRatio: '4/4.4', borderRadius: 28, backgroundColor: '#E6E0D2', overflow: 'hidden', boxShadow: '0 20px 60px -30px rgba(31,55,40,.5)' }}>
                 {heroImg && <img src={toAbsoluteUrl(heroImg.images[0])} alt={heroImg.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               </div>
@@ -119,8 +148,8 @@ export default function Landing() {
         </section>
 
         {/* DESTACADOS */}
-        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 32px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 26 }}>
+        <section className="lp-featured-section" style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 32px' }}>
+          <div className="lp-featured-head" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 26 }}>
             <div>
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 34, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 6px' }}>Buscan hogar ahora</h2>
               <p style={{ fontSize: 16, color: C.muted, margin: 0 }}>Animales destacados de protectoras verificadas.</p>
@@ -130,7 +159,7 @@ export default function Landing() {
           {pets.length === 0 ? (
             <div style={{ color: C.muted, padding: '24px 0' }}>Pronto verás aquí los animales destacados.</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
+            <div className="lp-pets-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
               {pets.map((p: any) => {
                 const img = Array.isArray(p.images) ? p.images[0] : null;
                 const meta = [p.species, SIZE_LABEL[p.size] || p.size].filter(Boolean).join(' · ');
@@ -162,12 +191,12 @@ export default function Landing() {
 
         {/* COMO FUNCIONA */}
         <section id="como" style={{ background: C.panel, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, marginTop: 32 }}>
-          <div style={{ maxWidth: 1180, margin: '0 auto', padding: '68px 32px' }}>
+          <div className="lp-steps-wrap" style={{ maxWidth: 1180, margin: '0 auto', padding: '68px 32px' }}>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
               <div style={{ fontSize: 13, letterSpacing: '.16em', textTransform: 'uppercase', color: C.faint, fontWeight: 700, marginBottom: 12 }}>Cómo funciona</div>
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, letterSpacing: '-.02em', margin: 0 }}>De conocer a convivir, en 5 pasos</h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 18 }}>
+            <div className="lp-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 18 }}>
               {STEPS.map(s => (
                 <div key={s.n} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: '26px 22px' }}>
                   <div style={{ width: 46, height: 46, borderRadius: 14, background: C.teal100, color: C.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
@@ -184,15 +213,15 @@ export default function Landing() {
         </section>
 
         {/* IMPACTO */}
-        <section id="impacto" style={{ maxWidth: 1180, margin: '0 auto', padding: '72px 32px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '.9fr 1.1fr', gap: 48, alignItems: 'center' }}>
+        <section className="lp-impact-section" id="impacto" style={{ maxWidth: 1180, margin: '0 auto', padding: '72px 32px' }}>
+          <div className="lp-impact-grid" style={{ display: 'grid', gridTemplateColumns: '.9fr 1.1fr', gap: 48, alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 13, letterSpacing: '.16em', textTransform: 'uppercase', color: C.faint, fontWeight: 700, marginBottom: 14 }}>Nuestro impacto</div>
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 42, lineHeight: 1.02, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 18px' }}>Cada adopción mueve todo un ecosistema</h2>
               <p style={{ fontSize: 17, lineHeight: 1.6, color: C.muted, margin: '0 0 24px' }}>Las <strong style={{ color: '#A77B1C' }}>Patitas</strong> son nuestra moneda de impacto: cada compra con cupón, donación o campaña genera valor que financia directamente a las protectoras.</p>
               <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Empieza a sumar Patitas →</Link>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
               <div style={{ background: C.teal, color: '#fff', borderRadius: 20, padding: 28 }}>
                 <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}>85</div>
                 <div style={{ fontSize: 14, color: 'rgba(255,255,255,.85)', marginTop: 8 }}>protectoras activas</div>
@@ -214,8 +243,8 @@ export default function Landing() {
         </section>
 
         {/* CTA BANNER */}
-        <section style={{ maxWidth: 1180, margin: '0 auto 72px', padding: '0 32px' }}>
-          <div style={{ background: C.teal, borderRadius: 28, padding: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32, overflow: 'hidden', position: 'relative' }}>
+        <section className="lp-cta-section" style={{ maxWidth: 1180, margin: '0 auto 72px', padding: '0 32px' }}>
+          <div className="lp-cta-band" style={{ background: C.teal, borderRadius: 28, padding: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32, overflow: 'hidden', position: 'relative' }}>
             <div style={{ position: 'relative', zIndex: 2 }}>
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 38, fontWeight: 800, letterSpacing: '-.02em', color: '#fff', margin: '0 0 12px' }}>¿Listo para conocer a tu compañero?</h2>
               <p style={{ fontSize: 17, color: 'rgba(255,255,255,.85)', margin: 0, maxWidth: 440 }}>Explora el catálogo y filtra por lo que de verdad encaja contigo.</p>
@@ -226,7 +255,7 @@ export default function Landing() {
         </section>
 
         {/* FOOTER */}
-        <footer style={{ background: C.ink, color: '#E6E0D2' }}>
+        <footer className="lp-footer" style={{ background: C.ink, color: '#E6E0D2' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 32px 32px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 32, paddingBottom: 40, borderBottom: '1px solid rgba(255,255,255,.12)' }}>
               <div>
@@ -263,6 +292,7 @@ export default function Landing() {
           </div>
         </footer>
       </div>
+      <MobileBottomNav />
     </div>
   );
 }

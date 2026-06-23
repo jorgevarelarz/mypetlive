@@ -168,7 +168,8 @@ export default function AnimalDetail() {
         .detail-wrap{max-width:1180px;margin:0 auto;padding:30px 32px 64px;}
         .detail-grid{display:grid;grid-template-columns:minmax(0,1.1fr) 360px;gap:28px;align-items:start;}
         .detail-gallery{display:grid;grid-template-columns:1fr 112px;gap:12px;}
-        @media (max-width: 920px){.detail-grid{grid-template-columns:1fr}.detail-side{position:static!important}.detail-gallery{grid-template-columns:1fr}.detail-thumbs{display:flex!important;overflow:auto}.detail-wrap{padding:22px 16px 48px}}
+        .detail-mobile-cta{display:none;}
+        @media (max-width: 920px){.detail-grid{grid-template-columns:1fr}.detail-side{position:static!important}.detail-adopt-card{display:none!important}.detail-gallery{grid-template-columns:1fr}.detail-thumbs{display:flex!important;overflow:auto}.detail-wrap{padding:0 0 96px}.detail-wrap > button{margin:16px 20px!important}.detail-gallery{display:block}.detail-gallery > div:first-child{min-height:300px!important;border-radius:0!important;box-shadow:none!important}.detail-thumbs{display:none!important}.detail-grid{gap:0!important}.detail-grid > div:first-child{gap:14px!important}.detail-grid section:not(.detail-gallery){margin-left:20px!important;margin-right:20px!important}.detail-grid h1{font-size:30px!important}.detail-mobile-cta{position:fixed;left:0;right:0;bottom:0;z-index:36;display:flex;gap:12px;align-items:center;background:#fff;border-top:1px solid ${MPL.border};padding:14px 20px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 30px -24px rgba(31,55,40,.35)}}
       `}</style>
 
       <main className="detail-wrap">
@@ -270,7 +271,7 @@ export default function AnimalDetail() {
           </div>
 
           <aside className="detail-side" style={{ position: 'sticky', top: 92, display: 'grid', gap: 16 }}>
-            <section style={{ background: MPL.teal, color: '#fff', borderRadius: 22, padding: 24, position: 'relative', overflow: 'hidden' }}>
+            <section className="detail-adopt-card" style={{ background: MPL.teal, color: '#fff', borderRadius: 22, padding: 24, position: 'relative', overflow: 'hidden' }}>
               <span style={{ position: 'absolute', right: -22, bottom: -28, color: 'rgba(255,255,255,.10)' }}><PawMark size={150} /></span>
               <div style={{ position: 'relative' }}>
                 <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, lineHeight: 1.05, fontWeight: 800, marginBottom: 10 }}>
@@ -310,6 +311,15 @@ export default function AnimalDetail() {
           </aside>
         </div>
       </main>
+
+      <div className="detail-mobile-cta">
+        <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
+          {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+        </button>
+        <button type="button" onClick={handlePatitaClick} disabled={patitaMutation.isPending || !shelterId} aria-label="Echar una Patita" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.gold, cursor: shelterId ? 'pointer' : 'not-allowed' }}>
+          <PawMark size={22} />
+        </button>
+      </div>
 
       {questionnaireOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(31,55,40,.42)', padding: 16 }}>

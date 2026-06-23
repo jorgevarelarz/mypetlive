@@ -7,6 +7,7 @@ import SkeletonGrid from '../../components/ui/SkeletonGrid';
 import ErrorCard from '../../components/ui/ErrorCard';
 import { toAbsoluteUrl } from '../../utils/media';
 import { BrandWordmark, MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, sizeLabel, speciesLabel } from '../../styles/mypetlive';
+import MobileBottomNav from '../../components/MobileBottomNav';
 
 const speciesOptions = [
   { label: 'Perro', value: 'dog' },
@@ -108,7 +109,8 @@ export default function AnimalsPublicList() {
         .catalog-grid{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px;}
         .catalog-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;}
         @media (max-width: 980px){.catalog-grid{grid-template-columns:1fr}.catalog-aside{position:static!important}.catalog-results{grid-template-columns:repeat(2,minmax(0,1fr));}}
-        @media (max-width: 640px){.catalog-results{grid-template-columns:1fr}.catalog-top{padding:18px 16px!important}.catalog-hero{padding:28px 16px 20px!important}.catalog-search{flex-direction:column;align-items:stretch!important}.catalog-nav{display:none!important}}
+        @media (max-width: 640px){.catalog-results{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.catalog-top{padding:14px 18px!important}.catalog-hero{padding:22px 20px 16px!important}.catalog-search{flex-direction:column;align-items:stretch!important}.catalog-nav{display:none!important}.catalog-grid{padding:0 20px 92px!important}.catalog-aside{padding:16px!important;border-radius:16px!important}.catalog-results .catalog-card{border-radius:16px!important}.catalog-results .catalog-card > div:first-child{height:104px!important}.catalog-results .catalog-card > div:last-child{padding:9px 11px 12px!important}.catalog-results .catalog-card span[style*="font-size: 21"]{font-size:15px!important}.catalog-results .catalog-card div[style*="font-size: 13"]{font-size:11px!important}}
+        @media (max-width: 390px){.catalog-results{grid-template-columns:1fr}}
       `}</style>
 
       <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'rgba(246,243,236,.88)', backdropFilter: 'blur(10px)', borderBottom: `1px solid ${MPL.border}` }}>
@@ -286,6 +288,7 @@ export default function AnimalsPublicList() {
           </section>
         </div>
       </main>
+      <MobileBottomNav />
     </div>
   );
 }

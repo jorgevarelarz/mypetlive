@@ -5,6 +5,7 @@ import { listCoupons, Coupon } from '../../api/coupons';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
+import MobileBottomNav from '../../components/MobileBottomNav';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   store: <ShoppingBag size={20} />,
@@ -60,12 +61,12 @@ export default function CouponsList() {
         .coupon-card{transition:transform .18s ease, box-shadow .18s ease;}
         .coupon-card:hover{transform:translateY(-3px);box-shadow:0 1px 3px rgba(31,55,40,.06),0 18px 38px -24px rgba(31,55,40,.32)!important;}
         @media (max-width: 920px){.coupon-hero{grid-template-columns:1fr}.coupon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.coupon-wrap{padding:26px 16px 48px}}
-        @media (max-width: 620px){.coupon-grid{grid-template-columns:1fr}.ticket-feature{display:grid!important}.ticket-feature button{width:100%}}
+        @media (max-width: 620px){.coupon-wrap{padding:22px 20px 96px!important}.coupon-tabs{display:none!important}.coupon-hero{gap:16px!important}.coupon-hero h1{font-size:24px!important}.coupon-hero p{font-size:13.5px!important}.coupon-grid{grid-template-columns:1fr}.ticket-feature{padding:14px!important;border-radius:16px!important;gap:13px!important}.ticket-feature button{width:100%;grid-column:1 / -1}.coupon-card{border-radius:15px!important}.coupon-card > div:first-child{padding:14px!important}.coupon-card > div:last-child{padding:12px 14px!important}}
       `}</style>
 
       <main className="coupon-wrap">
         <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 14 }}>Inicio / Mi panel / Cupones</div>
-        <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${MPL.border}`, marginBottom: 30, overflowX: 'auto' }}>
+        <div className="coupon-tabs" style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${MPL.border}`, marginBottom: 30, overflowX: 'auto' }}>
           {['Resumen', 'Mis solicitudes', 'Favoritos', 'Mis mascotas', 'Cupones', 'Patitas'].map(tab => (
             <span key={tab} style={{ fontSize: 14.5, fontWeight: tab === 'Cupones' ? 800 : 700, color: tab === 'Cupones' ? MPL.teal : MPL.muted, padding: '12px 16px', borderBottom: tab === 'Cupones' ? `2.5px solid ${MPL.teal}` : '2.5px solid transparent', whiteSpace: 'nowrap' }}>
               {tab}
@@ -212,6 +213,7 @@ export default function CouponsList() {
         onClose={() => setSelectorOpen(false)}
         onConfirm={handleProtectoraSelected}
       />
+      <MobileBottomNav />
     </div>
   );
 }
