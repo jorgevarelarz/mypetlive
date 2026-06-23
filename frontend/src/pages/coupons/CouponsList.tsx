@@ -6,6 +6,7 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
+import { useAuth } from '../../context/AuthContext';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   store: <ShoppingBag size={20} />,
@@ -22,6 +23,7 @@ function categoryLabel(type: string) {
 }
 
 export default function CouponsList() {
+  const { user } = useAuth();
   const { data, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: listCoupons });
   const [selected, setSelected] = useState<Coupon | null>(null);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -213,7 +215,7 @@ export default function CouponsList() {
         onClose={() => setSelectorOpen(false)}
         onConfirm={handleProtectoraSelected}
       />
-      <MobileBottomNav />
+      {!user && <MobileBottomNav />}
     </div>
   );
 }

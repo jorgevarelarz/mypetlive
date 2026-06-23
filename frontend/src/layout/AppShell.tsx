@@ -5,6 +5,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import navConfig from '../config/nav.config.json';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
+import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
 
 type NavItem = { label: string; path?: string; to?: string };
@@ -259,7 +260,10 @@ function SideNav() {
 
 export default function AppShell() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
   const isPublicCatalog = pathname === '/animals';
+  const hasAnimalDetailCta = /^\/animals\/[^/]+$/.test(pathname);
+  const showMobileBottomNav = user?.role === 'tenant' && !isPublicCatalog && !hasAnimalDetailCta;
 
   return (
     <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
@@ -269,12 +273,13 @@ export default function AppShell() {
       ) : (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
-          <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2">
+          <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2 pb-24 md:pb-0">
             <Breadcrumbs />
             <Outlet />
           </main>
         </div>
       )}
+      {showMobileBottomNav && <MobileBottomNav />}
     </div>
   );
 }
