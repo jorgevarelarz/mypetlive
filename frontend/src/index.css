@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -9,19 +9,23 @@
 :root {
   --bg: #f6f3ec;
   --fg: #3f4a3c;
-  --muted: #6d7569;
+  --muted: #6b7464;
   --card: #ffffff;
-  --border: #e7e1d5;
-  --accent: #f1ece4;
-  --focus: rgba(63, 74, 60, 0.45);
+  --border: #e5e1d6;
+  --accent: #efeADF;
+  --focus: rgba(31, 111, 111, 0.42);
+  --brand-teal: #1f6f6f;
+  --brand-coral: #e8654a;
+  --brand-olive: #6a7b4f;
+  --brand-gold: #e9a93c;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--fg);
-  letter-spacing: 0.2px;
+  letter-spacing: 0;
   line-height: 1.35;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

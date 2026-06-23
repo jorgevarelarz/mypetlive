@@ -70,7 +70,7 @@ const LegalConsentPage: React.FC = () => {
       <header style={{ display: "grid", gap: 8 }}>
         <h1 style={{ margin: 0 }}>Documentación legal pendiente</h1>
         <p style={{ margin: 0, color: "#475569" }}>
-          Para seguir usando RentalApp necesitas revisar y aceptar los documentos legales actualizados. Puedes descargar
+          Para seguir usando MyPetLive necesitas revisar y aceptar los documentos legales actualizados. Puedes descargar
           o copiar el texto para revisarlo con tu equipo legal.
         </p>
       </header>

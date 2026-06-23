@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -74,7 +74,7 @@ export default function AnimalsPage() {
     queryFn: listCoupons,
     staleTime: 30_000,
   });
-  const coupons = (couponsData?.items || []) as Coupon[];
+  const coupons = useMemo(() => (couponsData?.items || []) as Coupon[], [couponsData?.items]);
 
   const spendMutation = useMutation({
     mutationFn: async () => {
@@ -100,7 +100,7 @@ export default function AnimalsPage() {
     },
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!shelterId) return;
     setLoading(true);
     try {
@@ -109,11 +109,11 @@ export default function AnimalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [shelterId]);
 
   useEffect(() => {
     load();
-  }, [shelterId]);
+  }, [load]);
 
   const selectedAnimal = useMemo(() => {
     if (!spendForm.animalId) return undefined;

@@ -74,7 +74,7 @@ export default function PetPage() {
     queryFn: listMyPets,
   });
 
-  const petItems = myPets?.items || [];
+  const petItems = useMemo(() => myPets?.items || [], [myPets?.items]);
 
   useEffect(() => {
     if (!petItems.length) {

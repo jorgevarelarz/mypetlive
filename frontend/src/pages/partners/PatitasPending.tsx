@@ -57,7 +57,7 @@ export default function PatitasPending() {
   const [lookupLoading, setLookupLoading] = useState(false);
 
   const { data, isLoading } = useQuery({ queryKey: ['patitas-pending'], queryFn: listPendingPatitas });
-  const pending = data?.items || [];
+  const pending = useMemo(() => data?.items || [], [data?.items]);
   const [codeFilter, setCodeFilter] = useState('');
   const normalizedFilter = codeFilter.trim().toUpperCase();
   const filteredPending = useMemo(() => {

@@ -18,6 +18,15 @@ const getGeneralItems = (role?: string): NavItem[] => {
 
 const resolvePath = (item: NavItem) => item.path || item.to || '#';
 
+const labelFor: Record<string, string> = {
+  tenant: 'Adoptante',
+  landlord: 'Protectora',
+  pro: 'Profesional',
+  admin: 'Administración',
+  store: 'Tienda',
+  vet: 'Veterinario',
+};
+
 function Header() {
   const { user, logout } = useAuth();
   const { openAuth } = useAuthModal();
@@ -49,15 +58,6 @@ function Header() {
     : user?.role === 'admin' ? '/admin'
     : user?.role === 'store' || user?.role === 'vet' ? '/partner'
     : '/animals';
-  const labelFor: Record<string, string> = {
-    tenant: 'Adoptante',
-    landlord: 'Protectora',
-    pro: 'Profesional',
-    admin: 'Administración',
-    store: 'Tienda',
-    vet: 'Veterinario',
-  };
-
   return (
     <header
       className="sticky top-0 z-20 backdrop-blur"
@@ -115,7 +115,7 @@ function Header() {
             </>
           ) : (
             <>
-              <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {user.role}</span>
+              <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {labelFor[user.role] || user.role}</span>
               <button onClick={logout} className="px-3 py-1.5 rounded">Salir</button>
             </>
           )}
@@ -186,7 +186,7 @@ function Header() {
 function SideNav() {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
-  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | undefined;
+  const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
   const generalItems = getGeneralItems(role);
   const showInbox = generalItems.some(item => item.path === '/inbox');
   useEffect(() => {
@@ -206,12 +206,6 @@ function SideNav() {
     }
     return () => {};
   }, [user?._id, showInbox]);
-  const labelFor: Record<string, string> = {
-    tenant: 'Adoptante',
-    landlord: 'Protectora',
-    pro: 'Profesional',
-    admin: 'Administración',
-  };
   return (
     <aside className="hidden lg:block w-60 shrink-0">
       <div

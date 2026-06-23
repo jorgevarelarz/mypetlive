@@ -33,7 +33,7 @@ export default function AnimalDetail() {
     enabled: Boolean(shelterId),
   });
 
-  const questions = questionnaireData?.questions || [];
+  const questions = useMemo(() => questionnaireData?.questions || [], [questionnaireData?.questions]);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
 
@@ -49,7 +49,7 @@ export default function AnimalDetail() {
       });
       return next;
     });
-  }, [questions.join('|')]);
+  }, [questions]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -64,6 +64,7 @@ export default function AnimalDetail() {
       toast.success(res.status === 'pending' ? 'Solicitud enviada' : 'OK');
       setQuestionnaireOpen(false);
       setQuestionAnswers({});
+      nav('/adoptions/mine');
     },
     onError: (e: any) => {
       toast.error(e?.response?.data?.error || 'No se pudo crear la solicitud');
@@ -88,6 +89,18 @@ export default function AnimalDetail() {
       return;
     }
     proceedAdopt();
+  };
+
+  const handlePatitaClick = () => {
+    if (!user) {
+      openAuth({
+        mode: 'login',
+        message: 'Inicia sesión para echar una Patita.',
+        onSuccess: () => patitaMutation.mutate(),
+      });
+      return;
+    }
+    patitaMutation.mutate();
   };
 
   const submitAnswers = () => {
@@ -212,7 +225,7 @@ export default function AnimalDetail() {
                 <button
                   className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-50"
                   onClick={handleAdoptClick}
-                  disabled={!user || !canAdopt || adoptionMutation.isPending}
+                  disabled={!canAdopt || adoptionMutation.isPending}
                   title={!user ? 'Inicia sesión para adoptar' : 'Solicitar adopción'}
                 >
                   {adoptionMutation.isPending ? 'Enviando…' : 'Solicitar adopción'}
@@ -230,7 +243,7 @@ export default function AnimalDetail() {
             )}
             <button
               className="px-4 py-2 rounded border"
-              onClick={() => patitaMutation.mutate()}
+              onClick={handlePatitaClick}
               disabled={patitaMutation.isPending || !shelterIdResolved}
             >
               {patitaMutation.isPending ? 'Registrando…' : 'Echar una Patita'}

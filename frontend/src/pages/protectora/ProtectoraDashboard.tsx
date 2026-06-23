@@ -48,8 +48,8 @@ export default function ProtectoraDashboard() {
     staleTime: 30_000,
   });
 
-  const animals = animalsQ.data?.items || [];
-  const adoptions = adoptionsQ.data?.items || [];
+  const animals = useMemo(() => animalsQ.data?.items || [], [animalsQ.data?.items]);
+  const adoptions = useMemo(() => adoptionsQ.data?.items || [], [adoptionsQ.data?.items]);
 
   const byStatus = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -57,12 +57,15 @@ export default function ProtectoraDashboard() {
     return acc;
   }, [animals]);
 
-  const openAdoptions = adoptions.filter((a: any) => OPEN_ADOPTION_STATES.includes(a.status)).length;
+  const openAdoptions = useMemo(
+    () => adoptions.filter((a: any) => OPEN_ADOPTION_STATES.includes(a.status)).length,
+    [adoptions],
+  );
 
   return (
     <div className="p-4 grid gap-5">
       <header>
-        <h1 className="text-2xl font-semibold">Hola{user?.name ? `, ${user.name}` : ''} 👋</h1>
+        <h1 className="text-2xl font-semibold">Hola{user?.name ? `, ${user.name}` : ''}</h1>
         <p className="text-gray-600">Resumen de tu protectora y accesos rápidos.</p>
       </header>
 
@@ -75,15 +78,15 @@ export default function ProtectoraDashboard() {
 
       <section className="grid md:grid-cols-3 gap-3">
         <Link to="/landlord/animals" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">🐾 Mis animales</div>
+          <div className="font-semibold">Mis animales</div>
           <div className="text-sm text-gray-600 mt-1">Crea, edita, publica y archiva fichas.</div>
         </Link>
         <Link to="/landlord/adoptions" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">📋 Solicitudes de adopción</div>
+          <div className="font-semibold">Solicitudes de adopción</div>
           <div className="text-sm text-gray-600 mt-1">Gestiona candidaturas por estados.</div>
         </Link>
         <Link to="/landlord/questionnaire" className="rounded-2xl border p-4 bg-white hover:shadow-sm transition" style={{ borderColor: '#E7E1D5' }}>
-          <div className="font-semibold">❓ Cuestionario</div>
+          <div className="font-semibold">Cuestionario</div>
           <div className="text-sm text-gray-600 mt-1">Define las preguntas para adoptantes.</div>
         </Link>
       </section>

@@ -8,7 +8,7 @@ type Props = {
 /** Wordmark de marca MyPetLive: "MyPet" (teal) + "Live" (verde) + huella coral. */
 export default function Brand({ size = 20, withIcon = true }: Props) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 800, fontSize: size, letterSpacing: '-0.02em', lineHeight: 1 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 800, fontSize: size, letterSpacing: 0, lineHeight: 1 }}>
       {withIcon && (
         <svg width={size + 6} height={size + 6} viewBox="0 0 64 64" aria-hidden="true" style={{ flexShrink: 0 }}>
           <rect width="64" height="64" rx="15" fill="#1F6F6F" />

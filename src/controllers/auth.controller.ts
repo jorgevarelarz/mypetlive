@@ -145,14 +145,14 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
       const body = [
         'Hola,',
         '',
-        'Hemos recibido una solicitud para restablecer tu contraseña en RentalApp.',
+        'Hemos recibido una solicitud para restablecer tu contraseña en MyPetLive.',
         'Puedes crear una nueva contraseña usando el siguiente enlace (caduca en 60 minutos):',
         resetUrl,
         '',
         'Si no has solicitado este cambio, simplemente ignora este mensaje.',
         '',
         'Gracias,',
-        'Equipo RentalApp',
+        'Equipo MyPetLive',
       ].join('\n');
       await sendEmail(user.email, 'Restablece tu contraseña', body);
     }

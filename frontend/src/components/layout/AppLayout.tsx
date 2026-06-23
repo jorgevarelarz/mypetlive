@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import Brand from "../Brand";
 
 type NavItemProps = {
   to: string;
@@ -42,7 +43,7 @@ export default function AppLayout() {
         >
           ☰
         </button>
-        <Link to="/" style={{ fontWeight: 800, fontSize: 18 }}>RentalApp</Link>
+        <Link to="/" aria-label="MyPetLive — inicio"><Brand size={18} /></Link>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {!user && <NavItem to="/login">Entrar</NavItem>}
           {user && (
@@ -62,31 +63,31 @@ export default function AppLayout() {
           {sidebarOpen && (
             <nav style={{ display: 'grid', gap: 4 }}>
               <div style={{ fontSize: 12, opacity: .6, padding: '4px 8px' }}>Inicio</div>
-              <NavItem to="/">Centro de funciones</NavItem>
+              <NavItem to="/animals">Explorar animales</NavItem>
               <div style={{ fontSize: 12, opacity: .6, padding: '4px 8px' }}>General</div>
-              <NavItem to="/properties">Propiedades</NavItem>
-              <NavItem to="/me/favorites">Favoritos</NavItem>
-              {user?.role === 'tenant' && <NavItem to="/contracts">Mis contratos</NavItem>}
+              <NavItem to="/animals">Animales</NavItem>
+              <NavItem to="/coupons">Cupones</NavItem>
+              {user?.role === 'tenant' && <NavItem to="/adoptions/mine">Mis adopciones</NavItem>}
               {user?.role === 'landlord' && (
                 <>
-                  <div style={{ fontSize: 12, opacity: .6, padding: '8px 8px 4px' }}>Propietario</div>
-                  <NavItem to="/owner/properties">Mis propiedades</NavItem>
-                  <NavItem to="/contracts">Contratos</NavItem>
-                  <NavItem to="/earnings">Ingresos</NavItem>
+                  <div style={{ fontSize: 12, opacity: .6, padding: '8px 8px 4px' }}>Protectora</div>
+                  <NavItem to="/landlord">Panel</NavItem>
+                  <NavItem to="/landlord/animals">Mis animales</NavItem>
+                  <NavItem to="/landlord/adoptions">Solicitudes</NavItem>
                 </>
               )}
               {user?.role === 'pro' && (
                 <>
                   <div style={{ fontSize: 12, opacity: .6, padding: '8px 8px 4px' }}>Profesional</div>
-                  <NavItem to="/pro">Panel PRO</NavItem>
-                  <NavItem to="/pro/tickets">Incidencias</NavItem>
+                  <NavItem to="/partner">Panel partner</NavItem>
+                  <NavItem to="/coupons">Cupones</NavItem>
                 </>
               )}
               {user?.role === 'admin' && (
                 <>
                   <div style={{ fontSize: 12, opacity: .6, padding: '8px 8px 4px' }}>Administración</div>
                   <NavItem to="/admin">Panel admin</NavItem>
-                  <NavItem to="/earnings">Ingresos</NavItem>
+                  <NavItem to="/admin/animals">Animales</NavItem>
                 </>
               )}
             </nav>
