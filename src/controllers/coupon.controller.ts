@@ -32,6 +32,34 @@ const pickFields = (body: any) => ({
         : undefined,
 });
 
+function serializeCoupon(doc: any) {
+  const partner = doc.partnerId && doc.partnerId._id
+    ? {
+        _id: doc.partnerId._id.toString(),
+        name: doc.partnerId.name,
+        role: doc.partnerId.role,
+      }
+    : undefined;
+  return {
+    _id: doc._id,
+    partnerId: doc.partnerId?._id ? doc.partnerId._id.toString() : doc.partnerId?.toString?.() || doc.partnerId,
+    partner,
+    partnerType: doc.partnerType,
+    copy: doc.copy,
+    title: doc.title,
+    description: doc.description,
+    discount: doc.discount,
+    bonusPatitas: doc.bonusPatitas,
+    active: doc.active,
+    targetAnimalCode: doc.targetAnimalCode,
+    expiresAt: doc.expiresAt,
+    usedAt: doc.usedAt,
+    usedBy: doc.usedBy,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
 export async function listCoupons(req: Request, res: Response) {
   const all = req.query.all === 'true';
   const filter: any = {};
@@ -44,8 +72,11 @@ export async function listCoupons(req: Request, res: Response) {
       { expiresAt: { $gt: new Date() } },
     ];
   }
-  const coupons = await Coupon.find(filter).sort({ createdAt: -1 }).lean();
-  res.json({ items: coupons });
+  const coupons = await Coupon.find(filter)
+    .sort({ createdAt: -1 })
+    .populate('partnerId', 'name role')
+    .lean();
+  res.json({ items: coupons.map(serializeCoupon) });
 }
 
 export async function createCoupon(req: Request, res: Response) {
