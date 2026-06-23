@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
+import PublicHeader from '../../components/PublicHeader';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -171,6 +172,7 @@ export default function AnimalDetail() {
         .detail-mobile-cta{display:none;}
         @media (max-width: 920px){.detail-grid{grid-template-columns:1fr}.detail-side{position:static!important}.detail-adopt-card{display:none!important}.detail-gallery{grid-template-columns:1fr}.detail-thumbs{display:flex!important;overflow:auto}.detail-wrap{padding:0 0 96px}.detail-wrap > button{margin:16px 20px!important}.detail-gallery{display:block}.detail-gallery > div:first-child{min-height:300px!important;border-radius:0!important;box-shadow:none!important}.detail-thumbs{display:none!important}.detail-grid{gap:0!important}.detail-grid > div:first-child{gap:14px!important}.detail-grid section:not(.detail-gallery){margin-left:20px!important;margin-right:20px!important}.detail-grid h1{font-size:30px!important}.detail-mobile-cta{position:fixed;left:0;right:0;bottom:0;z-index:36;display:flex;gap:12px;align-items:center;background:#fff;border-top:1px solid ${MPL.border};padding:14px 20px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 30px -24px rgba(31,55,40,.35)}}
       `}</style>
+      <PublicHeader />
 
       <main className="detail-wrap">
         <button type="button" onClick={() => nav('/animals')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: 0, background: 'none', color: MPL.muted, font: 'inherit', fontWeight: 800, cursor: 'pointer', marginBottom: 18 }}>

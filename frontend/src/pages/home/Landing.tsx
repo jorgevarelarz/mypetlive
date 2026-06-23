@@ -5,6 +5,7 @@ import { searchAnimals } from '../../api/animals';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
+import PublicHeader from '../../components/PublicHeader';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
@@ -87,25 +88,7 @@ export default function Landing() {
       `}</style>
 
       <div className="lp">
-        {/* NAV */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'rgba(246,243,236,.86)', backdropFilter: 'blur(10px)', borderBottom: `1px solid ${C.border}` }}>
-          <div className="lp-topbar" style={{ maxWidth: 1180, margin: '0 auto', padding: '15px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ color: C.teal, display: 'inline-flex' }}><Paw size={24} /></span>
-              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, letterSpacing: '-.02em' }}>MyPet<span style={{ color: C.coral }}>Live</span></span>
-            </Link>
-            <div className="lp-navlinks" style={{ display: 'flex', gap: 28, fontSize: 14.5, fontWeight: 600, color: '#6B7464', alignItems: 'center' }}>
-              <Link className="lp-navlink" to="/animals">Adoptar</Link>
-              <a className="lp-navlink" href="#como">Cómo funciona</a>
-              <a className="lp-navlink" href="#impacto">Impacto</a>
-              <button className="lp-navlink" onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: '#6B7464' }}>Protectoras</button>
-            </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <button className="lp-navlink" onClick={() => openAuth({ mode: 'login' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', fontSize: 14.5, fontWeight: 600, color: C.ink }}>Entrar</button>
-              <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 14.5, fontWeight: 700, padding: '11px 22px', borderRadius: 14, boxShadow: '0 6px 16px -8px rgba(232,101,74,.7)' }}>Adoptar</Link>
-            </div>
-          </div>
-        </div>
+        <PublicHeader />
 
         {/* HERO */}
         <section className="lp-hero-section" style={{ maxWidth: 1180, margin: '0 auto', padding: '60px 32px 40px' }}>

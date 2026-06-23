@@ -263,12 +263,13 @@ export default function AppShell() {
   const { user } = useAuth();
   const isPublicCatalog = pathname === '/animals';
   const hasAnimalDetailCta = /^\/animals\/[^/]+$/.test(pathname);
+  const isPublicAnimalPage = isPublicCatalog || hasAnimalDetailCta;
   const showMobileBottomNav = user?.role === 'tenant' && !isPublicCatalog && !hasAnimalDetailCta;
 
   return (
     <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
-      {!isPublicCatalog && <Header />}
-      {isPublicCatalog ? (
+      {!isPublicAnimalPage && <Header />}
+      {isPublicAnimalPage ? (
         <Outlet />
       ) : (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
