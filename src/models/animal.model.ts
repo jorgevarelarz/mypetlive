@@ -66,7 +66,12 @@ const animalSchema = new Schema(
     breed: { type: String },
     sex: { type: String, enum: ['male', 'female'], default: 'female' },
     age: { type: String, required: true },
+    ageGroup: { type: String, enum: ['puppy', 'young', 'adult', 'senior'] },
+    city: { type: String, trim: true, index: true },
     size: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
+    goodWithChildren: { type: Boolean },
+    goodWithDogs: { type: Boolean },
+    goodWithCats: { type: Boolean },
     status: {
       type: String,
       enum: ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'],

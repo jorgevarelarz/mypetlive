@@ -263,7 +263,7 @@ export default function AppShell() {
   const { user } = useAuth();
   const isPublicCatalog = pathname === '/animals';
   const hasAnimalDetailCta = /^\/animals\/[^/]+$/.test(pathname);
-  const isFavoritesPage = pathname === '/me/favorites';
+  const isFavoritesPage = pathname === '/me/favorites' || pathname === '/me/alerts';
   const isPublicAnimalPage = isPublicCatalog || hasAnimalDetailCta || isFavoritesPage;
   const showMobileBottomNav = user?.role === 'tenant' && !isPublicAnimalPage;
 

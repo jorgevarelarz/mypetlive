@@ -1,8 +1,39 @@
 import { Request, Response } from 'express';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
+import { AnimalAlert } from '../models/animalAlert.model';
+import { User } from '../models/user.model';
+import { sendEmail } from '../utils/notification';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
+
+function matchesAlert(animal: any, filters: Record<string, any>) {
+  for (const key of ['species', 'size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
+    if (filters[key] !== undefined && animal[key] !== filters[key]) return false;
+  }
+  if (filters.city && !String(animal.city || '').toLowerCase().includes(String(filters.city).toLowerCase())) return false;
+  if (filters.q) {
+    const haystack = [animal.name, animal.breed, animal.species, animal.description, animal.city]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (!haystack.includes(String(filters.q).toLowerCase())) return false;
+  }
+  return true;
+}
+
+async function notifyMatchingAlerts(animal: any) {
+  const alerts = await AnimalAlert.find({ active: true }).lean();
+  const matching = alerts.filter(alert => matchesAlert(animal, alert.filters || {}));
+  if (!matching.length) return;
+  const users = await User.find({ _id: { $in: matching.map(alert => alert.userId) } }).select('email name').lean();
+  const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://test.valerisstudio.es';
+  await Promise.allSettled(users.map(user => sendEmail(
+    user.email,
+    `Nuevo compañero compatible: ${animal.name}`,
+    `Hola ${user.name || ''}, ${animal.name} coincide con una de tus alertas de MyPetLive. Puedes conocerlo aquí: ${baseUrl}/animals/${animal._id}`,
+  )));
+}
 
 export async function create(req: Request, res: Response) {
   const b: any = req.body || {};
@@ -12,6 +43,7 @@ export async function create(req: Request, res: Response) {
     if (u?._id || u?.id) b.shelter = String(u._id || u.id);
   }
   const doc = await Animal.create({ ...b, isPersonalPet: false, createdByRole: 'protectora' });
+  if (doc.status === 'publicado') notifyMatchingAlerts(doc.toObject()).catch(() => undefined);
   res.status(201).json(doc);
 }
 
@@ -33,11 +65,14 @@ export async function update(req: Request, res: Response) {
   delete (payload as any).ownerId;
 
   const updated = await Animal.findByIdAndUpdate(id, payload, { new: true });
+  if (current.status !== 'publicado' && updated?.status === 'publicado') {
+    notifyMatchingAlerts(updated.toObject()).catch(() => undefined);
+  }
   res.json(updated);
 }
 
 export async function getById(req: Request, res: Response) {
-  const a = await Animal.findById(req.params.id);
+  const a = await Animal.findById(req.params.id).populate('shelter', 'name email');
   if (!a) return res.status(404).json({ error: 'not_found' });
   if (a.isPersonalPet === true) return res.status(404).json({ error: 'not_found' });
   if (a.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
@@ -63,7 +98,22 @@ export async function getByCode(req: Request, res: Response) {
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
 
 export async function search(req: Request, res: Response) {
-  const { q, species, size, sex, shelter, code, status, sort, dir } = req.query as Record<string, string>;
+  const {
+    q,
+    species,
+    size,
+    sex,
+    shelter,
+    code,
+    status,
+    sort,
+    dir,
+    city,
+    ageGroup,
+    goodWithChildren,
+    goodWithDogs,
+    goodWithCats,
+  } = req.query as Record<string, string>;
   const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '24'), 10) || 24));
 
@@ -85,13 +135,18 @@ export async function search(req: Request, res: Response) {
   if (species) filter.species = species;
   if (size) filter.size = size;
   if (sex) filter.sex = sex;
+  if (ageGroup) filter.ageGroup = ageGroup;
+  if (city) filter.city = new RegExp(String(city).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  if (goodWithChildren === 'true') filter.goodWithChildren = true;
+  if (goodWithDogs === 'true') filter.goodWithDogs = true;
+  if (goodWithCats === 'true') filter.goodWithCats = true;
   if (code) filter.code = String(code).trim().toUpperCase();
   if (q) {
     const rx = new RegExp(String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ name: rx }, { breed: rx }, { species: rx }, { description: rx }];
+    filter.$or = [{ name: rx }, { breed: rx }, { species: rx }, { description: rx }, { city: rx }];
   }
 
-  const sortField = sort === 'name' ? 'name' : 'createdAt';
+  const sortField = sort === 'name' ? 'name' : sort === 'age' ? 'ageGroup' : 'createdAt';
   const sortDir = dir === 'asc' ? 1 : -1;
 
   const [items, total] = await Promise.all([
@@ -117,8 +172,12 @@ export async function updateStatus(req: Request, res: Response) {
   const user: any = (req as any).user;
   const isOwner = user?.role === 'admin' || String(animal.shelter) === String(user?._id || user?.id);
   if (!isOwner) return res.status(403).json({ error: 'forbidden' });
+  const previousStatus = animal.status;
   animal.status = status as any;
   await animal.save();
+  if (previousStatus !== 'publicado' && animal.status === 'publicado') {
+    notifyMatchingAlerts(animal.toObject()).catch(() => undefined);
+  }
   res.json({ _id: animal._id, status: animal.status });
 }
 

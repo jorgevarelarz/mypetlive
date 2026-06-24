@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home, MapPin, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home, MapPin, RefreshCw, Share2, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAnimal } from '../../api/animals';
 import { createAdoption } from '../../api/adoptions';
@@ -12,7 +12,7 @@ import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import PublicHeader from '../../components/PublicHeader';
-import { isFavorite, toggleFavorite } from '../../utils/favorites';
+import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -40,6 +40,7 @@ export default function AnimalDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const { openAuth } = useAuthModal();
+  const favorites = useAnimalFavorites();
   const nav = useNavigate();
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['animal', id],
@@ -64,7 +65,6 @@ export default function AnimalDetail() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
   const [activeIndex, setActiveIndex] = useState(0);
-  const [favorite, setFavorite] = useState(() => isFavorite(String(id || '')));
 
   useEffect(() => {
     if (!questions.length) {
@@ -82,12 +82,27 @@ export default function AnimalDetail() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    setFavorite(isFavorite(String(id || '')));
   }, [id]);
 
   const handleFavoriteClick = () => {
-    const favorites = toggleFavorite(String(id || ''));
-    setFavorite(favorites.includes(String(id || '')));
+    favorites.toggle(String(id || ''));
+  };
+
+  const handleShareClick = async () => {
+    const shareData = {
+      title: `${data?.name || 'Compañero'} en adopción`,
+      text: `Conoce a ${data?.name || 'este compañero'} en MyPetLive`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) await navigator.share(shareData);
+      else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success('Enlace copiado');
+      }
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
+    }
   };
 
   const adoptionMutation = useMutation({
@@ -160,6 +175,7 @@ export default function AnimalDetail() {
   if (data.isPersonalPet) return <Navigate to="/pet" replace />;
 
   const a: any = data;
+  const favorite = favorites.isFavorite(String(id || ''));
   const canAdopt = a.status === 'publicado';
   const images = Array.isArray(a.images) ? a.images : [];
   const currentImage = images[activeIndex] || images[0];
@@ -233,6 +249,9 @@ export default function AnimalDetail() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={handleShareClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
+                    <Share2 size={18} />
+                  </button>
                   <button type="button" onClick={handleFavoriteClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                     <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
                   </button>
@@ -336,6 +355,9 @@ export default function AnimalDetail() {
         </button>
         <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
           <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />
+        </button>
+        <button type="button" onClick={handleShareClick} aria-label="Compartir compañero" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: 'pointer' }}>
+          <Share2 size={21} />
         </button>
       </div>
 

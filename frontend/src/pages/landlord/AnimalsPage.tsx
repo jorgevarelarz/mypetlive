@@ -40,7 +40,12 @@ const INITIAL_FORM = {
   breed: '',
   sex: 'female',
   age: '',
+  ageGroup: 'adult',
+  city: '',
   size: 'medium',
+  goodWithChildren: false,
+  goodWithDogs: false,
+  goodWithCats: false,
   description: '',
   status: 'borrador' as AnimalStatus,
   personality: [] as string[],
@@ -286,6 +291,7 @@ export default function AnimalsPage() {
           <input className="border rounded px-2 py-1" placeholder="Especie" value={form.species} onChange={e => setForm(f => ({ ...f, species: e.target.value }))} required />
           <input className="border rounded px-2 py-1" placeholder="Raza (opcional)" value={form.breed} onChange={e => setForm(f => ({ ...f, breed: e.target.value }))} />
           <input className="border rounded px-2 py-1" placeholder="Edad" value={form.age} onChange={e => setForm(f => ({ ...f, age: e.target.value }))} required />
+          <input className="border rounded px-2 py-1" placeholder="Ciudad" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
           <select className="border rounded px-2 py-1" value={form.sex} onChange={e => setForm(f => ({ ...f, sex: e.target.value }))}>
             <option value="female">Hembra</option>
             <option value="male">Macho</option>
@@ -295,12 +301,33 @@ export default function AnimalsPage() {
             <option value="medium">Mediano</option>
             <option value="large">Grande</option>
           </select>
+          <select className="border rounded px-2 py-1 col-span-2" value={form.ageGroup} onChange={e => setForm(f => ({ ...f, ageGroup: e.target.value }))}>
+            <option value="puppy">Cachorro</option>
+            <option value="young">Joven</option>
+            <option value="adult">Adulto</option>
+            <option value="senior">Senior</option>
+          </select>
           <select className="border rounded px-2 py-1 col-span-2" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as AnimalStatus }))}>
             {STATUS_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </div>
+        <fieldset className="grid gap-2">
+          <legend className="text-sm text-gray-600 mb-1">Convivencia</legend>
+          <div className="flex flex-wrap gap-4">
+            {[
+              ['goodWithChildren', 'Con niños'],
+              ['goodWithDogs', 'Con perros'],
+              ['goodWithCats', 'Con gatos'],
+            ].map(([key, label]) => (
+              <label key={key} className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={Boolean((form as any)[key])} onChange={e => setForm(current => ({ ...current, [key]: e.target.checked }))} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <textarea className="border rounded px-2 py-1" placeholder="Descripción (opcional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
         <div>
           <p className="text-sm text-gray-600 mb-1">Personalidad (máx 3)</p>

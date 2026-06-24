@@ -6,6 +6,8 @@ import { animalCreateSchema, animalUpdateSchema, animalStatusSchema } from '../v
 import asyncHandler from '../utils/asyncHandler';
 import { markFeeding, markLitter } from '../controllers/animalCare.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
+import * as favoriteCtrl from '../controllers/animalFavorite.controller';
+import * as alertCtrl from '../controllers/animalAlert.controller';
 
 const r = Router();
 
@@ -17,6 +19,14 @@ r.delete('/:id', ...assertRole('landlord', 'admin'), asyncHandler(ctrl.remove));
 
 r.post('/personal', authenticate, asyncHandler(ctrl.createPersonal));
 r.get('/mine', authenticate, asyncHandler(ctrl.listMine));
+r.get('/favorites', authenticate, asyncHandler(favoriteCtrl.list));
+r.post('/favorites/import', authenticate, asyncHandler(favoriteCtrl.addMany));
+r.post('/:id/favorite', authenticate, asyncHandler(favoriteCtrl.add));
+r.delete('/:id/favorite', authenticate, asyncHandler(favoriteCtrl.remove));
+r.get('/alerts', authenticate, asyncHandler(alertCtrl.list));
+r.post('/alerts', authenticate, asyncHandler(alertCtrl.create));
+r.patch('/alerts/:id', authenticate, asyncHandler(alertCtrl.update));
+r.delete('/alerts/:id', authenticate, asyncHandler(alertCtrl.remove));
 
 // Public
 r.get('/code/:code', authenticate, asyncHandler(ctrl.getByCode));

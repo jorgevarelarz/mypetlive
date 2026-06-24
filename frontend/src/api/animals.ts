@@ -15,10 +15,15 @@ export type AnimalSearchParams = {
   species?: string;
   size?: 'small' | 'medium' | 'large';
   sex?: 'male' | 'female';
+  city?: string;
+  ageGroup?: 'puppy' | 'young' | 'adult' | 'senior';
+  goodWithChildren?: boolean;
+  goodWithDogs?: boolean;
+  goodWithCats?: boolean;
   status?: AnimalStatus;
   shelter?: string;
   code?: string;
-  sort?: 'createdAt' | 'name';
+  sort?: 'createdAt' | 'name' | 'age';
   dir?: 'asc' | 'desc';
   page?: number;
   limit?: number;
@@ -32,6 +37,59 @@ export async function searchAnimals(params: AnimalSearchParams = {}) {
 export async function getAnimal(id: string) {
   const { data } = await client.get(`/api/animals/${id}`);
   return data;
+}
+
+export async function listFavoriteAnimals() {
+  const { data } = await client.get('/api/animals/favorites');
+  return data as { ids: string[]; items: any[] };
+}
+
+export async function addAnimalFavorite(id: string) {
+  const { data } = await client.post(`/api/animals/${id}/favorite`);
+  return data;
+}
+
+export async function removeAnimalFavorite(id: string) {
+  const { data } = await client.delete(`/api/animals/${id}/favorite`);
+  return data;
+}
+
+export async function importAnimalFavorites(ids: string[]) {
+  const { data } = await client.post('/api/animals/favorites/import', { ids });
+  return data as { ok: boolean; added: number };
+}
+
+export type AnimalAlertFilters = Pick<
+  AnimalSearchParams,
+  'q' | 'species' | 'size' | 'sex' | 'city' | 'ageGroup' | 'goodWithChildren' | 'goodWithDogs' | 'goodWithCats'
+>;
+
+export type AnimalAlert = {
+  _id: string;
+  filters: AnimalAlertFilters;
+  active: boolean;
+  matches: number;
+  createdAt: string;
+};
+
+export async function listAnimalAlerts() {
+  const { data } = await client.get('/api/animals/alerts');
+  return data as { items: AnimalAlert[] };
+}
+
+export async function createAnimalAlert(filters: AnimalAlertFilters) {
+  const { data } = await client.post('/api/animals/alerts', { filters });
+  return data as AnimalAlert;
+}
+
+export async function updateAnimalAlert(id: string, payload: { active?: boolean; filters?: AnimalAlertFilters }) {
+  const { data } = await client.patch(`/api/animals/alerts/${id}`, payload);
+  return data as AnimalAlert;
+}
+
+export async function deleteAnimalAlert(id: string) {
+  const { data } = await client.delete(`/api/animals/alerts/${id}`);
+  return data as { ok: boolean };
 }
 
 export async function getAnimalByCode(code: string) {

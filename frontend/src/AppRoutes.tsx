@@ -39,6 +39,7 @@ import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
 import PetPage from "./pages/pet/PetPage";
 import Favorites from "./pages/Favorites";
+import AnimalAlerts from "./pages/animals/AnimalAlerts";
 
 const tenantHome = <Navigate to="/home" replace />;
 const protectoraHome = <Navigate to="/landlord" replace />;
@@ -63,6 +64,7 @@ export default function AppRoutes() {
               <Route path="/animals" element={<AnimalsPublicList />} />
               <Route path="/animals/:id" element={<AnimalDetail />} />
               <Route path="/me/favorites" element={<Favorites />} />
+              <Route path="/me/alerts" element={<ProtectedRoute><AnimalAlerts /></ProtectedRoute>} />
               <Route path="/coupons" element={<CouponsList />} />
               <Route path="/donate" element={<ProtectedRoute><DonationsPage /></ProtectedRoute>} />
 

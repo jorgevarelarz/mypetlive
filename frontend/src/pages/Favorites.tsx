@@ -1,30 +1,37 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Heart, MapPin } from 'lucide-react';
+import { Bell, Heart, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getAnimal } from '../api/animals';
 import MobileBottomNav from '../components/MobileBottomNav';
 import PublicHeader from '../components/PublicHeader';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, sizeLabel, speciesLabel } from '../styles/mypetlive';
-import { getFavorites, toggleFavorite } from '../utils/favorites';
+import { useAnimalFavorites } from '../hooks/useAnimalFavorites';
 import { toAbsoluteUrl } from '../utils/media';
 
 export default function Favorites() {
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(getFavorites);
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ['favorite-animals', favoriteIds],
+  const favorites = useAnimalFavorites();
+  const { data: localItems = [], isLoading: localLoading } = useQuery({
+    queryKey: ['favorite-animals-local', favorites.ids],
     queryFn: async () => {
-      const results = await Promise.allSettled(favoriteIds.map(getAnimal));
+      const results = await Promise.allSettled(favorites.ids.map(getAnimal));
       return results
         .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
         .map(result => result.value)
         .filter(animal => !animal?.isPersonalPet);
     },
-    enabled: favoriteIds.length > 0,
+    enabled: favorites.items.length === 0 && favorites.ids.length > 0,
   });
 
-  const removeFavorite = (id: string) => {
-    setFavoriteIds(toggleFavorite(id));
+  const items = favorites.items.length ? favorites.items : localItems;
+  const isLoading = favorites.isLoading || localLoading;
+  const statusLabel: Record<string, string> = {
+    publicado: 'Disponible',
+    reservado: 'Reservado',
+    preadoptado: 'En preadopción',
+    adoptado: 'Adoptado',
+    no_disponible: 'No disponible',
+    archivado: 'No disponible',
   };
 
   return (
@@ -39,12 +46,18 @@ export default function Favorites() {
       `}</style>
       <PublicHeader />
       <main className="favorites-main" style={{ maxWidth: 1180, margin: '0 auto', padding: '42px 32px 72px' }}>
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+          <div>
           <div style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
             <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>Inicio</Link> / Favoritos
           </div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, lineHeight: 1.1, margin: '0 0 8px', fontWeight: 800 }}>Tus favoritos</h1>
           <p style={{ color: MPL.muted, margin: 0 }}>Los compañeros que has guardado para conocerlos mejor.</p>
+          </div>
+          <Link to="/me/alerts" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: MPL.teal, border: `1.5px solid ${MPL.teal}`, borderRadius: 13, padding: '11px 16px', textDecoration: 'none', fontWeight: 800 }}>
+            <Bell size={17} />
+            Mis alertas
+          </Link>
         </div>
 
         {isLoading ? (
@@ -72,6 +85,9 @@ export default function Favorites() {
                   <Link to={`/animals/${id}`} style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
                     <div className="favorite-image" style={{ height: 210, background: '#E6E0D2' }}>
                       {image ? <img src={toAbsoluteUrl(image)} alt={animal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: MPL.faint }}>Sin imagen</div>}
+                      <span style={{ position: 'absolute', top: 12, left: 12, background: animal.status === 'publicado' ? MPL.teal100 : '#FFF2D7', color: animal.status === 'publicado' ? MPL.tealDark : MPL.goldDark, fontSize: 11.5, fontWeight: 800, padding: '5px 10px', borderRadius: 8 }}>
+                        {statusLabel[animal.status] || animal.status}
+                      </span>
                     </div>
                     <div className="favorite-body" style={{ padding: '17px 18px 20px' }}>
                       <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, margin: '0 0 5px' }}>{animal.name}</h2>
@@ -88,7 +104,7 @@ export default function Favorites() {
                     type="button"
                     aria-label={`Quitar a ${animal.name} de favoritos`}
                     title="Quitar de favoritos"
-                    onClick={() => removeFavorite(id)}
+                    onClick={() => favorites.toggle(id)}
                     style={{ position: 'absolute', top: 12, right: 12, width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: MPL.coral, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
                   >
                     <Heart size={21} fill="currentColor" />
