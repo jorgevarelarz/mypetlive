@@ -1,12 +1,12 @@
 {
   "general": [
-    { "label": "Animales", "path": "/animals" },
+    { "label": "Compañeros", "path": "/animals" },
     { "label": "Cupones", "path": "/coupons" },
     { "label": "Donar", "path": "/donate" }
   ],
   "tenantGeneral": [
     { "label": "Inicio", "path": "/home", "to": "/home" },
-    { "label": "Buscar animales", "path": "/animals", "to": "/animals" },
+    { "label": "Compañeros", "path": "/animals", "to": "/animals" },
     { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
     { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" }

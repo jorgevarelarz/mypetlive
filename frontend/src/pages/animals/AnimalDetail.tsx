@@ -12,6 +12,7 @@ import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import PublicHeader from '../../components/PublicHeader';
+import { isFavorite, toggleFavorite } from '../../utils/favorites';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -63,6 +64,7 @@ export default function AnimalDetail() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
   const [activeIndex, setActiveIndex] = useState(0);
+  const [favorite, setFavorite] = useState(() => isFavorite(String(id || '')));
 
   useEffect(() => {
     if (!questions.length) {
@@ -80,7 +82,13 @@ export default function AnimalDetail() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    setFavorite(isFavorite(String(id || '')));
   }, [id]);
+
+  const handleFavoriteClick = () => {
+    const favorites = toggleFavorite(String(id || ''));
+    setFavorite(favorites.includes(String(id || '')));
+  };
 
   const adoptionMutation = useMutation({
     mutationFn: async (answersPayload?: Array<{ question: string; answer: string }>) => createAdoption(String(id), undefined, answersPayload),
@@ -177,7 +185,7 @@ export default function AnimalDetail() {
       <main className="detail-wrap">
         <button type="button" onClick={() => nav('/animals')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: 0, background: 'none', color: MPL.muted, font: 'inherit', fontWeight: 800, cursor: 'pointer', marginBottom: 18 }}>
           <ArrowLeft size={17} />
-          Volver al catálogo
+          Volver a compañeros
         </button>
 
         <div className="detail-grid">
@@ -224,9 +232,14 @@ export default function AnimalDetail() {
                     </div>
                   )}
                 </div>
-                <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha">
-                  <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={handleFavoriteClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                    <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
+                  </button>
+                  <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha">
+                    <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
@@ -320,6 +333,9 @@ export default function AnimalDetail() {
         </button>
         <button type="button" onClick={handlePatitaClick} disabled={patitaMutation.isPending || !shelterId} aria-label="Echar una Patita" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.gold, cursor: shelterId ? 'pointer' : 'not-allowed' }}>
           <PawMark size={22} />
+        </button>
+        <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
+          <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />
         </button>
       </div>
 

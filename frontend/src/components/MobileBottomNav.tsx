@@ -5,7 +5,7 @@ import { MPL, MPL_FONT_BODY } from '../styles/mypetlive';
 
 const items = [
   { label: 'Inicio', to: '/', icon: Home },
-  { label: 'Buscar', to: '/animals', icon: Search },
+  { label: 'Compañeros', to: '/animals', icon: Search },
   { label: 'Cupones', to: '/coupons', icon: Ticket },
   { label: 'Favoritos', to: '/me/favorites', icon: Heart },
   { label: 'Perfil', to: '/profile', icon: User },

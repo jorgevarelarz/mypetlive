@@ -137,7 +137,7 @@ export default function Landing() {
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 34, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 6px' }}>Buscan hogar ahora</h2>
               <p style={{ fontSize: 16, color: C.muted, margin: 0 }}>Animales destacados de protectoras verificadas.</p>
             </div>
-            <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Ver catálogo →</Link>
+            <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Ver compañeros →</Link>
           </div>
           {pets.length === 0 ? (
             <div style={{ color: C.muted, padding: '24px 0' }}>Pronto verás aquí los animales destacados.</div>
@@ -230,7 +230,7 @@ export default function Landing() {
           <div className="lp-cta-band" style={{ background: C.teal, borderRadius: 28, padding: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32, overflow: 'hidden', position: 'relative' }}>
             <div style={{ position: 'relative', zIndex: 2 }}>
               <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 38, fontWeight: 800, letterSpacing: '-.02em', color: '#fff', margin: '0 0 12px' }}>¿Listo para conocer a tu compañero?</h2>
-              <p style={{ fontSize: 17, color: 'rgba(255,255,255,.85)', margin: 0, maxWidth: 440 }}>Explora el catálogo y filtra por lo que de verdad encaja contigo.</p>
+              <p style={{ fontSize: 17, color: 'rgba(255,255,255,.85)', margin: 0, maxWidth: 440 }}>Explora los compañeros y filtra por lo que de verdad encaja contigo.</p>
             </div>
             <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 17, fontWeight: 700, padding: '18px 34px', borderRadius: 16, flex: 'none', position: 'relative', zIndex: 2, boxShadow: '0 10px 24px -10px rgba(0,0,0,.4)' }}>Ver animales</Link>
             <span style={{ position: 'absolute', right: -30, bottom: -40, color: 'rgba(255,255,255,.08)' }}><Paw size={260} /></span>
@@ -251,7 +251,7 @@ export default function Landing() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 14 }}>Adoptantes</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'rgba(230,224,210,.7)' }}>
-                  <Link to="/animals">Catálogo</Link><a href="#como">Cómo adoptar</a><Link to="/coupons">Cupones</Link>
+                  <Link to="/animals">Compañeros</Link><a href="#como">Cómo adoptar</a><Link to="/coupons">Cupones</Link>
                 </div>
               </div>
               <div>

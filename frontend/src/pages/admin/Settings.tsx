@@ -46,7 +46,7 @@ export default function AdminSettings() {
           <Row label="Sistema visual" value={<Link to="/sistema" style={{ color: MPL.teal }}>Abrir</Link>} />
           <Row label="Direcciones mood" value={<Link to="/mood" style={{ color: MPL.teal }}>Abrir</Link>} />
           <Row label="Landing pública" value={<Link to="/" style={{ color: MPL.teal }}>Abrir</Link>} />
-          <Row label="Catálogo" value={<Link to="/animals" style={{ color: MPL.teal }}>Abrir</Link>} />
+          <Row label="Compañeros" value={<Link to="/animals" style={{ color: MPL.teal }}>Abrir</Link>} />
         </div>
       </section>
 

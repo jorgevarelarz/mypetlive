@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Search, SlidersHorizontal, X } from 'lucide-react';
 import { searchAnimals } from '../../api/animals';
 import SkeletonGrid from '../../components/ui/SkeletonGrid';
 import ErrorCard from '../../components/ui/ErrorCard';
@@ -9,6 +9,7 @@ import { toAbsoluteUrl } from '../../utils/media';
 import { BrandWordmark, MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
 import { useAuthModal } from '../../context/AuthModalContext';
+import { getFavorites, toggleFavorite } from '../../utils/favorites';
 
 const speciesOptions = [
   { label: 'Perro', value: 'dog' },
@@ -58,6 +59,7 @@ function Chip({
 
 export default function AnimalsPublicList() {
   const { openAuth } = useAuthModal();
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(getFavorites);
   const [sp, setSp] = useSearchParams();
   const page = Number(sp.get('page') || '1');
   const limit = Number(sp.get('limit') || '12');
@@ -135,10 +137,10 @@ export default function AnimalsPublicList() {
       <main style={{ maxWidth: 1180, margin: '0 auto' }}>
         <header className="catalog-hero" style={{ padding: '42px 32px 28px' }}>
           <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 8 }}>
-            <Link to="/" className="catalog-link">Inicio</Link> / Catálogo
+            <Link to="/" className="catalog-link">Inicio</Link> / Compañeros
           </div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, fontWeight: 800, margin: '0 0 6px' }}>
-            Animales en adopción
+            Compañeros en adopción
           </h1>
           <p style={{ fontSize: 16, color: MPL.muted, margin: 0 }}>
             <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
@@ -238,36 +240,49 @@ export default function AnimalsPublicList() {
               <>
                 <div className="catalog-results">
                   {items.map((a: any) => {
+                    const id = String(a._id || a.id);
                     const image = Array.isArray(a.images) ? a.images[0] : null;
                     const personality = Array.isArray(a.personality) ? a.personality.slice(0, 2) : [];
                     const meta = [speciesLabel(a.species), sizeLabel(a.size), a.age].filter(Boolean).join(' · ');
+                    const favorite = favoriteIds.includes(id);
                     return (
-                      <Link key={a._id || a.id} className="catalog-card" to={`/animals/${a._id || a.id}`} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, overflow: 'hidden', boxShadow: '0 1px 3px rgba(31,55,40,.06),0 8px 24px -16px rgba(31,55,40,.18)', display: 'block', textDecoration: 'none', color: MPL.ink }}>
-                        <div style={{ height: 200, background: '#E6E0D2', position: 'relative', overflow: 'hidden' }}>
-                          {image ? (
-                            <img src={toAbsoluteUrl(image)} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.faint, fontSize: 13 }}>Sin imagen</div>
-                          )}
-                          <span style={{ position: 'absolute', top: 12, left: 12, background: MPL.teal100, color: MPL.tealDark, fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8 }}>
-                            Publicado
-                          </span>
-                        </div>
-                        <div style={{ padding: '16px 18px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                            <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 21, fontWeight: 800 }}>{a.name}</span>
-                            {a.code && <span style={{ fontSize: 12, color: MPL.olive, fontWeight: 800 }}>{a.code}</span>}
+                      <article key={id} className="catalog-card" style={{ position: 'relative', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, overflow: 'hidden', boxShadow: '0 1px 3px rgba(31,55,40,.06),0 8px 24px -16px rgba(31,55,40,.18)' }}>
+                        <Link to={`/animals/${id}`} style={{ display: 'block', textDecoration: 'none', color: MPL.ink }}>
+                          <div style={{ height: 200, background: '#E6E0D2', position: 'relative', overflow: 'hidden' }}>
+                            {image ? (
+                              <img src={toAbsoluteUrl(image)} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.faint, fontSize: 13 }}>Sin imagen</div>
+                            )}
+                            <span style={{ position: 'absolute', top: 12, left: 12, background: MPL.teal100, color: MPL.tealDark, fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8 }}>
+                              Publicado
+                            </span>
                           </div>
-                          <div style={{ fontSize: 13, color: MPL.muted, margin: '4px 0 12px' }}>{meta || 'Información pendiente'}</div>
-                          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                            {(personality.length ? personality : ['Sociable']).map((trait: string) => (
-                              <span key={trait} style={{ background: MPL.bg, color: MPL.muted, fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 999 }}>
-                                {trait}
-                              </span>
-                            ))}
+                          <div style={{ padding: '16px 18px 20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                              <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 21, fontWeight: 800 }}>{a.name}</span>
+                              {a.code && <span style={{ fontSize: 12, color: MPL.olive, fontWeight: 800 }}>{a.code}</span>}
+                            </div>
+                            <div style={{ fontSize: 13, color: MPL.muted, margin: '4px 0 12px' }}>{meta || 'Información pendiente'}</div>
+                            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                              {(personality.length ? personality : ['Sociable']).map((trait: string) => (
+                                <span key={trait} style={{ background: MPL.bg, color: MPL.muted, fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 999 }}>
+                                  {trait}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      </Link>
+                        </Link>
+                        <button
+                          type="button"
+                          aria-label={favorite ? `Quitar ${a.name} de favoritos` : `Añadir ${a.name} a favoritos`}
+                          title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                          onClick={() => setFavoriteIds(toggleFavorite(id))}
+                          style={{ position: 'absolute', top: 12, right: 12, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: favorite ? MPL.coral : MPL.muted, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
+                        >
+                          <Heart size={20} fill={favorite ? 'currentColor' : 'none'} />
+                        </button>
+                      </article>
                     );
                   })}
                 </div>
