@@ -1,30 +1,72 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { searchAnimals } from '../../api/animals';
+import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, speciesLabel, sexLabel, sizeLabel, statusLabel } from '../../styles/mypetlive';
+
+const STATUS_COLORS: Record<string, string> = {
+  publicado: MPL.olive,
+  reservado: MPL.gold,
+  adoptado: MPL.teal,
+  borrador: MPL.faint,
+};
 
 export default function AdminAnimalsPage() {
   const { data, isLoading } = useQuery({ queryKey: ['admin-animals'], queryFn: () => searchAnimals({ limit: 200, page: 1, sort: 'createdAt', dir: 'desc' }) });
-  const items = data?.items || [];
+  const items = useMemo(() => data?.items || [], [data]);
+  const [status, setStatus] = useState('');
+
+  const statuses = useMemo(() => Array.from(new Set(items.map((a: any) => a.status).filter(Boolean))), [items]);
+  const filtered = status ? items.filter((a: any) => a.status === status) : items;
+
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-semibold mb-3">Animales</h1>
-      {isLoading ? <div>Cargando…</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {items.map((a: any) => (
-            <div key={a._id || a.id} className="border rounded overflow-hidden">
-              <div className="aspect-video bg-gray-100">
-                {Array.isArray(a.images) && a.images[0] ? <img src={a.images[0]} alt={a.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400">Sin imagen</div>}
+    <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', padding: '32px 20px' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', display: 'grid', gap: 18 }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: MPL.coral }}>
+            <PawMark size={24} />
+            <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, color: MPL.ink, margin: 0 }}>Animales</h1>
+            <span style={{ fontSize: 13, color: MPL.muted }}>{filtered.length} de {items.length}</span>
+          </div>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{ border: `1px solid ${MPL.border}`, borderRadius: 10, padding: '8px 12px', fontFamily: MPL_FONT_BODY, color: MPL.ink, background: '#fff' }}
+          >
+            <option value="">Todos los estados</option>
+            {statuses.map((s: any) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+        </header>
+
+        {isLoading ? (
+          <div style={{ color: MPL.muted }}>Cargando…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ color: MPL.muted }}>No hay animales para ese filtro.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+            {filtered.map((a: any) => (
+              <div key={a._id || a.id} style={{ background: MPL.card, border: `1px solid ${MPL.border}`, borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ aspectRatio: '16 / 10', background: MPL.panel, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {Array.isArray(a.images) && a.images[0]
+                    ? <img src={a.images[0]} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ color: MPL.faint, fontSize: 13 }}>Sin imagen</span>}
+                </div>
+                <div style={{ padding: 12, display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontFamily: MPL_FONT_DISPLAY, fontWeight: 800, fontSize: 16 }}>{a.name}</span>
+                    {a.status && (
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: '#fff', background: STATUS_COLORS[a.status] || MPL.faint, borderRadius: 999, padding: '2px 8px' }}>
+                        {statusLabel(a.status)}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 13, color: MPL.muted }}>{speciesLabel(a.species)}{a.breed ? ` · ${a.breed}` : ''}</div>
+                  <div style={{ fontSize: 12, color: MPL.faint }}>{sexLabel(a.sex)} · {sizeLabel(a.size)}</div>
+                </div>
               </div>
-              <div className="p-2 grid gap-1">
-                <div className="font-medium">{a.name}</div>
-                <div className="text-sm text-gray-600">{a.species}{a.breed?` · ${a.breed}`:''}</div>
-                <div className="text-xs text-gray-500">{a.sex} · {a.size} · {a.status}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-

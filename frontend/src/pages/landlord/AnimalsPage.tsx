@@ -218,9 +218,9 @@ export default function AnimalsPage() {
       <header>
         <h1 className="text-xl font-semibold">Mis animales</h1>
         <p className="text-gray-600">Crea y gestiona los animales de tu protectora.</p>
-        <div className="mt-3 inline-flex flex-col rounded-lg border border-emerald-100 bg-white px-4 py-3 shadow-sm gap-1">
-          <span className="text-xs uppercase tracking-wide text-emerald-800">Patitas disponibles</span>
-          <span className="text-2xl font-semibold text-emerald-700">{patitasLoading ? '…' : (patitasData?.patitas ?? 0)}</span>
+        <div className="mt-3 inline-flex flex-col rounded-lg border border-teal-100 bg-white px-4 py-3 shadow-sm gap-1">
+          <span className="text-xs uppercase tracking-wide text-teal-700">Patitas disponibles</span>
+          <span className="text-2xl font-semibold text-teal-700">{patitasLoading ? '…' : (patitasData?.patitas ?? 0)}</span>
           <button type="button" className="mt-1 text-sm" onClick={() => setSpendOpen(true)} disabled={patitasLoading}>
             Usar Patitas
           </button>
@@ -229,7 +229,7 @@ export default function AnimalsPage() {
 
       {spendOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 border border-emerald-100 grid gap-3">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 border border-teal-100 grid gap-3">
             <h2 className="text-lg font-medium">Usar Patitas</h2>
             <label className="text-sm text-gray-600 grid gap-1">
               Importe
@@ -270,7 +270,7 @@ export default function AnimalsPage() {
                 ))}
               </select>
               {coupons.length > 0 && filteredCoupons.length === 0 && (
-                <span className="text-xs text-amber-700">Selecciona una mascota con código para ver cupones asociados.</span>
+                <span className="text-xs text-gold-700">Selecciona una mascota con código para ver cupones asociados.</span>
               )}
             </label>
             <div className="flex gap-2 justify-end pt-2">
@@ -339,7 +339,7 @@ export default function AnimalsPage() {
                   type="button"
                   key={option}
                   onClick={() => togglePersonality(option)}
-                  className={`px-3 py-1 rounded-full border text-sm ${active ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'border-gray-300 text-gray-600'}`}
+                  className={`px-3 py-1 rounded-full border text-sm ${active ? 'bg-teal-100 border-teal text-teal-700' : 'border-gray-300 text-gray-600'}`}
                 >
                   {option}
                 </button>
@@ -355,7 +355,7 @@ export default function AnimalsPage() {
                 type="button"
                 key={option.value}
                 onClick={() => setForm(prev => ({ ...prev, mood: prev.mood === option.value ? '' : option.value }))}
-                className={`px-3 py-1 rounded-full border text-sm ${form.mood === option.value ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'border-gray-300 text-gray-600'}`}
+                className={`px-3 py-1 rounded-full border text-sm ${form.mood === option.value ? 'bg-teal-100 border-teal text-teal-700' : 'border-gray-300 text-gray-600'}`}
               >
                 {option.icon} {option.label}
               </button>
@@ -404,7 +404,7 @@ export default function AnimalsPage() {
           )}
         </div>
         <div>
-          <button type="submit" className="px-4 py-2 rounded bg-emerald-600 text-white">
+          <button type="submit" className="px-4 py-2 rounded bg-teal-600 text-white">
             Crear animal
           </button>
         </div>

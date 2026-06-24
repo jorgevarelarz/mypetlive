@@ -1,33 +1,38 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
 
-const LINKS: Array<{ to: string; label: string; desc: string }> = [
-  { to: '/admin/users', label: 'Usuarios', desc: 'Adoptantes, protectoras y partners' },
-  { to: '/admin/animals', label: 'Animales', desc: 'Fichas publicadas en la plataforma' },
-  { to: '/admin/adoptions', label: 'Adopciones', desc: 'Solicitudes y su estado' },
-  { to: '/admin/coupons', label: 'Cupones', desc: 'Crea y gestiona cupones de partners' },
-  { to: '/admin/reports', label: 'Reportes', desc: 'Métricas del ecosistema' },
+const LINKS: Array<{ to: string; label: string; desc: string; accent: string }> = [
+  { to: '/admin/users', label: 'Usuarios', desc: 'Adoptantes, protectoras y partners', accent: MPL.teal },
+  { to: '/admin/animals', label: 'Animales', desc: 'Fichas publicadas en la plataforma', accent: MPL.coral },
+  { to: '/admin/adoptions', label: 'Adopciones', desc: 'Solicitudes y su estado', accent: MPL.olive },
+  { to: '/admin/coupons', label: 'Cupones', desc: 'Crea y gestiona cupones de partners', accent: MPL.gold },
+  { to: '/admin/reports', label: 'Reportes', desc: 'Métricas del ecosistema', accent: MPL.teal },
 ];
 
 export default function AdminHome() {
   return (
-    <div className="p-4 grid gap-4">
-      <header>
-        <h1 className="text-2xl font-semibold">Panel de administración</h1>
-        <p className="text-gray-600">Modera la plataforma y revisa el ecosistema MyPetLive.</p>
-      </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {LINKS.map((l) => (
-          <Link
-            key={l.to}
-            to={l.to}
-            className="rounded-2xl border p-4 bg-white hover:shadow-sm transition"
-            style={{ borderColor: '#E7E1D5' }}
-          >
-            <div className="font-semibold">{l.label}</div>
-            <div className="text-sm text-gray-600 mt-1">{l.desc}</div>
-          </Link>
-        ))}
+    <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', padding: '32px 20px' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', display: 'grid', gap: 22 }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: MPL.teal }}>
+            <PawMark size={24} />
+            <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: MPL.ink, margin: 0 }}>Panel de administración</h1>
+          </div>
+          <p style={{ color: MPL.muted, margin: 0, fontSize: 14 }}>Modera la plataforma y revisa el ecosistema MyPetLive.</p>
+        </header>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+          {LINKS.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              style={{ display: 'block', textDecoration: 'none', background: MPL.card, border: `1px solid ${MPL.border}`, borderLeft: `4px solid ${l.accent}`, borderRadius: 16, padding: 18, color: MPL.ink }}
+            >
+              <div style={{ fontFamily: MPL_FONT_DISPLAY, fontWeight: 800, fontSize: 17 }}>{l.label}</div>
+              <div style={{ fontSize: 13, color: MPL.muted, marginTop: 4 }}>{l.desc}</div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

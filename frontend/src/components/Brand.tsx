@@ -5,7 +5,7 @@ type Props = {
   withIcon?: boolean;
 };
 
-/** Wordmark de marca MyPetLive: "MyPet" (teal) + "Live" (verde) + huella coral. */
+/** Wordmark de marca MyPetLive: "MyPet" (teal) + "Live" (coral) + huella coral. */
 export default function Brand({ size = 20, withIcon = true }: Props) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 800, fontSize: size, letterSpacing: 0, lineHeight: 1 }}>
@@ -23,7 +23,7 @@ export default function Brand({ size = 20, withIcon = true }: Props) {
         </svg>
       )}
       <span style={{ color: '#1F6F6F' }}>MyPet</span>
-      <span style={{ color: '#6A7B4F', marginLeft: -2 }}>Live</span>
+      <span style={{ color: '#E8654A', marginLeft: -2 }}>Live</span>
     </span>
   );
 }

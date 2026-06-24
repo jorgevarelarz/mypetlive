@@ -300,7 +300,7 @@ export default function PetPage() {
                   key={id}
                   type="button"
                   onClick={() => setSelectedPetId(id)}
-                  className={`px-3 py-1 rounded-full border text-sm ${active ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'border-gray-300 text-gray-600'}`}
+                  className={`px-3 py-1 rounded-full border text-sm ${active ? 'bg-teal-100 border-teal text-teal-700' : 'border-gray-300 text-gray-600'}`}
                 >
                   {animal?.name || 'Mascota'}
                   {animal?.code && (
