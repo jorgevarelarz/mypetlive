@@ -17,6 +17,7 @@ type AuthCtx = {
   user: User | null;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  updateUser: (patch: Partial<User>) => void;
   hasRole: (...roles: User["role"][]) => boolean;
   legalStatus: LegalStatus | null;
   legalStatusLoading: boolean;
@@ -77,6 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLegalStatus(null);
   };
 
+  // Mezcla cambios en el usuario en memoria + localStorage (preserva el token).
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next: User = { ...prev, ...patch, token: prev.token };
+      try {
+        localStorage.setItem("user", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const hasRole = (...roles: User["role"][]) => !!user && roles.includes(user.role);
 
   const token = user?.token ?? null;
@@ -88,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         login,
         logout,
+        updateUser,
         hasRole,
         legalStatus,
         legalStatusLoading,

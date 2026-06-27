@@ -1,11 +1,34 @@
 import { api as axios } from "../api/client";
 
+export type UserAddress = {
+  street?: string;
+  city?: string;
+  postalCode?: string;
+  region?: string;
+  country?: string;
+};
+
+export type UserProfile = {
+  avatarUrl?: string;
+  phone?: string;
+  bio?: string;
+  firstName?: string;
+  lastName?: string;
+  age?: number;
+  occupation?: string;
+  housingType?: "casa" | "piso";
+  orgName?: string;
+  website?: string;
+  address?: UserAddress;
+};
+
 export type User = {
   _id: string;
   email: string;
   name?: string;
   role: "tenant" | "landlord" | "pro" | "admin" | "store" | "vet";
   isVerified?: boolean;
+  profile?: UserProfile;
   tenantPro?: {
     status?: string;
     maxRent?: number;

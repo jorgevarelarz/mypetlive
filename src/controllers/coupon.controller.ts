@@ -3,6 +3,7 @@ import { isValidObjectId } from 'mongoose';
 import { Coupon } from '../models/coupon.model';
 import { PatitaLog } from '../models/patitaLog.model';
 import { User } from '../models/user.model';
+import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
 
 const codePattern = /^[A-Z0-9]+-\d{3}$/;
 
@@ -229,7 +230,7 @@ export async function useCoupon(req: Request, res: Response) {
   if (!user || !['store', 'vet', 'admin'].includes(user.role)) {
     return res.status(403).json({ error: 'forbidden' });
   }
-  const { animalCode, logId } = (req.body || {}) as { animalCode?: string; logId?: string };
+  const { animalCode, logId, userId } = (req.body || {}) as { animalCode?: string; logId?: string; userId?: string };
   const normalizedCode = (animalCode || '').trim().toUpperCase();
   const coupon = await Coupon.findById(req.params.id);
   if (!coupon) return res.status(404).json({ error: 'coupon_not_found' });
@@ -274,9 +275,27 @@ export async function useCoupon(req: Request, res: Response) {
     await updatedLog.save();
   }
 
+  // Generación de Patitas para el usuario identificado (modelo nuevo).
+  let earn: any;
+  if (userId && isValidObjectId(userId)) {
+    const beneficiary = await User.findById(userId).select('role');
+    if (beneficiary) {
+      const reward = Number(coupon.bonusPatitas) > 0 ? Math.round(Number(coupon.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
+      earn = await earnForUser({
+        userId: String(userId),
+        amount: reward,
+        source: 'coupon',
+        partnerId: String(user._id || user.id),
+        couponId: String(coupon._id),
+        concept: coupon.title || coupon.copy || 'Cupón',
+      });
+    }
+  }
+
   res.json({
     ok: true,
     coupon,
     logId: updatedLog ? String(updatedLog._id) : undefined,
+    earn,
   });
 }

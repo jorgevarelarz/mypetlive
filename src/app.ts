@@ -246,7 +246,8 @@ app.use('/api', paymentsRoutes);
 // app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
 // app.use('/api/pros', authenticate, requireVerified, proRoutes);
 // app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
-// app.use('/api', authenticate, requireVerified, connectRoutes);
+// Stripe Connect: onboarding de cobro para protectoras (donaciones). Sin requireVerified.
+app.use('/api', authenticate, connectRoutes);
 // app.use('/api', authenticate, requireVerified, signatureRoutes);
 // app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
 

@@ -110,7 +110,60 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
+/**
+ * Dirección postal reutilizable (adoptantes, protectoras y tiendas).
+ */
+const addressSchema = new Schema(
+  {
+    street: { type: String, trim: true },
+    city: { type: String, trim: true },
+    postalCode: { type: String, trim: true },
+    region: { type: String, trim: true },
+    country: { type: String, trim: true, default: 'España' },
+  },
+  { _id: false },
+);
+
+/**
+ * Perfil enriquecido del usuario. Los campos relevantes dependen del rol:
+ *  - adoptante (tenant): firstName/lastName, age, occupation, housingType, address, avatar, bio.
+ *  - protectora (landlord): orgName, website, address, avatar/logo, bio (el cobro de donaciones
+ *    se gestiona vía Stripe Connect — stripeAccountId — no se guarda IBAN en claro).
+ *  - tienda/vet (store/vet): orgName, address, avatar/logo.
+ */
+const profileSchema = new Schema(
+  {
+    avatarUrl: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    bio: { type: String, trim: true, maxlength: 1000 },
+    // Persona
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    age: { type: Number, min: 0, max: 120 },
+    occupation: { type: String, trim: true },
+    housingType: { type: String, enum: ['casa', 'piso'] },
+    // Organización
+    orgName: { type: String, trim: true },
+    website: { type: String, trim: true },
+    // Común
+    address: { type: addressSchema, default: () => ({}) },
+    // Auto-donación de Patitas: reenvía automáticamente las Patitas generadas a una protectora.
+    autoDonate: {
+      type: new Schema(
+        {
+          enabled: { type: Boolean, default: false },
+          shelterId: { type: Schema.Types.ObjectId, ref: 'User' },
+        },
+        { _id: false },
+      ),
+      default: () => ({ enabled: false }),
+    },
+  },
+  { _id: false },
+);
+
 userSchema.add({ tenantPro: { type: tenantProSchema, default: () => ({}) } });
+userSchema.add({ profile: { type: profileSchema, default: () => ({}) } });
 
 userSchema.index({ 'tenantPro.status': 1, 'tenantPro.maxRent': -1 });
 

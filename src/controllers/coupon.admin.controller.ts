@@ -44,6 +44,7 @@ function serializeCoupon(doc: any) {
     partnerType: doc.partnerType,
     copy: doc.copy,
     discount: doc.discount,
+    bonusPatitas: doc.bonusPatitas,
     targetAnimalCode: doc.targetAnimalCode,
     active: doc.active,
     expiresAt: doc.expiresAt,
@@ -75,8 +76,15 @@ export async function listCouponPartners(_req: Request, res: Response) {
   });
 }
 
+function parseBonusPatitas(value: any): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(n);
+}
+
 export async function createAdminCoupon(req: Request, res: Response) {
-  const { partnerId, copy, discount, targetAnimalCode, expiresAt } = req.body || {};
+  const { partnerId, copy, discount, targetAnimalCode, expiresAt, bonusPatitas } = req.body || {};
   const normalizedCopy = normalizeCopy(copy);
   if (!normalizedCopy) {
     return res.status(400).json({ error: 'copy_required' });
@@ -101,6 +109,7 @@ export async function createAdminCoupon(req: Request, res: Response) {
     expiresDate = parsed;
   }
 
+  const reward = parseBonusPatitas(bonusPatitas);
   const coupon = await Coupon.create({
     partnerId: partner._id,
     partnerType: partner.role,
@@ -109,6 +118,7 @@ export async function createAdminCoupon(req: Request, res: Response) {
     discount: normalizedDiscount,
     targetAnimalCode: targetAnimalCode ? String(targetAnimalCode).trim().toUpperCase() : undefined,
     expiresAt: expiresDate,
+    bonusPatitas: reward,
     active: true,
   });
   const populated = await coupon.populate('partnerId', 'name role');
@@ -117,7 +127,14 @@ export async function createAdminCoupon(req: Request, res: Response) {
 
 export async function updateAdminCoupon(req: Request, res: Response) {
   const updates: any = {};
-  const { copy, discount, targetAnimalCode, expiresAt, partnerId } = req.body || {};
+  const { copy, discount, targetAnimalCode, expiresAt, partnerId, bonusPatitas } = req.body || {};
+  if (typeof bonusPatitas !== 'undefined') {
+    const reward = parseBonusPatitas(bonusPatitas);
+    if (reward === undefined) {
+      return res.status(400).json({ error: 'invalid_bonus_patitas' });
+    }
+    updates.bonusPatitas = reward;
+  }
   if (typeof copy !== 'undefined') {
     const normalizedCopy = normalizeCopy(copy);
     if (!normalizedCopy) {

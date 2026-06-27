@@ -11,12 +11,9 @@ import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
+import { MPL, PawMark } from '../styles/mypetlive';
 
 type NavItem = { label: string; path?: string; to?: string };
-
-// Paleta de marca MyPetLive
-const BRAND_TEAL = '#1F6F6F';
-const ACTIVE_BG = '#E7F0EE';
 
 type IconType = React.ComponentType<{ size?: number; strokeWidth?: number }>;
 const iconFor: Record<string, IconType> = {
@@ -31,19 +28,27 @@ const iconFor: Record<string, IconType> = {
   '/inbox': Inbox,
 };
 
+// Rutas "home" de cada rol: solo se marcan activas en coincidencia exacta (no en sus hijas)
+const INDEX_PATHS = new Set(['/home', '/landlord', '/admin', '/partner', '/pro']);
+
 function NavRow({ to, label, badge }: { to: string; label: string; badge?: React.ReactNode }) {
   const Icon = iconFor[to] || Circle;
   return (
     <NavLink
       to={to}
-      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[#F4EFE7]"
-      style={({ isActive }) =>
-        isActive
-          ? { background: ACTIVE_BG, color: BRAND_TEAL, fontWeight: 600 }
-          : { color: '#3F4A3C' }
-      }
+      end={INDEX_PATHS.has(to)}
+      className="flex items-center gap-3 transition-colors"
+      style={({ isActive }) => ({
+        padding: '11px 12px',
+        borderRadius: 12,
+        fontSize: 14.5,
+        fontWeight: 800,
+        textDecoration: 'none',
+        background: isActive ? MPL.teal100 : 'transparent',
+        color: isActive ? MPL.tealDark : MPL.muted,
+      })}
     >
-      <Icon size={17} strokeWidth={2} />
+      <Icon size={18} strokeWidth={2} />
       <span className="flex-1">{label}</span>
       {badge}
     </NavLink>
@@ -247,41 +252,45 @@ function SideNav() {
     return () => {};
   }, [user?._id, showInbox]);
   const roleItems = (role && (navConfig as any)[role] ? (navConfig as any)[role] : []) as NavItem[];
-  const sectionLabel = (text: string) => (
-    <div className="text-[11px] font-semibold uppercase tracking-wider px-3 mb-1.5" style={{ color: '#9AA08F' }}>{text}</div>
-  );
+  // Menú unificado: si el rol tiene su propia sección (protectora/admin/partner), ESA es la
+  // navegación — sin la sección "General" duplicada. Los roles sin sección propia (adoptante)
+  // usan su lista general como menú único.
+  const items = roleItems.length > 0 ? roleItems : generalItems;
   return (
-    <aside className="hidden lg:block w-60 shrink-0">
+    <aside className="hidden lg:flex w-60 shrink-0">
       <div
-        className="sticky top-16 p-3 border rounded-2xl shadow-sm"
-        style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
+        className="flex flex-col w-full border rounded-2xl shadow-sm overflow-hidden"
+        style={{ borderColor: MPL.border, background: '#FFFFFF' }}
       >
-        {sectionLabel('General')}
-        <div className="grid gap-1">
-          {generalItems.map((item: NavItem) => {
+        <nav className="grid gap-1.5 p-3">
+          {items.map((item: NavItem) => {
             const target = resolvePath(item);
             const badge =
               target === '/inbox' && unread > 0 ? (
                 <span
                   className="inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
-                  style={{ background: BRAND_TEAL, color: '#fff' }}
+                  style={{ background: MPL.teal, color: '#fff' }}
                 >
                   {unread}
                 </span>
               ) : undefined;
             return <NavRow key={target} to={target} label={item.label} badge={badge} />;
           })}
-        </div>
-        {roleItems.length > 0 && (
-          <>
-            <div className="my-3 border-t" style={{ borderColor: '#EFEADF' }} />
-            {sectionLabel(labelFor[role!] || role!)}
-            <div className="grid gap-1">
-              {roleItems.map(item => (
-                <NavRow key={resolvePath(item)} to={resolvePath(item)} label={item.label} />
-              ))}
+        </nav>
+        {user && role && (
+          <div className="mt-auto p-3">
+            <div style={{ background: MPL.bg, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 11 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 11, background: MPL.teal, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+                <PawMark size={17} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: MPL.ink }}>
+                  {user.name || labelFor[role] || 'Cuenta'}
+                </div>
+                <div style={{ fontSize: 11.5, color: MPL.faint }}>{labelFor[role] || role}</div>
+              </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </aside>
