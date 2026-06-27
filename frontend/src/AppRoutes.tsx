@@ -6,6 +6,7 @@ import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
 import Landing from "./pages/home/Landing";
 import Sistema from "./pages/Sistema";
+import AnimalPassport from "./pages/passport/AnimalPassport";
 import MoodDirections from "./pages/MoodDirections";
 import LoginPage from "./pages/auth/LoginPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -60,6 +61,7 @@ export default function AppRoutes() {
             <Route path="/" element={<HomeGate />} />
             <Route path="/sistema" element={<Sistema />} />
             <Route path="/mood" element={<MoodDirections />} />
+            <Route path="/p/:code" element={<AnimalPassport />} />
             <Route element={<AppShell />}>
               <Route path="/animals" element={<AnimalsPublicList />} />
               <Route path="/animals/:id" element={<AnimalDetail />} />

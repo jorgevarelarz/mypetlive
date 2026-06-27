@@ -11,6 +11,12 @@ const couponSchema = new Schema(
     bonusPatitas: { type: Number, default: 0 },
     active: { type: Boolean, default: true, index: true },
     targetAnimalCode: { type: String, uppercase: true, trim: true },
+    // Targeting de perfil para ofertas personalizadas (motor de ofertas).
+    targetSpecies: { type: [String], default: [] },
+    targetAgeGroup: { type: [String], default: [] }, // puppy|young|adult|senior
+    targetSize: { type: [String], default: [] }, // small|medium|large
+    targetCity: { type: String, trim: true },
+    sponsored: { type: Boolean, default: false, index: true }, // placement de pago
     expiresAt: { type: Date },
     usedAt: { type: Date, index: true },
     usedBy: { type: Schema.Types.ObjectId, ref: 'User' },

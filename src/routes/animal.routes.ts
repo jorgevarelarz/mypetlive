@@ -30,6 +30,9 @@ r.delete('/alerts/:id', authenticate, asyncHandler(alertCtrl.remove));
 
 // Public
 r.get('/code/:code', authenticate, asyncHandler(ctrl.getByCode));
+// Pasaporte público por código + línea de tiempo (auth opcional: dueño/admin ven más)
+r.get('/passport/:code', asyncHandler(ctrl.getPassport));
+r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
 r.get('/:id', asyncHandler(ctrl.getById));
 r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));
 r.post('/:id/care/feed', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markFeeding));

@@ -5,6 +5,7 @@ import { Animal, ensureAnimalCode } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
+import { logAnimalEvent } from '../utils/animalEvents';
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -186,7 +187,8 @@ export async function setStatus(req: Request, res: Response) {
   await app.save();
 
   if (status === 'aprobada') {
-    // Cierre de adopción: la mascota pasa a ser del adoptante.
+    // Cierre de adopción: la mascota pasa a ser del adoptante (conserva su código).
+    const previousShelter = animal.shelter ? String(animal.shelter) : undefined;
     if (app.adopterId) {
       animal.ownerId = new Types.ObjectId(String(app.adopterId));
     }
@@ -194,14 +196,23 @@ export async function setStatus(req: Request, res: Response) {
     animal.isPersonalPet = true;
     animal.status = 'adoptado';
     await animal.save();
+    await logAnimalEvent({
+      animalId: String(animal._id), code: animal.code, type: 'adopted',
+      actorId: String((req as any).user?._id || (req as any).user?.id || ''),
+      fromOwnerId: previousShelter, fromOwnerType: 'protectora',
+      toOwnerId: app.adopterId ? String(app.adopterId) : undefined, toOwnerType: 'tenant',
+      shelterId: previousShelter, data: { adoptionId: String(app._id) },
+    });
   } else if (['preaprobada', 'cita_propuesta'].includes(status) && animal.status === 'publicado') {
     // Proceso avanzado: el animal deja de estar libremente disponible.
     animal.status = 'reservado';
     await animal.save();
+    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'reserved', shelterId: animal.shelter ? String(animal.shelter) : undefined });
   } else if ((status === 'rechazada' || status === 'cancelada') && animal.status === 'reservado') {
     // Se libera de nuevo si el proceso se detiene.
     animal.status = 'publicado';
     await animal.save();
+    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
   }
 
   try {

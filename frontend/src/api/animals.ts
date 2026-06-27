@@ -97,6 +97,38 @@ export async function getAnimalByCode(code: string) {
   return data;
 }
 
+export type AnimalTimelineItem = { at: string; type: string; title: string; detail?: string };
+
+export type AnimalPassport = {
+  code: string;
+  name: string;
+  species?: string;
+  breed?: string;
+  age?: string;
+  ageGroup?: string;
+  sex?: string;
+  size?: string;
+  images: string[];
+  personality: string[];
+  status?: string;
+  isPersonalPet?: boolean;
+  provenance?: { shelterName?: string; city?: string } | null;
+  health: { vetVisits: number; healthMilestones: number };
+  timeline: AnimalTimelineItem[];
+};
+
+// Pasaporte público por código (sin datos personales del dueño).
+export async function getAnimalPassport(code: string) {
+  const { data } = await client.get(`/api/animals/passport/${encodeURIComponent(code)}`);
+  return data as AnimalPassport;
+}
+
+// Línea de tiempo (auth opcional: el dueño/admin ve más detalle).
+export async function getAnimalTimeline(code: string) {
+  const { data } = await client.get(`/api/animals/${encodeURIComponent(code)}/timeline`);
+  return data as { code: string; timeline: AnimalTimelineItem[] };
+}
+
 export async function createAnimal(payload: any) {
   const { data } = await client.post('/api/animals', payload);
   return data;

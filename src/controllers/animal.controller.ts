@@ -4,6 +4,8 @@ import { Adoption } from '../models/adoption.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
+import { logAnimalEvent } from '../utils/animalEvents';
+import { AnimalEvent } from '../models/animalEvent.model';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
@@ -43,6 +45,11 @@ export async function create(req: Request, res: Response) {
     if (u?._id || u?.id) b.shelter = String(u._id || u.id);
   }
   const doc = await Animal.create({ ...b, isPersonalPet: false, createdByRole: 'protectora' });
+  await logAnimalEvent({
+    animalId: String(doc._id), code: doc.code, type: 'created',
+    actorId: String((req as any).user?._id || (req as any).user?.id || ''),
+    shelterId: String(doc.shelter), toOwnerId: String(doc.shelter), toOwnerType: 'protectora',
+  });
   if (doc.status === 'publicado') notifyMatchingAlerts(doc.toObject()).catch(() => undefined);
   res.status(201).json(doc);
 }
@@ -93,6 +100,97 @@ export async function getByCode(req: Request, res: Response) {
   if (animal.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
   if (!animal.code) await ensureAnimalCode(animal);
   res.json(animal);
+}
+
+// Construye la línea de tiempo unificada del pasaporte (eventos de ciclo de vida + salud/vet).
+// `full` (dueño/admin) incluye nombres de las familias; el público recibe versión redactada.
+function buildTimeline(animal: any, events: any[], full: boolean) {
+  const items: { at: any; type: string; title: string; detail?: string }[] = [];
+  const hasCreated = events.some(e => e.type === 'created');
+  if (!hasCreated) {
+    items.push({ at: animal.createdAt, type: 'created', title: 'Dado de alta', detail: animal.createdByRole === 'tenant' ? 'por su familia' : undefined });
+  }
+  for (const e of events) {
+    const shelterName = e.shelterId?.name as string | undefined;
+    let title = e.type;
+    let detail: string | undefined;
+    switch (e.type) {
+      case 'created':
+        if (e.toOwnerType === 'tenant') { title = 'Registrado por su familia'; }
+        else { title = 'Dado de alta'; detail = shelterName ? `en ${shelterName}` : 'en una protectora'; }
+        break;
+      case 'adopted':
+        title = 'Adoptado';
+        detail = full && e.toOwnerId?.name ? `por ${e.toOwnerId.name}` : (shelterName ? `desde ${shelterName}` : undefined);
+        break;
+      case 'reserved': title = 'Reservado'; break;
+      case 'returned': title = 'De nuevo disponible'; break;
+      default: title = e.type;
+    }
+    items.push({ at: e.createdAt, type: e.type, title, detail });
+  }
+  for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: v.note });
+  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', title: h.type || 'Hito de salud', detail: h.notes });
+  return items
+    .filter(i => i.at)
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+// GET /api/animals/:code/timeline — auth opcional; dueño/admin ven nombres, público redactado.
+export async function getTimeline(req: Request, res: Response) {
+  const normalized = String(req.params.code || '').trim().toUpperCase();
+  if (!normalized) return res.status(400).json({ error: 'invalid_code' });
+  const animal: any = await Animal.findOne({ code: normalized }).lean();
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const viewer: any = (req as any).user;
+  const viewerId = String(viewer?._id || viewer?.id || '');
+  const isOwner = !!viewerId && (String(animal.ownerId || '') === viewerId || String(animal.shelter || '') === viewerId);
+  const full = !!viewer && (viewer.role === 'admin' || isOwner);
+
+  const events = await AnimalEvent.find({ animalId: animal._id })
+    .sort({ createdAt: 1 })
+    .populate('shelterId', 'name')
+    .populate('toOwnerId', 'name')
+    .populate('fromOwnerId', 'name')
+    .lean();
+
+  res.json({ code: animal.code, timeline: buildTimeline(animal, events, full) });
+}
+
+// GET /api/animals/passport/:code — público (sin datos personales del dueño actual).
+export async function getPassport(req: Request, res: Response) {
+  const normalized = String(req.params.code || '').trim().toUpperCase();
+  if (!normalized) return res.status(400).json({ error: 'invalid_code' });
+  const animal: any = await Animal.findOne({ code: normalized }).lean();
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const shelter: any = animal.shelter ? await User.findById(animal.shelter).select('name profile.address.city').lean() : null;
+  const events = await AnimalEvent.find({ animalId: animal._id })
+    .sort({ createdAt: 1 })
+    .populate('shelterId', 'name')
+    .lean();
+
+  const vetCount = (animal.vetHistory || []).length;
+  const healthCount = (animal.healthHistory || []).length;
+
+  res.json({
+    code: animal.code,
+    name: animal.name,
+    species: animal.species,
+    breed: animal.breed,
+    age: animal.age,
+    ageGroup: animal.ageGroup,
+    sex: animal.sex,
+    size: animal.size,
+    images: animal.images || [],
+    personality: animal.personality || [],
+    status: animal.status,
+    isPersonalPet: animal.isPersonalPet,
+    provenance: shelter ? { shelterName: shelter.name, city: shelter.profile?.address?.city || animal.city } : null,
+    health: { vetVisits: vetCount, healthMilestones: healthCount },
+    timeline: buildTimeline(animal, events, false),
+  });
 }
 
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
@@ -225,6 +323,11 @@ export async function createPersonal(req: Request, res: Response) {
     sex: sex || undefined,
     size: size || undefined,
     status: 'no_disponible',
+  });
+
+  await logAnimalEvent({
+    animalId: String(doc._id), code: doc.code, type: 'created',
+    actorId: String(userId), toOwnerId: String(userId), toOwnerType: 'tenant',
   });
 
   res.status(201).json(doc);

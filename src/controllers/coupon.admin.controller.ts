@@ -46,6 +46,11 @@ function serializeCoupon(doc: any) {
     discount: doc.discount,
     bonusPatitas: doc.bonusPatitas,
     targetAnimalCode: doc.targetAnimalCode,
+    targetSpecies: doc.targetSpecies,
+    targetAgeGroup: doc.targetAgeGroup,
+    targetSize: doc.targetSize,
+    targetCity: doc.targetCity,
+    sponsored: doc.sponsored,
     active: doc.active,
     expiresAt: doc.expiresAt,
     usedAt: doc.usedAt,
@@ -83,8 +88,15 @@ function parseBonusPatitas(value: any): number | undefined {
   return Math.round(n);
 }
 
+// Normaliza un campo de targeting a array de strings limpio.
+function toStrArray(value: any): string[] {
+  if (Array.isArray(value)) return value.map(v => String(v).trim().toLowerCase()).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return value.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+  return [];
+}
+
 export async function createAdminCoupon(req: Request, res: Response) {
-  const { partnerId, copy, discount, targetAnimalCode, expiresAt, bonusPatitas } = req.body || {};
+  const { partnerId, copy, discount, targetAnimalCode, expiresAt, bonusPatitas, targetSpecies, targetAgeGroup, targetSize, targetCity, sponsored } = req.body || {};
   const normalizedCopy = normalizeCopy(copy);
   if (!normalizedCopy) {
     return res.status(400).json({ error: 'copy_required' });
@@ -119,6 +131,11 @@ export async function createAdminCoupon(req: Request, res: Response) {
     targetAnimalCode: targetAnimalCode ? String(targetAnimalCode).trim().toUpperCase() : undefined,
     expiresAt: expiresDate,
     bonusPatitas: reward,
+    targetSpecies: toStrArray(targetSpecies),
+    targetAgeGroup: toStrArray(targetAgeGroup),
+    targetSize: toStrArray(targetSize),
+    targetCity: typeof targetCity === 'string' && targetCity.trim() ? targetCity.trim() : undefined,
+    sponsored: !!sponsored,
     active: true,
   });
   const populated = await coupon.populate('partnerId', 'name role');
@@ -127,7 +144,7 @@ export async function createAdminCoupon(req: Request, res: Response) {
 
 export async function updateAdminCoupon(req: Request, res: Response) {
   const updates: any = {};
-  const { copy, discount, targetAnimalCode, expiresAt, partnerId, bonusPatitas } = req.body || {};
+  const { copy, discount, targetAnimalCode, expiresAt, partnerId, bonusPatitas, targetSpecies, targetAgeGroup, targetSize, targetCity, sponsored } = req.body || {};
   if (typeof bonusPatitas !== 'undefined') {
     const reward = parseBonusPatitas(bonusPatitas);
     if (reward === undefined) {
@@ -135,6 +152,11 @@ export async function updateAdminCoupon(req: Request, res: Response) {
     }
     updates.bonusPatitas = reward;
   }
+  if (typeof targetSpecies !== 'undefined') updates.targetSpecies = toStrArray(targetSpecies);
+  if (typeof targetAgeGroup !== 'undefined') updates.targetAgeGroup = toStrArray(targetAgeGroup);
+  if (typeof targetSize !== 'undefined') updates.targetSize = toStrArray(targetSize);
+  if (typeof targetCity !== 'undefined') updates.targetCity = typeof targetCity === 'string' && targetCity.trim() ? targetCity.trim() : undefined;
+  if (typeof sponsored !== 'undefined') updates.sponsored = !!sponsored;
   if (typeof copy !== 'undefined') {
     const normalizedCopy = normalizeCopy(copy);
     if (!normalizedCopy) {
