@@ -1,9 +1,10 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { Camera, CheckCircle2, X } from 'lucide-react';
+import { Camera, CheckCircle2, X, UserCheck, Ticket, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyPatitas, redeemPreview, redeemConfirm, type RedeemPreview } from '../../api/patitas';
+import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, type RedeemPreview } from '../../api/patitas';
+import { listCoupons, applyCouponToCustomer, type Coupon } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
@@ -50,6 +51,122 @@ function PartnerPayout() {
         <button type="button" onClick={connect} disabled={linking} style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
           {linking ? 'Abriendo…' : status?.connected ? 'Continuar verificación' : 'Conectar cuenta de cobro'}
         </button>}
+    </div>
+  );
+}
+
+// Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
+function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void }) {
+  const [scanning, setScanning] = useState(false);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [customer, setCustomer] = useState<{ userId: string; name?: string } | null>(null);
+
+  const couponsQ = useQuery({ queryKey: ['my-coupons'], queryFn: listCoupons });
+  const myCoupons = (couponsQ.data?.items || []).filter(c => String(c.partnerId) === meId && !c.usedAt && c.active);
+
+  const identify = async (ref: { userToken?: string; code?: string }) => {
+    setBusy(true);
+    try {
+      const u = await identifyUser(ref);
+      setCustomer({ userId: u.userId, name: u.name });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error === 'invalid_user_code' ? 'Código de cliente no válido o caducado' : 'No se pudo identificar al cliente');
+    } finally { setBusy(false); }
+  };
+
+  const doVisit = async () => {
+    if (!customer) return;
+    setBusy(true);
+    try {
+      const r = await earnVisit(customer.userId);
+      toast.success(`+${r.earned} 🐾 a ${customer.name || 'el cliente'}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
+      reset();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error === 'visit_already_rewarded' ? 'Esa visita ya se premió hoy' : 'No se pudo registrar la visita');
+    } finally { setBusy(false); }
+  };
+
+  const applyCoupon = async (coupon: Coupon) => {
+    if (!customer) return;
+    setBusy(true);
+    try {
+      const r = await applyCouponToCustomer(coupon._id, customer.userId, coupon.targetAnimalCode || undefined);
+      toast.success(`Cupón aplicado · +${r.earn?.earned ?? coupon.bonusPatitas ?? 0} 🐾 a ${customer.name || 'el cliente'}`);
+      couponsQ.refetch();
+      reset();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'No se pudo aplicar el cupón');
+    } finally { setBusy(false); }
+  };
+
+  const reset = () => { setCustomer(null); setCode(''); setScanning(false); onDone(); };
+
+  return (
+    <div style={card}>
+      <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Generar Patitas a un cliente</h3>
+      <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Identifica al cliente por su QR o código y súmale Patitas por su visita o al usar un cupón.</p>
+
+      {!customer ? (
+        <div style={{ display: 'grid', gap: 14 }}>
+          {scanning ? (
+            <div style={{ display: 'grid', gap: 10, justifyItems: 'start' }}>
+              <Suspense fallback={<div style={{ color: MPL.faint }}>Cargando cámara…</div>}>
+                <QrScanner onResult={t => { setScanning(false); identify({ userToken: t }); }} onError={() => { setScanning(false); toast.error('No se pudo abrir la cámara'); }} />
+              </Suspense>
+              <button type="button" onClick={() => setScanning(false)} style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '8px 14px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setScanning(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifySelf: 'start', background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+              <Camera size={18} /> Escanear QR del cliente
+            </button>
+          )}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+            <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
+              Código del cliente
+              <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABC123" style={{ ...input, width: 160, fontFamily: MPL_FONT_MONO, letterSpacing: 1 }} />
+            </label>
+            <button type="button" onClick={() => code.trim() && identify({ code: code.trim().toUpperCase() })} disabled={busy || !code.trim()} style={{ background: MPL.ink, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+              {busy ? '…' : 'Identificar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: MPL.bg, borderRadius: 14, padding: 16 }}>
+            <span style={{ width: 40, height: 40, borderRadius: 11, background: MPL.teal, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><UserCheck size={20} /></span>
+            <div>
+              <div style={{ fontSize: 12.5, color: MPL.faint, fontWeight: 800 }}>Cliente identificado</div>
+              <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800 }}>{customer.name || 'Cliente'}</div>
+            </div>
+            <button type="button" onClick={reset} style={{ marginLeft: 'auto', background: 'none', border: 0, color: MPL.faint, cursor: 'pointer', fontWeight: 800, fontSize: 13 }}>Cambiar</button>
+          </div>
+
+          <button type="button" onClick={doVisit} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifySelf: 'start', background: MPL.olive, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+            <Store size={17} /> Registrar visita
+          </button>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 8 }}>O aplicar uno de tus cupones</div>
+            {myCoupons.length === 0 ? (
+              <div style={{ color: MPL.faint, fontSize: 13 }}>No tienes cupones activos.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {myCoupons.map(c => (
+                  <button key={c._id} type="button" onClick={() => applyCoupon(c)} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '11px 14px', font: 'inherit', cursor: 'pointer' }}>
+                    <Ticket size={18} color={MPL.coralDark} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
+                      <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
+                    </div>
+                    <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -108,6 +225,8 @@ export default function PatitasPartnerPanel() {
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <PartnerPayout />
+
+      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} />
 
       <div style={card}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Cobrar con Patitas</h3>

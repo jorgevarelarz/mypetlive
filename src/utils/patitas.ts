@@ -55,6 +55,22 @@ export function verifyWalletToken(token: string): { shelterId: string } | null {
   }
 }
 
+// Token de identidad del usuario: lo muestra el cliente (QR) para que el partner le
+// genere Patitas al usar un cupón o registrar una visita.
+export function signUserToken(userId: string): string {
+  return jwt.sign({ userId, purpose: 'patitas-user' }, getJwtSecret(), { expiresIn: WALLET_TOKEN_TTL });
+}
+
+export function verifyUserToken(token: string): { userId: string } | null {
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
+    if (decoded?.purpose !== 'patitas-user' || !decoded?.userId) return null;
+    return { userId: String(decoded.userId) };
+  } catch {
+    return null;
+  }
+}
+
 // Acredita Patitas a un usuario/protectora. Devuelve el nuevo saldo.
 export async function creditPatitas(userId: string, amount: number): Promise<number> {
   const updated = await User.findByIdAndUpdate(userId, { $inc: { patitas: amount } }, { new: true }).select('patitas');

@@ -49,6 +49,18 @@ export async function earnVisit(userId: string) {
   return data as { ok: boolean; earned: number; balance: number; autoDonated: boolean; shelterId?: string };
 }
 
+// Identidad del usuario para ganar Patitas (el cliente muestra este QR/código).
+export async function getMyCode() {
+  const { data } = await client.get('/api/patitas/my-code');
+  return data as { token: string; code: string };
+}
+
+// El partner identifica a un cliente por su QR/código.
+export async function identifyUser(payload: { userToken?: string; code?: string }) {
+  const { data } = await client.post('/api/patitas/identify', payload);
+  return data as { userId: string; name?: string; email?: string; role?: string };
+}
+
 export async function getWalletToken() {
   const { data } = await client.get('/api/patitas/wallet/token');
   return data as { token: string; code: string; balance: number; valueEur: number };

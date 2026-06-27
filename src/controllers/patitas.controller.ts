@@ -12,6 +12,8 @@ import {
   genRedeemCode,
   signWalletToken,
   verifyWalletToken,
+  signUserToken,
+  verifyUserToken,
   transferPatitas,
   earnForUser,
 } from '../utils/patitas';
@@ -155,13 +157,50 @@ export async function donatePatitas(req: Request, res: Response) {
   res.json({ ok: true, balance: moved.fromBalance, shelterName: shelter.name });
 }
 
+// --- Identidad del usuario para ganar Patitas (QR que muestra el cliente) ---
+const USER_CODE_TTL_MS = 10 * 60 * 1000;
+const userCodeStore = new Map<string, { userId: string; expiresAt: number }>();
+
+// El usuario obtiene su token + código de identidad para mostrarlo en la tienda.
+export async function getMyCode(req: Request, res: Response) {
+  const me = actorId(req);
+  if (!me) return res.status(401).json({ error: 'unauthorized' });
+  const token = signUserToken(me);
+  const code = shortCode();
+  userCodeStore.set(code, { userId: me, expiresAt: Date.now() + USER_CODE_TTL_MS });
+  res.json({ token, code });
+}
+
+function resolveUserFromBody(body: any): string | null {
+  if (body?.userToken) {
+    const decoded = verifyUserToken(String(body.userToken));
+    if (decoded) return decoded.userId;
+  }
+  if (body?.code) {
+    const entry = userCodeStore.get(String(body.code).trim().toUpperCase());
+    if (entry && entry.expiresAt > Date.now()) return entry.userId;
+  }
+  if (body?.userId && objectIdRegex.test(String(body.userId))) return String(body.userId);
+  return null;
+}
+
+// El partner identifica a un cliente por su QR/código antes de generarle Patitas.
+export async function identifyUser(req: Request, res: Response) {
+  const partner: any = (req as any).user;
+  if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
+  const userId = resolveUserFromBody(req.body || {});
+  if (!userId) return res.status(400).json({ error: 'invalid_user_code' });
+  const user = await User.findById(userId).select('name email role');
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ userId: String(user._id), name: user.name, email: user.email, role: user.role });
+}
+
 // Check-in de visita a tienda: el partner identifica a un usuario y le genera Patitas.
 export async function earnVisit(req: Request, res: Response) {
   const partnerId = actorId(req);
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  const { userId } = (req.body || {}) as { userId?: string };
-  const target = normalizeId(userId);
+  const target = resolveUserFromBody(req.body || {});
   if (!target) return res.status(400).json({ error: 'invalid_user' });
 
   const user = await User.findById(target).select('role');

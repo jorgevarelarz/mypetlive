@@ -16,6 +16,8 @@ import {
   addPatitas,
   echoPatita,
   spendPatitas,
+  getMyCode,
+  identifyUser,
 } from '../controllers/patitas.controller';
 
 const router = Router();
@@ -35,6 +37,10 @@ router.get('/patitas/history', authenticate, asyncHandler(getMyPatitasHistory));
 
 // Usuario dona Patitas a una protectora.
 router.post('/patitas/donate', ...assertRole('tenant', 'adoptante'), asyncHandler(donatePatitas));
+
+// Identidad del usuario para ganar Patitas (QR que muestra el cliente).
+router.get('/patitas/my-code', authenticate, asyncHandler(getMyCode));
+router.post('/patitas/identify', ...assertRole('store', 'vet', 'admin'), asyncHandler(identifyUser));
 
 // Generación por visita a tienda (el partner identifica al usuario).
 router.post('/patitas/earn/visit', ...assertRole('store', 'vet', 'admin'), asyncHandler(earnVisit));

@@ -30,3 +30,9 @@ export async function redeemCoupon(couponId: string, payload: { animalCode: stri
   const { data } = await client.post(`/api/coupons/${couponId}/use`, payload);
   return data as { ok: boolean; coupon: Coupon; logId?: string };
 }
+
+// Usa un cupón para un cliente identificado, generándole sus Patitas.
+export async function applyCouponToCustomer(couponId: string, userId: string, animalCode?: string) {
+  const { data } = await client.post(`/api/coupons/${couponId}/use`, { userId, animalCode });
+  return data as { ok: boolean; coupon: Coupon; earn?: { earned: number; autoDonated: boolean } };
+}

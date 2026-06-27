@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { QRCodeSVG } from 'qrcode.react';
+import { QrCode, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/client';
-import { getMyPatitas, listProtectoras, donatePatitas } from '../../api/patitas';
+import { getMyPatitas, listProtectoras, donatePatitas, getMyCode } from '../../api/patitas';
 import PatitasHistory from './PatitasHistory';
-import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
+import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 const input: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '11px 13px', font: 'inherit', width: '100%', boxSizing: 'border-box', background: '#fff' };
@@ -16,6 +18,13 @@ export default function PatitasUserPanel() {
   const qc = useQueryClient();
   const [donateAmount, setDonateAmount] = useState('');
   const [donateShelter, setDonateShelter] = useState('');
+  const [myCode, setMyCode] = useState<{ token: string; code: string } | null>(null);
+  const [loadingCode, setLoadingCode] = useState(false);
+
+  const showMyCode = async () => {
+    setLoadingCode(true);
+    try { setMyCode(await getMyCode()); } finally { setLoadingCode(false); }
+  };
 
   const meQ = useQuery({ queryKey: ['patitas-me'], queryFn: getMyPatitas });
   const sheltersQ = useQuery({ queryKey: ['protectoras'], queryFn: listProtectoras });
@@ -55,6 +64,31 @@ export default function PatitasUserPanel() {
           <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 38, fontWeight: 800, lineHeight: 1.1, color: MPL.ink }}>{meQ.data?.totalGenerated ?? 0}</div>
           <div style={{ fontSize: 13, color: MPL.muted }}>desde que te uniste</div>
         </div>
+      </div>
+
+      <div style={card}>
+        <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Mi código para ganar Patitas</h3>
+        <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Enséñalo en una tienda o veterinario asociado (o al usar un cupón) para que te sumen Patitas. Caduca a los 10 minutos.</p>
+        {!myCode ? (
+          <button type="button" onClick={showMyCode} disabled={loadingCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+            <QrCode size={18} /> {loadingCode ? 'Generando…' : 'Mostrar mi código'}
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 16, padding: 14 }}>
+              <QRCodeSVG value={myCode.token} size={150} bgColor="#ffffff" fgColor={MPL.ink} />
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12.5, color: MPL.faint, fontWeight: 800 }}>Código manual</div>
+                <div style={{ fontFamily: MPL_FONT_MONO, fontSize: 28, fontWeight: 800, letterSpacing: 2, color: MPL.ink }}>{myCode.code}</div>
+              </div>
+              <button type="button" onClick={showMyCode} disabled={loadingCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink, justifySelf: 'start' }}>
+                <RefreshCw size={15} /> Regenerar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={card}>
