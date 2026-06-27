@@ -19,13 +19,13 @@ async function resolveRecipient(identifier: string) {
  * email address or a user identifier. If the recipient cannot be resolved, the
  * send is skipped but no error is thrown to avoid breaking the main flow.
  */
-export async function sendEmail(identifier: string, subject: string, body: string) {
+export async function sendEmail(identifier: string, subject: string, body: string, html?: string) {
   const to = await resolveRecipient(identifier);
   if (!to) {
     logger.warn({ identifier, subject }, '[email] Destinatario desconocido, se omite envío');
     return;
   }
-  await deliverEmail(to, subject, body);
+  await deliverEmail(to, subject, body, html);
 }
 
 export async function sendPriceAlert(userId: string, property: any) {

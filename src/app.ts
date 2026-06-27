@@ -11,6 +11,7 @@ import logger from './utils/logger';
 import stripeWebhookRoutes from './routes/stripe.webhook';
 
 import authRoutes from './routes/auth.routes';
+import seoRoutes from './routes/seo.routes';
 import verificationRoutes from './routes/verification.routes';
 import identityRoutes from './routes/identity.routes';
 import propertyRoutes from './routes/property.routes';
@@ -51,7 +52,6 @@ import { ensureAnimalCodes } from './models/animal.model';
 
 import { errorHandler } from './middleware/errorHandler';
 import { requireAdmin } from './middleware/requireAdmin';
-import { requireVerified } from './middleware/requireVerified';
 import { authenticate } from './middleware/auth.middleware';
 
 const globalAny = globalThis as typeof globalThis & { __rentalAppProcessHandlers?: boolean };
@@ -81,6 +81,10 @@ import { metricsMiddleware, metricsHandler } from './metrics';
 const env = loadEnv();
 
 const app = express();
+// La API corre detrás del proxy Apache de Plesk (mod_proxy). Confiar en 1 salto
+// para que req.ip use X-Forwarded-For y express-rate-limit identifique a cada
+// usuario por su IP real (sin esto, todos comparten un único bucket de rate-limit).
+app.set('trust proxy', 1);
 // Endurecer cabeceras y parámetros
 app.disable('x-powered-by');
 app.set('etag', false);
@@ -199,6 +203,8 @@ app.use('/api/kyc', identityRoutes);
 app.use('/api', legalRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/notify', notifyRoutes);
+// SEO / Open Graph (público, sin auth): /sitemap.xml y /og/animals/:id (para bots).
+app.use(seoRoutes);
 // [FROZEN RentalApp] Mounts de alquiler desactivados durante la migración a MyPetLive.
 // OJO: postsign y appointments montaban authenticate/requireVerified sobre '/api' global,
 // lo que bloqueaba el catálogo público de animales. Congelados aquí.
@@ -223,16 +229,15 @@ app.use('/api/purchases', purchaseRoutes);
 app.use(
   '/api/admin/coupons',
   authenticate,
-  requireVerified,
   requireAdmin,
   adminCouponRoutes,
 );
 app.use('/api', questionnaireRoutes);
 
-// Protected routes (verified users)
-app.use('/api/users', authenticate, requireVerified, userRoutes);
-app.use('/api/reviews', authenticate, requireVerified, reviewRoutes);
-app.use('/api/chat', authenticate, requireVerified, chatRoutes);
+// Protected routes (autenticación + rol; sin verificación KYC — adopción libre)
+app.use('/api/users', authenticate, userRoutes);
+app.use('/api/reviews', authenticate, reviewRoutes);
+app.use('/api/chat', authenticate, chatRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
 // [FROZEN RentalApp] Rutas protegidas de alquiler congeladas.
@@ -249,7 +254,6 @@ app.use('/api', paymentsRoutes);
 app.use(
   '/api/admin',
   authenticate,
-  requireVerified,
   requireAdmin,
   adminRoutes,
   adminEarningsRoutes,

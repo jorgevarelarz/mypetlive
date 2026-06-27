@@ -54,6 +54,11 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
         </label>
+        <div style={{ textAlign: 'right', marginTop: -4 }}>
+          <Link to="/forgot-password" className="auth-link" style={{ fontSize: 14 }}>
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
         {err && <p className="auth-error" style={{ color: '#b91c1c' }}>{err}</p>}
         <button type="submit" className="auth-button">
           Entrar

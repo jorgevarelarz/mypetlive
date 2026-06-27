@@ -1,5 +1,5 @@
 import { listMyAdoptions } from '../api/adoptions';
-import { getAnimal, searchAnimals, listMyPets } from '../api/animals';
+import { getAnimal, listMyPets } from '../api/animals';
 
 export type AnimalDoc = {
   _id?: string;
@@ -79,19 +79,7 @@ export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<A
   const detailed = await loadDetailed();
   if (detailed) return detailed;
 
-  try {
-    const { items } = await searchAnimals({ species: 'cat', q: 'Popeye', limit: 1 });
-    const fallback = items?.[0];
-    if (fallback) {
-      if (fallback.images?.length) {
-        return fallback;
-      }
-      enqueue(fallback._id || fallback.id);
-      return (await loadDetailed()) || fallback;
-    }
-  } catch (error) {
-    console.warn('[pet] Error obteniendo fallback Popeye', error);
-  }
-
+  // Sin mascota personal ni adopción no hay animal destacado: el UI muestra un
+  // estado vacío honesto en vez de un placeholder de demo ("Popeye").
   return null;
 }

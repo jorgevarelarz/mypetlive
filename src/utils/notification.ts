@@ -6,15 +6,25 @@ import logger from './logger';
 const smtpConfigured = Boolean(process.env.SMTP_HOST);
 const twilioConfigured = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
 
+const smtpPort = Number(process.env.SMTP_PORT) || 587;
+// 465 usa TLS implícito (secure). Para 587/25 se usa STARTTLS (secure=false).
+// Se puede forzar con SMTP_SECURE=true/false.
+const smtpSecure =
+  process.env.SMTP_SECURE !== undefined
+    ? process.env.SMTP_SECURE === 'true'
+    : smtpPort === 465;
 const transporter = smtpConfigured
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
+      port: smtpPort,
+      secure: smtpSecure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      // El cert del Postfix de Plesk es para el hostname del servidor, no para
+      // el dominio; permitir relajar la verificación TLS vía env si hace falta.
+      tls: { rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false' },
     })
   : null;
 
@@ -49,8 +59,8 @@ const deliverEmail = async (
   }
 };
 
-export const sendEmail = async (to: string, subject: string, body: string) => {
-  await deliverEmail({ to, subject, text: body });
+export const sendEmail = async (to: string, subject: string, body: string, html?: string) => {
+  await deliverEmail({ to, subject, text: body, ...(html ? { html } : {}) });
 };
 
 export const sendRentReminderEmail = async (

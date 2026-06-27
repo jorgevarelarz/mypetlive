@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { sendEmail } from '../utils/email';
+import { resetPasswordEmail } from '../utils/emailTemplates';
 import getRequestLogger from '../utils/requestLogger';
 import { AppError, badRequest, isAppError } from '../utils/errors';
 
@@ -142,19 +143,8 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
       user.resetTokenExp = new Date(Date.now() + 60 * 60 * 1000);
       await user.save();
       const resetUrl = buildResetLink(token);
-      const body = [
-        'Hola,',
-        '',
-        'Hemos recibido una solicitud para restablecer tu contraseña en MyPetLive.',
-        'Puedes crear una nueva contraseña usando el siguiente enlace (caduca en 60 minutos):',
-        resetUrl,
-        '',
-        'Si no has solicitado este cambio, simplemente ignora este mensaje.',
-        '',
-        'Gracias,',
-        'Equipo MyPetLive',
-      ].join('\n');
-      await sendEmail(user.email, 'Restablece tu contraseña', body);
+      const { text, html } = resetPasswordEmail(resetUrl);
+      await sendEmail(user.email, 'Restablece tu contraseña', text, html);
     }
   } catch (error) {
     log.error({ err: error, email }, 'Error generando token de reseteo');

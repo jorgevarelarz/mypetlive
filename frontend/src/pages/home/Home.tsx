@@ -193,9 +193,10 @@ export default function Home() {
     echoMutation.mutate();
   };
 
-  const displayName = featuredAnimal?.name || 'Popeye';
-  const displaySpecies = featuredAnimal?.species || 'Gato';
-  const displayAge = featuredAnimal?.age || '3 años';
+  const hasPet = Boolean(featuredAnimal);
+  const displayName = featuredAnimal?.name || 'tu mascota';
+  const displaySpecies = featuredAnimal?.species || '';
+  const displayAge = featuredAnimal?.age || '';
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
   const patitas = patitasData?.patitas ?? 0;
 
@@ -259,37 +260,56 @@ export default function Home() {
                   <span className="text-sm font-bold" style={{ color: colors.soft }}>Sin imagen todavía</span>
                 </div>
               )}
-              <span
-                className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-xs font-bold"
-                style={{ background: '#E2EEEC', color: '#176363' }}
-              >
-                Publicado
-              </span>
-            </div>
-            <div className="grid gap-3 p-5">
-              <div className="flex items-baseline justify-between gap-3">
-                <h2
-                  className="text-3xl font-extrabold"
-                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}
+              {hasPet && (
+                <span
+                  className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-xs font-bold"
+                  style={{ background: '#E2EEEC', color: '#176363' }}
                 >
-                  {displayName}
-                </h2>
-                <span className="text-sm font-bold" style={{ color: colors.muted }}>{displayAge}</span>
-              </div>
-              <p className="text-sm font-semibold" style={{ color: colors.muted }}>
-                {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                  Cerca de ti
+                  Mi mascota
                 </span>
-                {featuredAnimal?.mood && (
-                  <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                    {featuredAnimal.mood}
-                  </span>
-                )}
-              </div>
+              )}
             </div>
+            {hasPet ? (
+              <div className="grid gap-3 p-5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2
+                    className="text-3xl font-extrabold"
+                    style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}
+                  >
+                    {displayName}
+                  </h2>
+                  {displayAge && <span className="text-sm font-bold" style={{ color: colors.muted }}>{displayAge}</span>}
+                </div>
+                <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                  {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
+                    Cerca de ti
+                  </span>
+                  {featuredAnimal?.mood && (
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
+                      {featuredAnimal.mood}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 p-5">
+                <h2
+                  className="text-2xl font-extrabold"
+                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
+                >
+                  Aún no has registrado tu mascota
+                </h2>
+                <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                  Da de alta a tu compañero para seguir sus cuidados, o adopta uno nuevo.
+                </p>
+                <ActionButton variant="primary" onClick={() => nav('/pet')}>
+                  Registrar mi mascota
+                </ActionButton>
+              </div>
+            )}
           </Card>
         </section>
 

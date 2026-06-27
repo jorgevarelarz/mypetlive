@@ -13,6 +13,7 @@ import { toAbsoluteUrl } from '../../utils/media';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import PublicHeader from '../../components/PublicHeader';
 import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
+import { usePageMeta } from '../../utils/usePageMeta';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -46,6 +47,15 @@ export default function AnimalDetail() {
     queryKey: ['animal', id],
     queryFn: () => getAnimal(id || ''),
     enabled: !!id,
+  });
+
+  usePageMeta({
+    title: data?.name ? `${data.name} en adopción · MyPetLive` : undefined,
+    description: data
+      ? (data.description?.trim() ||
+          `${speciesLabel(data.species)}${data.breed ? ` · ${data.breed}` : ''}${data.sex ? ` · ${sexLabel(data.sex)}` : ''}${data.size ? ` · ${sizeLabel(data.size)}` : ''}. Disponible para adopción responsable en MyPetLive.`)
+      : undefined,
+    image: data?.images?.[0] ? toAbsoluteUrl(data.images[0]) : undefined,
   });
 
   const shelterId = useMemo(() => {

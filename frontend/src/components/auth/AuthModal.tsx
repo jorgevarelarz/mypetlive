@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { register as apiRegister } from '../../api/auth';
@@ -15,6 +16,7 @@ const palette = {
 export default function AuthModal() {
   const { open, mode, message, closeAuth, setMode, fireSuccess } = useAuthModal();
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -138,6 +140,16 @@ export default function AuthModal() {
           >
             {busy ? 'Procesando…' : mode === 'register' ? 'Crear cuenta' : 'Entrar'}
           </button>
+          {mode === 'login' && (
+            <button
+              type="button"
+              onClick={() => { closeAuth(); navigate('/forgot-password'); }}
+              className="text-sm text-center underline"
+              style={{ color: palette.accent, textUnderlineOffset: 4 }}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          )}
         </form>
       </div>
     </div>

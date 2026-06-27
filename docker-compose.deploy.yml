@@ -31,6 +31,19 @@ services:
       ESCROW_DRIVER: mock
       SIGN_PROVIDER: mock
       SMS_PROVIDER: mock
+      # Email transaccional vía Postfix de Plesk (recuperación de contraseña, etc.)
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_FROM: "${SMTP_FROM}"
+      SMTP_SECURE: "${SMTP_SECURE}"
+      SMTP_TLS_REJECT_UNAUTHORIZED: "${SMTP_TLS_REJECT_UNAUTHORIZED}"
+      FRONTEND_URL: "${FRONTEND_URL}"
+    # Mapea el hostname del cert de mail al host para que el contenedor alcance
+    # el Postfix de Plesk a través del gateway de la red Docker.
+    extra_hosts:
+      - "panel.valerisstudio.es:host-gateway"
     ports:
       - "3000:3000"
     networks: [mypetlive]

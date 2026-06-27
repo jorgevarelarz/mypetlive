@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
+import {
+  Home, PawPrint, Heart, Ticket, Gift, User, Users, FileText,
+  Settings, ClipboardList, Inbox, Circle,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import navConfig from '../config/nav.config.json';
@@ -9,6 +13,42 @@ import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
 
 type NavItem = { label: string; path?: string; to?: string };
+
+// Paleta de marca MyPetLive
+const BRAND_TEAL = '#1F6F6F';
+const ACTIVE_BG = '#E7F0EE';
+
+type IconType = React.ComponentType<{ size?: number; strokeWidth?: number }>;
+const iconFor: Record<string, IconType> = {
+  '/home': Home, '/landlord': Home, '/admin': Home, '/partner': Home, '/pro': Home,
+  '/animals': PawPrint, '/landlord/animals': PawPrint, '/admin/animals': PawPrint, '/pet': PawPrint,
+  '/adoptions/mine': Heart, '/landlord/adoptions': Heart, '/admin/adoptions': Heart,
+  '/coupons': Ticket, '/admin/coupons': Ticket,
+  '/donate': Gift,
+  '/profile': User, '/admin/users': Users,
+  '/admin/reports': FileText, '/admin/settings': Settings,
+  '/landlord/questionnaire': ClipboardList,
+  '/inbox': Inbox,
+};
+
+function NavRow({ to, label, badge }: { to: string; label: string; badge?: React.ReactNode }) {
+  const Icon = iconFor[to] || Circle;
+  return (
+    <NavLink
+      to={to}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[#F4EFE7]"
+      style={({ isActive }) =>
+        isActive
+          ? { background: ACTIVE_BG, color: BRAND_TEAL, fontWeight: 600 }
+          : { color: '#3F4A3C' }
+      }
+    >
+      <Icon size={17} strokeWidth={2} />
+      <span className="flex-1">{label}</span>
+      {badge}
+    </NavLink>
+  );
+}
 
 const getGeneralItems = (role?: string): NavItem[] => {
   const config: any = navConfig;
@@ -157,7 +197,7 @@ function Header() {
               })}
             </div>
 
-            {role && (navConfig as any)[role] && (
+            {role && (navConfig as any)[role] && ((navConfig as any)[role] as any[]).length > 0 && (
               <>
                 <div className="text-xs uppercase tracking-wide mt-4 mb-2" style={{ color: '#7A8273' }}>{labelFor[role]}</div>
                 <div className="flex flex-wrap gap-2">
@@ -206,49 +246,39 @@ function SideNav() {
     }
     return () => {};
   }, [user?._id, showInbox]);
+  const roleItems = (role && (navConfig as any)[role] ? (navConfig as any)[role] : []) as NavItem[];
+  const sectionLabel = (text: string) => (
+    <div className="text-[11px] font-semibold uppercase tracking-wider px-3 mb-1.5" style={{ color: '#9AA08F' }}>{text}</div>
+  );
   return (
     <aside className="hidden lg:block w-60 shrink-0">
       <div
-        className="sticky top-16 p-3 border rounded"
+        className="sticky top-16 p-3 border rounded-2xl shadow-sm"
         style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
       >
-        <div className="text-xs uppercase tracking-wide px-2 mb-2" style={{ color: '#7A8273' }}>General</div>
+        {sectionLabel('General')}
         <div className="grid gap-1">
           {generalItems.map((item: NavItem) => {
             const target = resolvePath(item);
-            return (
-              <NavLink
-                key={target}
-                className={({isActive})=>
-                  `px-2 py-1.5 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`
-                }
-                to={target}
-              >
-                {item.label}
-                {target === '/inbox' && unread > 0 && (
-                  <span
-                    className="ml-2 inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
-                    style={{ background: '#E5DACC', color: '#3F4A3C' }}
-                  >
-                    {unread}
-                  </span>
-                )}
-              </NavLink>
-            );
+            const badge =
+              target === '/inbox' && unread > 0 ? (
+                <span
+                  className="inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
+                  style={{ background: BRAND_TEAL, color: '#fff' }}
+                >
+                  {unread}
+                </span>
+              ) : undefined;
+            return <NavRow key={target} to={target} label={item.label} badge={badge} />;
           })}
         </div>
-        {role && (navConfig as any)[role] && (
+        {roleItems.length > 0 && (
           <>
-            <div className="text-xs uppercase tracking-wide px-2 mt-4 mb-2" style={{ color: '#7A8273' }}>{labelFor[role]}</div>
+            <div className="my-3 border-t" style={{ borderColor: '#EFEADF' }} />
+            {sectionLabel(labelFor[role!] || role!)}
             <div className="grid gap-1">
-              {((navConfig as any)[role] as any[]).map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({isActive})=>`px-2 py-1.5 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`}
-                >
-                  {item.label}
-                </NavLink>
+              {roleItems.map(item => (
+                <NavRow key={resolvePath(item)} to={resolvePath(item)} label={item.label} />
               ))}
             </div>
           </>
