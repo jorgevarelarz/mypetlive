@@ -33,6 +33,8 @@ r.get('/code/:code', authenticate, asyncHandler(ctrl.getByCode));
 // Pasaporte público por código + línea de tiempo (auth opcional: dueño/admin ven más)
 r.get('/passport/:code', asyncHandler(ctrl.getPassport));
 r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
+// El veterinario (o admin) añade un registro clínico al animal por su código.
+r.post('/:code/health', ...assertRole('vet', 'admin'), asyncHandler(ctrl.addHealthRecord));
 r.get('/:id', asyncHandler(ctrl.getById));
 r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));
 r.post('/:id/care/feed', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markFeeding));

@@ -31,8 +31,11 @@ const shelterId = new mongoose.Types.ObjectId().toHexString();
 const storeId = new mongoose.Types.ObjectId().toHexString();
 const adopterId = new mongoose.Types.ObjectId().toHexString();
 
+const vetId = new mongoose.Types.ObjectId().toHexString();
+
 const shelterH = { 'x-user-id': shelterId, 'x-user-role': 'landlord', 'x-user-verified': 'true' };
 const storeH = { 'x-user-id': storeId, 'x-user-role': 'store', 'x-user-verified': 'true' };
+const vetH = { 'x-user-id': vetId, 'x-user-role': 'vet', 'x-user-verified': 'true' };
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
@@ -119,6 +122,45 @@ describe('Pasaporte del animal', () => {
     const updated = await Coupon.findById(coupon._id).lean();
     expect(updated.sponsored).toBe(false);
     expect(updated.sponsorshipStatus).toBe('pending');
+  });
+
+  it('un veterinario añade visita e hito de salud y el pasaporte los refleja', async () => {
+    const animal = await createAnimal({ name: 'Bobby' });
+
+    const visit = await request(app)
+      .post(`/api/animals/${animal.code}/health`)
+      .set(vetH)
+      .send({ category: 'visit', note: 'Revisión general, sin incidencias', treatment: 'Ninguno' })
+      .expect(201);
+    expect(visit.body.health.vetVisits).toBe(1);
+
+    await request(app)
+      .post(`/api/animals/${animal.code}/health`)
+      .set(vetH)
+      .send({ category: 'vaccine', note: 'Trivalente' })
+      .expect(201);
+
+    const pass = await request(app).get(`/api/animals/passport/${animal.code}`).expect(200);
+    expect(pass.body.health.vetVisits).toBe(1);
+    expect(pass.body.health.healthMilestones).toBe(1);
+    expect(pass.body.timeline.some((t: any) => t.type === 'vet')).toBe(true);
+    expect(pass.body.timeline.some((t: any) => t.type === 'health')).toBe(true);
+    // Sin duplicados: exactamente 1 entrada clínica por registro (no se repite el AnimalEvent).
+    const clinical = pass.body.timeline.filter((t: any) => t.type === 'vet' || t.type === 'health');
+    expect(clinical).toHaveLength(2);
+  });
+
+  it('registro clínico exige nota y rechaza a no-veterinarios', async () => {
+    const animal = await createAnimal({ name: 'Kira' });
+    await request(app).post(`/api/animals/${animal.code}/health`).set(vetH).send({ category: 'visit' }).expect(400);
+    // un adoptante (tenant) no puede registrar
+    await request(app)
+      .post(`/api/animals/${animal.code}/health`)
+      .set({ 'x-user-id': adopterId, 'x-user-role': 'tenant', 'x-user-verified': 'true' })
+      .send({ category: 'visit', note: 'x' })
+      .expect(403);
+    // código inexistente
+    await request(app).post('/api/animals/NOEXISTE-999/health').set(vetH).send({ category: 'visit', note: 'x' }).expect(404);
   });
 
   it('un partner ajeno no puede patrocinar un cupón que no es suyo', async () => {

@@ -129,6 +129,14 @@ export async function getAnimalTimeline(code: string) {
   return data as { code: string; timeline: AnimalTimelineItem[] };
 }
 
+export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'surgery' | 'checkup' | 'test' | 'other';
+
+// El veterinario añade un registro clínico al animal por su código (alimenta el pasaporte).
+export async function addHealthRecord(code: string, payload: { category: HealthCategory; note: string; treatment?: string; date?: string }) {
+  const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload);
+  return data as { ok: boolean; category: HealthCategory; health: { vetVisits: number; healthMilestones: number } };
+}
+
 export async function createAnimal(payload: any) {
   const { data } = await client.post('/api/animals', payload);
   return data;

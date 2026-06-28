@@ -111,6 +111,9 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
     items.push({ at: animal.createdAt, type: 'created', title: 'Dado de alta', detail: animal.createdByRole === 'tenant' ? 'por su familia' : undefined });
   }
   for (const e of events) {
+    // Los registros clínicos (vet/health) ya se renderizan desde vetHistory/
+    // healthHistory con formato; el AnimalEvent equivalente es solo auditoría.
+    if (e.type === 'vet' || e.type === 'health') continue;
     const shelterName = e.shelterId?.name as string | undefined;
     let title = e.type;
     let detail: string | undefined;
@@ -156,6 +159,57 @@ export async function getTimeline(req: Request, res: Response) {
     .lean();
 
   res.json({ code: animal.code, timeline: buildTimeline(animal, events, full) });
+}
+
+// Categorías de registro clínico. 'visit' va a vetHistory (cuenta como visita
+// veterinaria); el resto a healthHistory (hitos de salud). Alimentan el pasaporte.
+const HEALTH_CATEGORIES = ['visit', 'vaccine', 'deworming', 'surgery', 'checkup', 'test', 'other'] as const;
+type HealthCategory = (typeof HEALTH_CATEGORIES)[number];
+
+// POST /api/animals/:code/health — un veterinario (o admin) añade un registro
+// clínico al animal identificado por su código. Lo refleja el pasaporte.
+export async function addHealthRecord(req: Request, res: Response) {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'invalid_code' });
+
+  const body: any = req.body || {};
+  const category: HealthCategory = HEALTH_CATEGORIES.includes(body.category) ? body.category : 'visit';
+  const note = typeof body.note === 'string' ? body.note.trim() : '';
+  const treatment = typeof body.treatment === 'string' && body.treatment.trim() ? body.treatment.trim() : undefined;
+  if (!note) return res.status(400).json({ error: 'note_required' });
+
+  let date = new Date();
+  if (body.date) {
+    const parsed = new Date(body.date);
+    if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: 'invalid_date' });
+    date = parsed;
+  }
+
+  const animal: any = await Animal.findOne({ code });
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const actorId = String((req as any).user?._id || (req as any).user?.id || '');
+
+  if (category === 'visit') {
+    animal.vetHistory.push({ date, note, treatment });
+  } else {
+    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined });
+  }
+  await animal.save();
+
+  await logAnimalEvent({
+    animalId: String(animal._id),
+    code: animal.code,
+    type: category === 'visit' ? 'vet' : 'health',
+    actorId,
+    data: { category, note, treatment, date },
+  });
+
+  res.status(201).json({
+    ok: true,
+    category,
+    health: { vetVisits: animal.vetHistory.length, healthMilestones: animal.healthHistory.length },
+  });
 }
 
 // GET /api/animals/passport/:code — público (sin datos personales del dueño actual).
