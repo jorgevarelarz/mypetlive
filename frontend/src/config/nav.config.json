@@ -18,6 +18,7 @@
     { "label": "Mis animales", "path": "/landlord/animals" },
     { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
+    { "label": "Citas veterinarias", "path": "/citas" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "pro": [

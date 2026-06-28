@@ -17,6 +17,12 @@ const vetAppointmentSchema = new Schema(
     status: { type: String, enum: VET_APPOINTMENT_STATUSES, default: 'requested', index: true },
     vetNotes: { type: String, trim: true, maxlength: 1000 },
     cancelReason: { type: String, trim: true, maxlength: 500 },
+    // Pago con Patitas (solo cuando agenda una protectora): coste comprometido y
+    // liquidación al completar (debita a la protectora, paga € al vet, como un canje).
+    patitasCost: { type: Number, default: 0, min: 0 },
+    patitasPaid: { type: Boolean, default: false },
+    patitasCode: { type: String }, // código del PatitaTxn de canje generado
+    payoutStatus: { type: String, enum: ['none', 'pending_payout', 'paid'], default: 'none' },
   },
   { timestamps: true },
 );

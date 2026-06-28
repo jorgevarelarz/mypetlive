@@ -25,6 +25,9 @@ export type VetAppointment = {
   status: VetAppointmentStatus;
   vetNotes?: string;
   cancelReason?: string;
+  patitasCost?: number;
+  patitasPaid?: boolean;
+  payoutStatus?: 'none' | 'pending_payout' | 'paid';
   createdAt?: string;
 };
 
@@ -33,7 +36,7 @@ export async function listVets(params?: { city?: string; q?: string }) {
   return data as { items: VetDirectoryItem[] };
 }
 
-export async function createVetAppointment(payload: { vetId: string; reason: string; requestedAt: string; animalCode?: string }) {
+export async function createVetAppointment(payload: { vetId: string; reason: string; requestedAt: string; animalCode?: string; patitasCost?: number }) {
   const { data } = await client.post('/api/vet-appointments', payload);
   return data as VetAppointment;
 }

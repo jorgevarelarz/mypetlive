@@ -47,6 +47,11 @@ export function AppointmentCard({
         <span style={{ flex: 'none', background: s.bg, color: s.color, borderRadius: 999, padding: '4px 11px', fontSize: 12, fontWeight: 800 }}>{s.label}</span>
       </div>
       <div style={{ fontSize: 13.5, color: MPL.ink }}>{appt.reason}</div>
+      {(appt.patitasCost ?? 0) > 0 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'start', background: MPL.gold100, color: MPL.goldDark, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 800 }}>
+          🐾 {appt.patitasCost} Patitas {appt.patitasPaid ? '· pagadas' : appt.status === 'completed' ? '· pendiente' : '· al completar'}
+        </div>
+      )}
       {appt.vetNotes && <div style={{ fontSize: 12.5, color: MPL.muted, background: MPL.bg, borderRadius: 10, padding: '7px 10px' }}>Nota del vet: {appt.vetNotes}</div>}
       {appt.cancelReason && <div style={{ fontSize: 12.5, color: MPL.coralDark }}>Motivo de cancelación: {appt.cancelReason}</div>}
       {children}

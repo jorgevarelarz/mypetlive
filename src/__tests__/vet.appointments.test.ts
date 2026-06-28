@@ -27,9 +27,11 @@ afterAll(async () => {
 const vetId = new mongoose.Types.ObjectId().toHexString();
 const otherVetId = new mongoose.Types.ObjectId().toHexString();
 const userId = new mongoose.Types.ObjectId().toHexString();
+const shelterId = new mongoose.Types.ObjectId().toHexString();
 
 const vetH = { 'x-user-id': vetId, 'x-user-role': 'vet', 'x-user-verified': 'true' };
 const userH = { 'x-user-id': userId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
+const shelterH = { 'x-user-id': shelterId, 'x-user-role': 'landlord', 'x-user-verified': 'true' };
 
 const future = () => new Date(Date.now() + 86_400_000).toISOString();
 
@@ -41,6 +43,7 @@ beforeEach(async () => {
     { _id: vetId, name: 'Clínica Sur', email: 'vet@test.com', passwordHash: 'x', role: 'vet', profile: { orgName: 'Clínica Sur', address: { city: 'Lugo' }, vet: { specialties: ['Felina'], services: ['Vacunación'] } } },
     { _id: otherVetId, name: 'Clínica Norte', email: 'vet2@test.com', passwordHash: 'x', role: 'vet' },
     { _id: userId, name: 'Ana', email: 'ana@test.com', passwordHash: 'x', role: 'tenant' },
+    { _id: shelterId, name: 'Protectora Lugo', email: 'shelter@test.com', passwordHash: 'x', role: 'landlord', patitas: 50 },
   ]);
 });
 
@@ -115,6 +118,37 @@ describe('Citas veterinarias', () => {
     const animal: any = await Animal.findOne({ code: 'REX-555' }).lean();
     expect(animal.vetHistory).toHaveLength(1);
     expect(animal.vetHistory[0].note).toBe('Vacuna puesta');
+  });
+
+  it('la protectora agenda pagando con Patitas: se debitan al completar y se genera el canje', async () => {
+    const created = await request(app).post('/api/vet-appointments').set(shelterH)
+      .send({ vetId, reason: 'Vacunación gatos', requestedAt: future(), patitasCost: 30 }).expect(201);
+    expect(created.body.patitasCost).toBe(30);
+    const id = created.body._id;
+
+    await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const done = await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'completed' }).expect(200);
+    expect(done.body.patitasPaid).toBe(true);
+    expect(done.body.patitasCode).toBeTruthy();
+
+    // Saldo de la protectora debitado.
+    const shelter: any = await User.findById(shelterId).select('patitas').lean();
+    expect(shelter.patitas).toBe(20);
+    // Ledger: existe el canje al vet.
+    const { PatitaTxn } = await import('../models/patitaTxn.model');
+    const txn: any = await PatitaTxn.findOne({ type: 'redeem', shelterId, partnerId: vetId }).lean();
+    expect(txn.amount).toBe(30);
+    expect(txn.valueEur).toBeCloseTo(3.0);
+  });
+
+  it('rechaza agendar con más Patitas de las que tiene la protectora', async () => {
+    await request(app).post('/api/vet-appointments').set(shelterH)
+      .send({ vetId, reason: 'X', requestedAt: future(), patitasCost: 999 }).expect(400);
+  });
+
+  it('un adoptante no fija coste en Patitas (se ignora)', async () => {
+    const res = await createAppt(userH, { patitasCost: 30 }).expect(201);
+    expect(res.body.patitasCost).toBe(0);
   });
 
   it('rechaza transición inválida y a terceros', async () => {

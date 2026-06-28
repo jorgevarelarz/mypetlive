@@ -83,7 +83,7 @@ export default function AppRoutes() {
 
               <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
 
-              <Route path="/citas" element={<ProtectedRoute><RoleGuard roles={["tenant", "vet"]}><AppointmentsPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/citas" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><AppointmentsPage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/admin" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminHome /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminUsersPage /></RoleGuard></ProtectedRoute>} />

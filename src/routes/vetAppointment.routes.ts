@@ -15,7 +15,7 @@ const router = Router();
 router.get('/vets', optionalAuthenticate, asyncHandler(listVets));
 
 // Citas veterinarias.
-router.post('/vet-appointments', ...assertRole('tenant', 'admin'), asyncHandler(createAppointment));
+router.post('/vet-appointments', ...assertRole('tenant', 'landlord', 'admin'), asyncHandler(createAppointment));
 router.get('/vet-appointments/mine', authenticate, asyncHandler(listMyAppointments));
 router.patch('/vet-appointments/:id/status', authenticate, asyncHandler(updateAppointmentStatus));
 

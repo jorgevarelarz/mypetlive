@@ -5,6 +5,9 @@ import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
+import { PatitaTxn } from '../models/patitaTxn.model';
+import { eurFromPatitas, centsFromPatitas, genRedeemCode } from '../utils/patitas';
+import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import logger from '../utils/logger';
 
 function actor(req: Request) {
@@ -51,9 +54,9 @@ export async function listVets(req: Request, res: Response) {
   });
 }
 
-// POST /api/vet-appointments — el dueño solicita una cita.
+// POST /api/vet-appointments — el dueño (adoptante o protectora) solicita una cita.
 export async function createAppointment(req: Request, res: Response) {
-  const { id: userId } = actor(req);
+  const { id: userId, role } = actor(req);
   const { vetId, animalCode, reason, requestedAt } = req.body || {};
 
   if (!vetId || !Types.ObjectId.isValid(String(vetId))) return res.status(400).json({ error: 'invalid_vet' });
@@ -78,8 +81,24 @@ export async function createAppointment(req: Request, res: Response) {
     code = (animal as any).code;
   }
 
+  // Pago con Patitas: solo cuando agenda una protectora (landlord). Validamos saldo
+  // ahora (la liquidación real se hace al completar la cita).
+  let patitasCost = 0;
+  if ((role === 'landlord' || role === 'admin') && req.body?.patitasCost != null) {
+    const n = Number(req.body.patitasCost);
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_patitas_cost' });
+    patitasCost = Math.round(n);
+    if (patitasCost > 0) {
+      const shelter: any = await User.findById(userId).select('patitas').lean();
+      if ((shelter?.patitas || 0) < patitasCost) {
+        return res.status(400).json({ error: 'insufficient_patitas', available: shelter?.patitas || 0 });
+      }
+    }
+  }
+
   const appt = await VetAppointment.create({
     vetId, userId, animalId, animalCode: code, reason: cleanReason, requestedAt: when, status: 'requested',
+    patitasCost, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
   });
 
   // Avisar al veterinario de la nueva solicitud.
@@ -164,6 +183,45 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
 
   appt.status = status;
   await appt.save();
+
+  // Al completar: si la protectora comprometió Patitas, se liquida (debita a la
+  // protectora y paga € al vet, gateado por Stripe — mismo modelo que el canje).
+  if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
+    const debited = await User.findOneAndUpdate(
+      { _id: appt.userId, patitas: { $gte: appt.patitasCost } },
+      { $inc: { patitas: -appt.patitasCost } },
+      { new: true },
+    ).select('patitas');
+    if (debited) {
+      const valueEur = eurFromPatitas(appt.patitasCost);
+      const code = genRedeemCode();
+      const txn: any = await PatitaTxn.create({
+        type: 'redeem', shelterId: appt.userId, partnerId: appt.vetId,
+        amount: appt.patitasCost, valueEur, code, status: 'pending_payout',
+        concept: 'Cita veterinaria',
+      });
+      let payoutStatus = 'pending_payout';
+      const vetDoc: any = await User.findById(appt.vetId).select('stripeAccountId');
+      if (isStripeConfigured() && vetDoc?.stripeAccountId) {
+        try {
+          const stripe = getStripeClient();
+          const transfer = await stripe.transfers.create({
+            amount: centsFromPatitas(appt.patitasCost), currency: 'eur',
+            destination: vetDoc.stripeAccountId,
+            metadata: { code, appointmentId: String(appt._id), patitas: String(appt.patitasCost) },
+          });
+          txn.status = 'paid'; txn.payoutRef = transfer.id; await txn.save();
+          payoutStatus = 'paid';
+        } catch (err) {
+          logger.error({ err, code }, '[vet-appointments] fallo en transfer de Patitas');
+        }
+      }
+      appt.patitasPaid = true; appt.patitasCode = code; appt.payoutStatus = payoutStatus as any;
+      await appt.save();
+    } else {
+      logger.warn({ appt: String(appt._id) }, '[vet-appointments] saldo de Patitas insuficiente al completar');
+    }
+  }
 
   // Al completar, el vet puede volcar la cita al historial clínico del animal.
   let clinicalRecordAdded = false;
