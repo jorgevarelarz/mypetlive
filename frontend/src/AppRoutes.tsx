@@ -39,6 +39,7 @@ import Home from "./pages/home/Home";
 import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
 import PetPage from "./pages/pet/PetPage";
+import AppointmentsPage from "./pages/vet/AppointmentsPage";
 import Favorites from "./pages/Favorites";
 import AnimalAlerts from "./pages/animals/AnimalAlerts";
 
@@ -81,6 +82,8 @@ export default function AppRoutes() {
               <Route path="/landlord/questionnaire" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><QuestionnairePage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+
+              <Route path="/citas" element={<ProtectedRoute><RoleGuard roles={["tenant", "vet"]}><AppointmentsPage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/admin" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminHome /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminUsersPage /></RoleGuard></ProtectedRoute>} />

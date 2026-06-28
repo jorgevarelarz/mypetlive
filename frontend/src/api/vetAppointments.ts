@@ -45,7 +45,7 @@ export async function listMyVetAppointments(status?: VetAppointmentStatus) {
 
 export async function updateVetAppointmentStatus(
   id: string,
-  payload: { status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; cancelReason?: string },
+  payload: { status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; cancelReason?: string; addToHistory?: boolean },
 ) {
   const { data } = await client.patch(`/api/vet-appointments/${id}/status`, payload);
   return data as VetAppointment;

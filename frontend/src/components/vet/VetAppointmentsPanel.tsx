@@ -19,10 +19,10 @@ export default function VetAppointmentsPanel() {
   const apptsQ = useQuery({ queryKey: ['vet-appointments'], queryFn: () => listMyVetAppointments() });
 
   const mut = useMutation({
-    mutationFn: (vars: { id: string; status: VetAppointmentStatus; scheduledAt?: string }) =>
-      updateVetAppointmentStatus(vars.id, { status: vars.status, scheduledAt: vars.scheduledAt }),
-    onSuccess: () => {
-      toast.success('Cita actualizada');
+    mutationFn: (vars: { id: string; status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; addToHistory?: boolean }) =>
+      updateVetAppointmentStatus(vars.id, { status: vars.status, scheduledAt: vars.scheduledAt, vetNotes: vars.vetNotes, addToHistory: vars.addToHistory }),
+    onSuccess: (data: any) => {
+      toast.success(data?.clinicalRecordAdded ? 'Cita completada y añadida al pasaporte' : 'Cita actualizada');
       setReschedFor(null); setReschedAt('');
       queryClient.invalidateQueries({ queryKey: ['vet-appointments'] });
     },
@@ -32,6 +32,18 @@ export default function VetAppointmentsPanel() {
     },
   });
 
+  const complete = (a: VetAppointment) => {
+    if (a.animalCode) {
+      const note = window.prompt(`Completar cita de ${a.animalCode}.\nEscribe una nota clínica para añadirla al pasaporte (deja vacío para no añadir):`, a.reason || '');
+      // Cancelar el prompt (null) aborta; texto (incl. vacío) completa.
+      if (note === null) return;
+      const addToHistory = note.trim().length > 0;
+      mut.mutate({ id: a._id, status: 'completed', vetNotes: addToHistory ? note.trim() : undefined, addToHistory });
+    } else {
+      mut.mutate({ id: a._id, status: 'completed' });
+    }
+  };
+
   const all = apptsQ.data?.items || [];
   const active = all.filter(a => ACTIVE.includes(a.status));
   const past = all.filter(a => !ACTIVE.includes(a.status));
@@ -40,7 +52,7 @@ export default function VetAppointmentsPanel() {
     if (!ACTIVE.includes(a.status)) return [];
     const acts: any[] = [];
     if (a.status === 'requested') acts.push({ label: 'Confirmar', tone: 'primary', onClick: () => mut.mutate({ id: a._id, status: 'confirmed' }) });
-    if (a.status === 'confirmed' || a.status === 'rescheduled') acts.push({ label: 'Marcar completada', tone: 'primary', onClick: () => mut.mutate({ id: a._id, status: 'completed' }) });
+    if (a.status === 'confirmed' || a.status === 'rescheduled') acts.push({ label: 'Marcar completada', tone: 'primary', onClick: () => complete(a) });
     acts.push({ label: reschedFor === a._id ? 'Cerrar' : 'Reprogramar', tone: 'neutral', onClick: () => { setReschedFor(reschedFor === a._id ? null : a._id); setReschedAt(''); } });
     acts.push({ label: 'Cancelar', tone: 'danger', onClick: () => mut.mutate({ id: a._id, status: 'cancelled' }) });
     return acts;

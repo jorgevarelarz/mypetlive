@@ -9,6 +9,7 @@
     { "label": "Compañeros", "path": "/animals", "to": "/animals" },
     { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
     { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
+    { "label": "Citas vet", "path": "/citas", "to": "/citas" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
   ],
   "tenant": [],
@@ -39,7 +40,9 @@
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
+    { "label": "Agenda de citas", "path": "/citas" },
     { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" }
+    { "label": "Patitas pendientes", "path": "/partner" },
+    { "label": "Perfil y cuenta", "path": "/profile" }
   ]
 }

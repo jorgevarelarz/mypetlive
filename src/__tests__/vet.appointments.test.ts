@@ -6,6 +6,7 @@ import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
+let Animal: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -15,6 +16,7 @@ beforeAll(async () => {
   const mod = await import('../app');
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
+  Animal = (await import('../models/animal.model')).Animal;
 });
 
 afterAll(async () => {
@@ -96,6 +98,23 @@ describe('Citas veterinarias', () => {
     const id = created.body._id;
     await request(app).patch(`/api/vet-appointments/${id}/status`).set(userH).send({ status: 'confirmed' }).expect(403);
     await request(app).patch(`/api/vet-appointments/${id}/status`).set(userH).send({ status: 'cancelled' }).expect(200);
+  });
+
+  it('al completar con addToHistory vuelca la cita al pasaporte del animal', async () => {
+    // Animal de una protectora con código conocido.
+    await User.create({ _id: new mongoose.Types.ObjectId(), name: 'Prot', email: 'p@test.com', passwordHash: 'x', role: 'landlord' });
+    const shelter: any = await User.findOne({ email: 'p@test.com' }).lean();
+    await Animal.create({ shelter: shelter._id, name: 'Rex', species: 'perro', sex: 'male', age: '3', size: 'medium', code: 'REX-555', status: 'publicado', createdByRole: 'protectora' });
+
+    const created = await createAppt(userH, { animalCode: 'REX-555' }).expect(201);
+    const id = created.body._id;
+    await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const done = await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'completed', vetNotes: 'Vacuna puesta', addToHistory: true }).expect(200);
+    expect(done.body.clinicalRecordAdded).toBe(true);
+
+    const animal: any = await Animal.findOne({ code: 'REX-555' }).lean();
+    expect(animal.vetHistory).toHaveLength(1);
+    expect(animal.vetHistory[0].note).toBe('Vacuna puesta');
   });
 
   it('rechaza transición inválida y a terceros', async () => {

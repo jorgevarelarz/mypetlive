@@ -3,10 +3,28 @@ import { Types } from 'mongoose';
 import { VetAppointment } from '../models/vetAppointment.model';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
+import { sendEmail } from '../utils/notification';
+import { logAnimalEvent } from '../utils/animalEvents';
+import logger from '../utils/logger';
 
 function actor(req: Request) {
   const u: any = (req as any).user || {};
   return { id: String(u._id || u.id || ''), role: u.role as string };
+}
+
+function fmtDate(d?: Date | string) {
+  if (!d) return 'fecha por confirmar';
+  return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+}
+
+// Notifica por email a la parte indicada. Best-effort: nunca rompe el flujo.
+async function notify(to: string | undefined, subject: string, body: string) {
+  if (!to) return;
+  try {
+    await sendEmail(to, subject, body);
+  } catch (err) {
+    logger.error({ err, to }, '[vet-appointments] fallo al enviar email');
+  }
 }
 
 // GET /api/vets — directorio público de veterinarios (para que el dueño elija).
@@ -63,6 +81,19 @@ export async function createAppointment(req: Request, res: Response) {
   const appt = await VetAppointment.create({
     vetId, userId, animalId, animalCode: code, reason: cleanReason, requestedAt: when, status: 'requested',
   });
+
+  // Avisar al veterinario de la nueva solicitud.
+  const [vetUser, owner] = await Promise.all([
+    User.findById(vetId).select('email name').lean(),
+    User.findById(userId).select('name').lean(),
+  ]);
+  await notify(
+    (vetUser as any)?.email,
+    'Nueva solicitud de cita en MyPetLive',
+    `${(owner as any)?.name || 'Un cliente'} ha solicitado una cita para el ${fmtDate(when)}.\n` +
+      `Motivo: ${cleanReason}${code ? `\nMascota: ${code}` : ''}\n\nRevísala en tu panel de MyPetLive.`,
+  );
+
   res.status(201).json(appt);
 }
 
@@ -133,5 +164,40 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
 
   appt.status = status;
   await appt.save();
-  res.json(appt);
+
+  // Al completar, el vet puede volcar la cita al historial clínico del animal.
+  let clinicalRecordAdded = false;
+  if (status === 'completed' && (isVet || isAdmin) && req.body?.addToHistory && appt.animalCode) {
+    const animal: any = await Animal.findOne({ code: appt.animalCode });
+    if (animal) {
+      const note = (appt.vetNotes && appt.vetNotes.trim()) || appt.reason || 'Visita veterinaria';
+      animal.vetHistory.push({ date: appt.scheduledAt || appt.requestedAt || new Date(), note });
+      await animal.save();
+      await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'vet', actorId, data: { note, fromAppointment: String(appt._id) } });
+      clinicalRecordAdded = true;
+    }
+  }
+
+  // Notificar a la contraparte del cambio de estado.
+  const [vetUser, owner] = await Promise.all([
+    User.findById(appt.vetId).select('email name profile.orgName').lean(),
+    User.findById(appt.userId).select('email name').lean(),
+  ]);
+  const vetName = (vetUser as any)?.profile?.orgName || (vetUser as any)?.name || 'el veterinario';
+  const STATUS_TEXT: Record<string, string> = {
+    confirmed: `Tu cita con ${vetName} ha sido confirmada para el ${fmtDate(appt.scheduledAt)}.`,
+    rescheduled: `${vetName} ha propuesto una nueva fecha para tu cita: ${fmtDate(appt.scheduledAt)}.`,
+    completed: `Tu cita con ${vetName} se ha marcado como completada.${clinicalRecordAdded ? ' Se ha añadido un registro al pasaporte de tu mascota.' : ''}`,
+  };
+  if (status === 'cancelled') {
+    // Avisar a la otra parte de quien canceló.
+    const cancelledByOwner = isOwner && !isVet && !isAdmin;
+    const to = cancelledByOwner ? (vetUser as any)?.email : (owner as any)?.email;
+    await notify(to, 'Cita cancelada — MyPetLive', `La cita del ${fmtDate(appt.scheduledAt || appt.requestedAt)} ha sido cancelada.${appt.cancelReason ? `\nMotivo: ${appt.cancelReason}` : ''}`);
+  } else if (STATUS_TEXT[status]) {
+    // Confirmaciones/reprogramaciones/completar las hace el vet → avisar al dueño.
+    await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status]);
+  }
+
+  res.json({ ...appt.toObject(), clinicalRecordAdded });
 }
