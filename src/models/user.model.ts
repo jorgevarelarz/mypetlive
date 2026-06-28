@@ -145,6 +145,20 @@ const profileSchema = new Schema(
     // Organización
     orgName: { type: String, trim: true },
     website: { type: String, trim: true },
+    // Veterinario: datos de la clínica/profesional.
+    vet: {
+      type: new Schema(
+        {
+          licenseNumber: { type: String, trim: true }, // nº de colegiado
+          specialties: { type: [String], default: [] }, // felina, exoticos, cirugia, dermatologia…
+          services: { type: [String], default: [] }, // vacunacion, desparasitacion, cirugia, urgencias…
+          schedule: { type: String, trim: true, maxlength: 300 }, // horario en texto libre
+          emergency24h: { type: Boolean, default: false },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
     // Común
     address: { type: addressSchema, default: () => ({}) },
     // Auto-donación de Patitas: reenvía automáticamente las Patitas generadas a una protectora.

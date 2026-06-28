@@ -61,6 +61,19 @@ function sanitizeProfile(input: any): Record<string, any> {
     }
     out.address = addr;
   }
+  if (input.vet && typeof input.vet === 'object') {
+    const v: Record<string, any> = {};
+    if (typeof input.vet.licenseNumber === 'string') v.licenseNumber = input.vet.licenseNumber.trim();
+    if (typeof input.vet.schedule === 'string') v.schedule = input.vet.schedule.trim().slice(0, 300);
+    if (input.vet.emergency24h !== undefined) v.emergency24h = !!input.vet.emergency24h;
+    const toCleanArray = (val: any) =>
+      Array.isArray(val) ? val.map((s: any) => String(s).trim()).filter(Boolean).slice(0, 20) : undefined;
+    const specialties = toCleanArray(input.vet.specialties);
+    const services = toCleanArray(input.vet.services);
+    if (specialties) v.specialties = specialties;
+    if (services) v.services = services;
+    out.vet = v;
+  }
   if (input.autoDonate && typeof input.autoDonate === 'object') {
     const ad: Record<string, any> = { enabled: !!input.autoDonate.enabled };
     if (input.autoDonate.shelterId && /^[a-f\d]{24}$/i.test(String(input.autoDonate.shelterId))) {

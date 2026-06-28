@@ -65,7 +65,11 @@ type FormState = {
   orgName: string;
   website: string;
   address: { street: string; city: string; postalCode: string; region: string; country: string };
+  vet: { licenseNumber: string; specialties: string[]; services: string[]; schedule: string; emergency24h: boolean };
 };
+
+const VET_SPECIALTIES = ['Felina', 'Canina', 'Exóticos', 'Cirugía', 'Dermatología', 'Traumatología', 'Oftalmología', 'Etología'];
+const VET_SERVICES = ['Vacunación', 'Desparasitación', 'Cirugía', 'Urgencias', 'Análisis', 'Microchip', 'Peluquería', 'Hospitalización'];
 
 function initForm(user: any): FormState {
   const p: UserProfile = user?.profile || {};
@@ -89,6 +93,13 @@ function initForm(user: any): FormState {
       postalCode: a.postalCode || '',
       region: a.region || '',
       country: a.country || 'España',
+    },
+    vet: {
+      licenseNumber: p.vet?.licenseNumber || '',
+      specialties: p.vet?.specialties || [],
+      services: p.vet?.services || [],
+      schedule: p.vet?.schedule || '',
+      emergency24h: Boolean(p.vet?.emergency24h),
     },
   };
 }
@@ -231,6 +242,15 @@ export default function ProfilePage() {
         profile.orgName = form.orgName.trim();
         profile.website = form.website.trim();
       }
+      if (role === 'vet') {
+        profile.vet = {
+          licenseNumber: form.vet.licenseNumber.trim(),
+          specialties: form.vet.specialties,
+          services: form.vet.services,
+          schedule: form.vet.schedule.trim(),
+          emergency24h: form.vet.emergency24h,
+        };
+      }
       const payload = { name: form.name.trim(), email: form.email.trim().toLowerCase(), profile };
       const { data } = await api.patch(`/api/users/${user._id}`, payload);
       return data;
@@ -352,6 +372,52 @@ export default function ProfilePage() {
             </div>
           </Card>
 
+          {/* Ficha profesional (veterinario) */}
+          {role === 'vet' && (
+            <Card title="Ficha de la clínica veterinaria">
+              <Field label="Nº de colegiado" hint="Identificador profesional / colegiado del veterinario">
+                <input value={form.vet.licenseNumber} onChange={e => set('vet', { ...form.vet, licenseNumber: e.target.value })} style={inputStyle} placeholder="Ej. COLVET-12345" />
+              </Field>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 800, fontSize: 14 }}>Especialidades</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {VET_SPECIALTIES.map(s => {
+                    const active = form.vet.specialties.includes(s);
+                    return (
+                      <button key={s} type="button"
+                        onClick={() => set('vet', { ...form.vet, specialties: active ? form.vet.specialties.filter(x => x !== s) : [...form.vet.specialties, s] })}
+                        style={{ padding: '7px 13px', borderRadius: 999, border: `1.5px solid ${active ? MPL.teal : MPL.border}`, background: active ? MPL.teal : '#fff', color: active ? '#fff' : MPL.ink, font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 800, fontSize: 14 }}>Servicios</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {VET_SERVICES.map(s => {
+                    const active = form.vet.services.includes(s);
+                    return (
+                      <button key={s} type="button"
+                        onClick={() => set('vet', { ...form.vet, services: active ? form.vet.services.filter(x => x !== s) : [...form.vet.services, s] })}
+                        style={{ padding: '7px 13px', borderRadius: 999, border: `1.5px solid ${active ? MPL.coral : MPL.border}`, background: active ? MPL.coral : '#fff', color: active ? '#fff' : MPL.ink, font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Field label="Horario de atención" hint="Texto libre, ej. L-V 9:00–14:00 y 17:00–20:00">
+                <textarea value={form.vet.schedule} maxLength={300} onChange={e => set('vet', { ...form.vet, schedule: e.target.value })} style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} />
+              </Field>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 14 }}>
+                <input type="checkbox" checked={form.vet.emergency24h} onChange={e => set('vet', { ...form.vet, emergency24h: e.target.checked })} />
+                Urgencias 24 h
+              </label>
+            </Card>
+          )}
+
           {/* Cobro de donaciones (protectora) */}
           {role === 'landlord' && <DonationPayout />}
 
@@ -376,6 +442,30 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+
+          {role === 'vet' && (() => {
+            const steps = [
+              { ok: !!form.vet.licenseNumber.trim(), label: 'Nº de colegiado' },
+              { ok: form.vet.specialties.length > 0, label: 'Especialidades' },
+              { ok: form.vet.services.length > 0, label: 'Servicios' },
+              { ok: !!form.address.city.trim(), label: 'Ciudad' },
+            ];
+            const done = steps.filter(s => s.ok).length;
+            if (done === steps.length) return null;
+            return (
+              <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 18 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>Completa tu ficha ({done}/{steps.length})</div>
+                <p style={{ color: MPL.faint, fontSize: 12.5, margin: '0 0 10px' }}>Una ficha completa da más confianza a adoptantes y protectoras.</p>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {steps.map(s => (
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: s.ok ? MPL.oliveDark : MPL.muted }}>
+                      <span>{s.ok ? '✓' : '○'}</span>{s.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </aside>
       </section>
 

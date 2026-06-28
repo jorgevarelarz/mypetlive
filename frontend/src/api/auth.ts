@@ -20,6 +20,15 @@ export type UserProfile = {
   orgName?: string;
   website?: string;
   address?: UserAddress;
+  vet?: VetProfile;
+};
+
+export type VetProfile = {
+  licenseNumber?: string;
+  specialties?: string[];
+  services?: string[];
+  schedule?: string;
+  emergency24h?: boolean;
 };
 
 export type User = {
