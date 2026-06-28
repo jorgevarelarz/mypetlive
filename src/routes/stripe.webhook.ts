@@ -180,6 +180,17 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
         } catch (err: any) {
           logger.error({ err, sessionId: session.id }, 'Error generando Patitas por donación');
         }
+      } else if (session.metadata?.sponsoredCouponId) {
+        // Placement destacado pagado por el partner: activar el cupón como sponsored.
+        const couponId = session.metadata.sponsoredCouponId;
+        if (couponId && Types.ObjectId.isValid(couponId)) {
+          const { Coupon } = await import('../models/coupon.model');
+          await Coupon.findByIdAndUpdate(couponId, {
+            sponsored: true,
+            sponsorshipStatus: 'active',
+            sponsorPaymentRef: (session.payment_intent as string) || session.id,
+          });
+        }
       } else if (session.metadata?.deposit === 'true') {
         const contractId = session.metadata?.contractId;
         if (contractId) {

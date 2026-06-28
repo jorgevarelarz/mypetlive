@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { normalizeSpecies } from '../utils/species';
 
 const CODE_ATTEMPTS = 8;
 
@@ -62,7 +63,7 @@ const animalSchema = new Schema(
   {
     shelter: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true },
-    species: { type: String, required: true },
+    species: { type: String, required: true, set: normalizeSpecies },
     breed: { type: String },
     sex: { type: String, enum: ['male', 'female'], default: 'female' },
     age: { type: String, required: true },

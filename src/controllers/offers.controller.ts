@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { Coupon } from '../models/coupon.model';
 import { Animal } from '../models/animal.model';
+import { speciesVariants, speciesMatches } from '../utils/species';
+import { isStripeConfigured, getStripeClient } from '../utils/stripe';
+
+// Precio del placement patrocinado (destacado) que paga el partner. Configurable.
+const SPONSORED_PLACEMENT_EUR = Math.max(1, Number(process.env.SPONSORED_PLACEMENT_EUR ?? 9.99));
 
 function serializeOffer(c: any) {
   return {
@@ -18,25 +23,8 @@ function serializeOffer(c: any) {
   };
 }
 
-// La especie se guarda mezclada (es/en: gato≡cat, perro≡dog). Normaliza para que
-// el targeting case sin importar el vocabulario del animal o del cupón.
-const SPECIES_SYNONYMS: Record<string, string[]> = {
-  cat: ['cat', 'gato'],
-  gato: ['cat', 'gato'],
-  dog: ['dog', 'perro'],
-  perro: ['dog', 'perro'],
-};
-function speciesVariants(value?: string): string[] {
-  if (!value) return [];
-  const k = String(value).toLowerCase();
-  return SPECIES_SYNONYMS[k] || [k];
-}
-function speciesMatches(target: string[] | undefined, animalSpecies?: string): boolean {
-  if (!target?.length) return true; // vacío no restringe
-  const variants = speciesVariants(animalSpecies);
-  return target.some(s => variants.includes(String(s).toLowerCase()));
-}
-
+// La especie se guarda mezclada en datos legados (es/en: gato≡cat, perro≡dog);
+// `speciesVariants`/`speciesMatches` (utils/species) casan ambos vocabularios.
 // Casa las ofertas (cupones) con el perfil de un animal: especie/edad/tamaño/ciudad,
 // o dirigidas exactamente a su código. Excluye cupones sin ningún targeting.
 async function matchOffersForAnimal(animal: any) {
@@ -83,6 +71,61 @@ export async function offersForAnimal(req: Request, res: Response) {
   const animal: any = await Animal.findOne({ code }).lean();
   if (!animal) return res.status(404).json({ error: 'not_found' });
   res.json({ animal: { code: animal.code, name: animal.name, species: animal.species }, items: await matchOffersForAnimal(animal) });
+}
+
+// POST /api/offers/coupons/:id/sponsor — el partner paga para destacar su cupón.
+// Gateado por Stripe igual que el resto: sin clave configurada queda 'pending'
+// (placement solicitado pero sin cobro), demoable sin pasarela real.
+export async function sponsorCoupon(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = String(user?._id || user?.id || '');
+  const id = String(req.params.id || '');
+  const coupon: any = await Coupon.findById(id);
+  if (!coupon) return res.status(404).json({ error: 'not_found' });
+
+  const isAdmin = user?.role === 'admin';
+  const isOwner = String(coupon.partnerId || '') === userId;
+  if (!isAdmin && !isOwner) return res.status(403).json({ error: 'forbidden' });
+
+  if (coupon.sponsored && coupon.sponsorshipStatus === 'active') {
+    return res.json({ status: 'active', sponsored: true, alreadyActive: true });
+  }
+
+  // Gateado: sin Stripe no se cobra; queda marcado como pendiente.
+  if (!isStripeConfigured()) {
+    coupon.sponsorshipStatus = 'pending';
+    await coupon.save();
+    return res.json({
+      status: 'pending',
+      configured: false,
+      priceEur: SPONSORED_PLACEMENT_EUR,
+      message: 'Pagos no disponibles todavía; placement marcado como pendiente.',
+    });
+  }
+
+  const base = process.env.FRONTEND_URL?.replace(/\/$/, '') || process.env.CORS_ORIGIN?.split(',')[0] || 'http://localhost:3001';
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: 'eur',
+          product_data: { name: `Placement destacado · ${coupon.copy || coupon.title || 'Cupón'}` },
+          unit_amount: Math.round(SPONSORED_PLACEMENT_EUR * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: { sponsoredCouponId: String(coupon._id), partnerId: String(coupon.partnerId || '') },
+    success_url: base + '/?sponsor=success',
+    cancel_url: base + '/?sponsor=cancel',
+  });
+
+  coupon.sponsorshipStatus = 'pending';
+  await coupon.save();
+  res.json({ status: 'pending', configured: true, id: session.id, url: session.url, priceEur: SPONSORED_PLACEMENT_EUR });
 }
 
 // GET /api/offers/for-me — unión de ofertas para las mascotas del usuario.
