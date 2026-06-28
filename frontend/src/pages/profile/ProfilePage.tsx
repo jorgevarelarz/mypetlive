@@ -11,6 +11,8 @@ import PatitasUserPanel from '../../components/patitas/PatitasUserPanel';
 import PatitasShelterPanel from '../../components/patitas/PatitasShelterPanel';
 import PatitasPartnerPanel from '../../components/patitas/PatitasPartnerPanel';
 import VetHealthPanel from '../../components/vet/VetHealthPanel';
+import VetAppointmentsPanel from '../../components/vet/VetAppointmentsPanel';
+import BookVetAppointment from '../../components/vet/BookVetAppointment';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 
 const roleLabel: Record<string, string> = {
@@ -473,6 +475,14 @@ export default function ProfilePage() {
         <section style={{ display: 'grid', gap: 14 }}>
           <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: 0 }}>Atención veterinaria 🩺</h2>
           <VetHealthPanel />
+          <VetAppointmentsPanel />
+        </section>
+      )}
+
+      {role === 'tenant' && (
+        <section style={{ display: 'grid', gap: 14 }}>
+          <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: 0 }}>Veterinario 🩺</h2>
+          <BookVetAppointment />
         </section>
       )}
 
