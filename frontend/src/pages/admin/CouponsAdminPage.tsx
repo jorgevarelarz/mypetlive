@@ -16,6 +16,11 @@ type CouponForm = {
   partnerId: string;
   targetAnimalCode: string;
   expiresAt: string;
+  targetSpecies: string[];
+  targetAgeGroup: string[];
+  targetSize: string[];
+  targetCity: string;
+  sponsored: boolean;
 };
 
 const INITIAL_FORM: CouponForm = {
@@ -24,7 +29,73 @@ const INITIAL_FORM: CouponForm = {
   partnerId: '',
   targetAnimalCode: '',
   expiresAt: '',
+  targetSpecies: [],
+  targetAgeGroup: [],
+  targetSize: [],
+  targetCity: '',
+  sponsored: false,
 };
+
+const SPECIES_TARGETS: Array<{ value: string; label: string }> = [
+  { value: 'cat', label: 'Gato' },
+  { value: 'dog', label: 'Perro' },
+  { value: 'rabbit', label: 'Conejo' },
+  { value: 'bird', label: 'Ave' },
+  { value: 'other', label: 'Otro' },
+];
+const AGE_TARGETS: Array<{ value: string; label: string }> = [
+  { value: 'puppy', label: 'Cachorro' },
+  { value: 'young', label: 'Joven' },
+  { value: 'adult', label: 'Adulto' },
+  { value: 'senior', label: 'Senior' },
+];
+const SIZE_TARGETS: Array<{ value: string; label: string }> = [
+  { value: 'small', label: 'Pequeño' },
+  { value: 'medium', label: 'Mediano' },
+  { value: 'large', label: 'Grande' },
+];
+
+function toggleValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter(v => v !== value) : [...list, value];
+}
+
+function TargetChips({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1">
+      <span style={{ color: '#3F4A3C' }}>{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {options.map(opt => {
+          const active = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onToggle(opt.value)}
+              className="px-3 py-1 rounded-full text-sm border"
+              style={
+                active
+                  ? { background: '#3F4A3C', color: '#FDFBF4', borderColor: '#3F4A3C' }
+                  : { background: '#FFFEFB', color: '#3F4A3C', borderColor: '#D9D2C4' }
+              }
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function CouponsAdminPage() {
   const queryClient = useQueryClient();
@@ -62,6 +133,11 @@ export default function CouponsAdminPage() {
       partnerId: coupon.partnerId,
       targetAnimalCode: coupon.targetAnimalCode || '',
       expiresAt: coupon.expiresAt ? coupon.expiresAt.slice(0, 10) : '',
+      targetSpecies: coupon.targetSpecies || [],
+      targetAgeGroup: coupon.targetAgeGroup || [],
+      targetSize: coupon.targetSize || [],
+      targetCity: coupon.targetCity || '',
+      sponsored: Boolean(coupon.sponsored),
     });
     setModalOpen(true);
   };
@@ -77,6 +153,11 @@ export default function CouponsAdminPage() {
         partnerId: form.partnerId,
         targetAnimalCode: form.targetAnimalCode.trim() || undefined,
         expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+        targetSpecies: form.targetSpecies,
+        targetAgeGroup: form.targetAgeGroup,
+        targetSize: form.targetSize,
+        targetCity: form.targetCity.trim() || null,
+        sponsored: form.sponsored,
       };
       if (editing) {
         return updateCoupon(editing._id, payload);
@@ -144,6 +225,20 @@ export default function CouponsAdminPage() {
                   <p className="text-sm" style={{ color: '#3F4A3C' }}>Descuento: {coupon.discount}</p>
                   {coupon.targetAnimalCode && (
                     <p className="text-xs" style={{ color: '#6A7B4F' }}>Código mascota: {coupon.targetAnimalCode}</p>
+                  )}
+                  {(() => {
+                    const segments = [
+                      ...(coupon.targetSpecies || []),
+                      ...(coupon.targetAgeGroup || []),
+                      ...(coupon.targetSize || []),
+                      ...(coupon.targetCity ? [coupon.targetCity] : []),
+                    ];
+                    return segments.length ? (
+                      <p className="text-xs" style={{ color: '#6A7B4F' }}>Segmenta: {segments.join(' · ')}</p>
+                    ) : null;
+                  })()}
+                  {coupon.sponsored && (
+                    <p className="text-xs font-semibold" style={{ color: '#B8860B' }}>★ Destacada</p>
                   )}
                   {coupon.expiresAt && (
                     <p className="text-xs" style={{ color: '#7A8273' }}>
@@ -246,6 +341,52 @@ export default function CouponsAdminPage() {
                   onChange={e => setForm(prev => ({ ...prev, expiresAt: e.target.value }))}
                 />
               </label>
+
+              <div className="mt-1 pt-3 border-t" style={{ borderColor: '#E7E1D5' }}>
+                <p className="text-sm font-semibold" style={{ color: '#3F4A3C' }}>Segmentación de oferta (opcional)</p>
+                <p className="text-xs" style={{ color: '#7A8273' }}>
+                  Si dejas todo vacío la oferta aplica a cualquier mascota. El código de mascota tiene prioridad sobre estos filtros.
+                </p>
+
+                <div className="grid gap-3 mt-3">
+                  <TargetChips
+                    label="Especie"
+                    options={SPECIES_TARGETS}
+                    selected={form.targetSpecies}
+                    onToggle={value => setForm(prev => ({ ...prev, targetSpecies: toggleValue(prev.targetSpecies, value) }))}
+                  />
+                  <TargetChips
+                    label="Edad"
+                    options={AGE_TARGETS}
+                    selected={form.targetAgeGroup}
+                    onToggle={value => setForm(prev => ({ ...prev, targetAgeGroup: toggleValue(prev.targetAgeGroup, value) }))}
+                  />
+                  <TargetChips
+                    label="Tamaño"
+                    options={SIZE_TARGETS}
+                    selected={form.targetSize}
+                    onToggle={value => setForm(prev => ({ ...prev, targetSize: toggleValue(prev.targetSize, value) }))}
+                  />
+                  <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+                    Ciudad (opcional)
+                    <input
+                      className="border rounded px-3 py-2"
+                      style={{ borderColor: '#D9D2C4', background: '#FFFEFB' }}
+                      value={form.targetCity}
+                      onChange={e => setForm(prev => ({ ...prev, targetCity: e.target.value }))}
+                      placeholder="Ej. Lugo"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm" style={{ color: '#3F4A3C' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.sponsored}
+                      onChange={e => setForm(prev => ({ ...prev, sponsored: e.target.checked }))}
+                    />
+                    Oferta destacada (placement patrocinado)
+                  </label>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button type="button" onClick={closeModal} className="px-4 py-2 rounded-full text-sm" style={{ border: '1px solid #D7CAB8', color: '#3F4A3C' }}>

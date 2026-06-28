@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home, MapPin, RefreshCw, Share2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home, MapPin, RefreshCw, ScrollText, Share2, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAnimal } from '../../api/animals';
 import { createAdoption } from '../../api/adoptions';
@@ -259,6 +259,11 @@ export default function AnimalDetail() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  {a.code && (
+                    <button type="button" onClick={() => nav(`/p/${encodeURIComponent(a.code)}`)} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Ver pasaporte" title="Ver pasaporte">
+                      <ScrollText size={18} />
+                    </button>
+                  )}
                   <button type="button" onClick={handleShareClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
                     <Share2 size={18} />
                   </button>

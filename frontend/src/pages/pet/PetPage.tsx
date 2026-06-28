@@ -12,6 +12,7 @@ import {
   AnimalMood,
 } from '../../api/animals';
 import { uploadImage } from '../../api/uploads';
+import { offersForAnimal } from '../../api/offers';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
@@ -133,6 +134,34 @@ export default function PetPage() {
     enabled: Boolean(shelterId),
     staleTime: 30_000,
   });
+
+  const petCode: string | undefined = featuredAnimal?.code;
+  const { data: offersData } = useQuery({
+    queryKey: ['offers-animal', petCode],
+    queryFn: () => offersForAnimal(petCode as string),
+    enabled: Boolean(petCode),
+    staleTime: 60_000,
+  });
+  const petOffers = offersData?.items || [];
+
+  const handleSharePassport = async () => {
+    if (!petCode) return;
+    const url = `${window.location.origin}/p/${encodeURIComponent(petCode)}`;
+    const shareData = {
+      title: `Pasaporte de ${featuredAnimal?.name || 'mi mascota'}`,
+      text: `Conoce el pasaporte digital de ${featuredAnimal?.name || 'mi mascota'} (${petCode}) en MyPetLive`,
+      url,
+    };
+    try {
+      if (navigator.share) await navigator.share(shareData);
+      else {
+        await navigator.clipboard.writeText(url);
+        toast.success('Enlace del pasaporte copiado');
+      }
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
+    }
+  };
 
   const echoMutation = useMutation({
     mutationFn: async () => {
@@ -357,6 +386,26 @@ export default function PetPage() {
             <p className="text-sm" style={{ color: '#7A8273' }}>Estado: {mood.replace('_', ' ')} 🌱</p>
           )}
         </div>
+        {petCode && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)}
+              className="px-3 py-2 rounded-xl text-sm font-semibold"
+              style={{ background: '#1F6F6F', color: '#FFFFFF' }}
+            >
+              📕 Ver pasaporte
+            </button>
+            <button
+              type="button"
+              onClick={handleSharePassport}
+              className="px-3 py-2 rounded-xl text-sm font-semibold border"
+              style={{ borderColor: '#1F6F6F', color: '#1F6F6F', background: '#FFFFFF' }}
+            >
+              🔗 Compartir
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -419,6 +468,39 @@ export default function PetPage() {
           )}
         </div>
       </div>
+
+      {petOffers.length > 0 && (
+        <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+          <h2 className="text-lg font-semibold">Ofertas para {featuredAnimal.name || 'tu mascota'}</h2>
+          <p className="text-xs" style={{ color: '#7A8273' }}>Seleccionadas según el perfil de tu mascota 🤍</p>
+          <div className="grid gap-2 mt-3">
+            {petOffers.map(offer => (
+              <div
+                key={offer._id}
+                className="flex items-center gap-3 border rounded-xl px-3 py-2"
+                style={{ borderColor: '#E7E1D5' }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold">
+                    {offer.title}
+                    {offer.sponsored && (
+                      <span className="ml-2 text-xs font-semibold" style={{ color: '#B8860B' }}>· Destacado</span>
+                    )}
+                  </div>
+                  <div className="text-xs" style={{ color: '#7A8273' }}>
+                    {offer.discount}{offer.partner?.name ? ` · ${offer.partner.name}` : ''}
+                  </div>
+                </div>
+                {offer.exact && (
+                  <span className="text-xs font-semibold rounded-full px-2 py-1" style={{ color: '#1F6F6F', background: '#D7ECEC' }}>
+                    Para {petCode}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 && (
         <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
