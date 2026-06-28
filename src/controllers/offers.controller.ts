@@ -18,6 +18,25 @@ function serializeOffer(c: any) {
   };
 }
 
+// La especie se guarda mezclada (es/en: gato≡cat, perro≡dog). Normaliza para que
+// el targeting case sin importar el vocabulario del animal o del cupón.
+const SPECIES_SYNONYMS: Record<string, string[]> = {
+  cat: ['cat', 'gato'],
+  gato: ['cat', 'gato'],
+  dog: ['dog', 'perro'],
+  perro: ['dog', 'perro'],
+};
+function speciesVariants(value?: string): string[] {
+  if (!value) return [];
+  const k = String(value).toLowerCase();
+  return SPECIES_SYNONYMS[k] || [k];
+}
+function speciesMatches(target: string[] | undefined, animalSpecies?: string): boolean {
+  if (!target?.length) return true; // vacío no restringe
+  const variants = speciesVariants(animalSpecies);
+  return target.some(s => variants.includes(String(s).toLowerCase()));
+}
+
 // Casa las ofertas (cupones) con el perfil de un animal: especie/edad/tamaño/ciudad,
 // o dirigidas exactamente a su código. Excluye cupones sin ningún targeting.
 async function matchOffersForAnimal(animal: any) {
@@ -25,7 +44,7 @@ async function matchOffersForAnimal(animal: any) {
   const code = animal.code;
   const expiryOr = [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }];
   const targetOr: any[] = [{ targetAnimalCode: code }];
-  if (animal.species) targetOr.push({ targetSpecies: animal.species });
+  if (animal.species) targetOr.push({ targetSpecies: { $in: speciesVariants(animal.species) } });
   if (animal.ageGroup) targetOr.push({ targetAgeGroup: animal.ageGroup });
   if (animal.size) targetOr.push({ targetSize: animal.size });
   if (animal.city) targetOr.push({ targetCity: { $regex: String(animal.city), $options: 'i' } });
@@ -41,7 +60,7 @@ async function matchOffersForAnimal(animal: any) {
       const exact = c.targetAnimalCode && c.targetAnimalCode === code;
       if (!exact) {
         // Refuerza: todos los criterios definidos deben casar (los vacíos no restringen).
-        if (c.targetSpecies?.length && !c.targetSpecies.includes(animal.species)) return null;
+        if (!speciesMatches(c.targetSpecies, animal.species)) return null;
         if (c.targetAgeGroup?.length && animal.ageGroup && !c.targetAgeGroup.includes(animal.ageGroup)) return null;
         if (c.targetAgeGroup?.length && !animal.ageGroup) return null;
         if (c.targetSize?.length && !c.targetSize.includes(animal.size)) return null;
