@@ -47,6 +47,7 @@ import patitasRoutes from './routes/patitas.routes';
 import couponRoutes from './routes/coupon.routes';
 import offersRoutes from './routes/offers.routes';
 import vetAppointmentRoutes from './routes/vetAppointment.routes';
+import vetOffersRoutes from './routes/vetOffers.routes';
 import adminCouponRoutes from './routes/coupon.admin.routes';
 import purchaseRoutes from './routes/purchase.routes';
 import questionnaireRoutes from './routes/questionnaire.routes';
@@ -228,6 +229,7 @@ app.use('/api', patitasRoutes);
 app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);
 app.use('/api', vetAppointmentRoutes);
+app.use('/api', vetOffersRoutes);
 app.use('/api/purchases', purchaseRoutes);
 
 app.use(

@@ -8,6 +8,8 @@ const couponSchema = new Schema(
     title: { type: String },
     description: { type: String },
     discount: { type: String, required: true },
+    // Tipo de servicio (ofertas de partner, sobre todo veterinarias): vacunación, revisión…
+    serviceType: { type: String, trim: true },
     bonusPatitas: { type: Number, default: 0 },
     active: { type: Boolean, default: true, index: true },
     targetAnimalCode: { type: String, uppercase: true, trim: true },

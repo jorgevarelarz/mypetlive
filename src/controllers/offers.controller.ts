@@ -13,6 +13,7 @@ function serializeOffer(c: any) {
     title: c.title || c.copy,
     description: c.description,
     discount: c.discount,
+    serviceType: c.serviceType,
     bonusPatitas: c.bonusPatitas,
     partnerType: c.partnerType,
     partner: c.partnerId && c.partnerId._id ? { id: String(c.partnerId._id), name: c.partnerId.name } : undefined,
