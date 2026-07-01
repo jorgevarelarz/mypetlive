@@ -9,6 +9,7 @@ import {
   updateVetAppointmentStatus,
 } from '../../api/vetAppointments';
 import { getMyPatitas } from '../../api/patitas';
+import { listMyPets, searchAnimals } from '../../api/animals';
 import { useAuth } from '../../context/AuthContext';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
 import { STATUS_META, AppointmentCard } from './appointmentShared';
@@ -28,6 +29,21 @@ export default function BookVetAppointment() {
 
   const vetsQ = useQuery({ queryKey: ['vets-directory'], queryFn: () => listVets(), staleTime: 60_000 });
   const apptsQ = useQuery({ queryKey: ['my-vet-appointments'], queryFn: () => listMyVetAppointments() });
+
+  // Solo se puede agendar para mascotas propias: adoptante → sus mascotas; protectora → animales de su protectora.
+  const petsQ = useQuery({
+    queryKey: ['my-pets-for-appointment', isShelter, user?._id],
+    enabled: !!user,
+    queryFn: async () => {
+      if (isShelter) {
+        const res = await searchAnimals({ shelter: String(user?._id || ''), limit: 200 });
+        return (res.items || []).map((a: any) => ({ code: a.code, name: a.name, species: a.species }));
+      }
+      const res = await listMyPets();
+      return (res.items || []).map(p => ({ code: p.animal?.code, name: p.animal?.name, species: p.animal?.species }));
+    },
+  });
+  const myPets = (petsQ.data || []).filter(p => p.code);
   const patitasQ = useQuery({ queryKey: ['my-patitas'], queryFn: getMyPatitas, enabled: isShelter });
   const balance = patitasQ.data?.balance ?? 0;
   const vets = vetsQ.data?.items || [];
@@ -52,6 +68,7 @@ export default function BookVetAppointment() {
       const map: Record<string, string> = {
         vet_required: 'Elige un veterinario', reason_required: 'Indica el motivo', date_required: 'Elige fecha y hora',
         date_in_past: 'La fecha no puede ser pasada', animal_not_found: 'No existe ese código de mascota',
+        animal_not_owned: 'Solo puedes pedir cita para tus propias mascotas',
         insufficient: 'No tienes suficientes Patitas', insufficient_patitas: 'No tienes suficientes Patitas',
       };
       toast.error(map[code] || 'No se pudo crear la solicitud');
@@ -98,8 +115,20 @@ export default function BookVetAppointment() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
-              Mascota (código, opcional)
-              <input value={animalCode} onChange={e => setAnimalCode(e.target.value.toUpperCase())} style={{ ...inputStyle, fontFamily: MPL_FONT_MONO }} placeholder="Ej. MILO-407" />
+              Mascota (opcional)
+              <select
+                value={animalCode}
+                onChange={e => setAnimalCode(e.target.value)}
+                disabled={petsQ.isLoading || myPets.length === 0}
+                style={{ ...inputStyle, fontFamily: animalCode ? MPL_FONT_MONO : 'inherit' }}
+              >
+                <option value="">
+                  {petsQ.isLoading ? 'Cargando…' : myPets.length === 0 ? 'No tienes mascotas registradas' : 'Sin especificar'}
+                </option>
+                {myPets.map(p => (
+                  <option key={p.code} value={p.code}>{p.name}{p.code ? ` · ${p.code}` : ''}</option>
+                ))}
+              </select>
             </label>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
               Fecha y hora

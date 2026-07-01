@@ -70,15 +70,19 @@ export async function createAppointment(req: Request, res: Response) {
   if (!when || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
   if (when.getTime() < Date.now() - 60_000) return res.status(400).json({ error: 'date_in_past' });
 
-  // Animal opcional: si se da el código, lo resolvemos (no exigimos propiedad — el dueño sabe su código).
+  // Animal opcional: si se da el código, debe ser una mascota del solicitante
+  // (dueño del animal) o, si agenda una protectora, un animal de su protectora.
   let animalId: string | undefined;
   let code: string | undefined;
   if (animalCode) {
     const normalized = String(animalCode).trim().toUpperCase();
-    const animal = await Animal.findOne({ code: normalized }).select('_id code').lean();
+    const animal: any = await Animal.findOne({ code: normalized }).select('_id code ownerId shelter').lean();
     if (!animal) return res.status(404).json({ error: 'animal_not_found' });
+    const uid = String(userId);
+    const isOwner = String(animal.ownerId || '') === uid || String(animal.shelter || '') === uid;
+    if (!isOwner && role !== 'admin') return res.status(403).json({ error: 'animal_not_owned' });
     animalId = String(animal._id);
-    code = (animal as any).code;
+    code = animal.code;
   }
 
   // Pago con Patitas: solo cuando agenda una protectora (landlord). Validamos saldo

@@ -104,10 +104,10 @@ describe('Citas veterinarias', () => {
   });
 
   it('al completar con addToHistory vuelca la cita al pasaporte del animal', async () => {
-    // Animal de una protectora con código conocido.
+    // Mascota del propio adoptante (dueño) con código conocido.
     await User.create({ _id: new mongoose.Types.ObjectId(), name: 'Prot', email: 'p@test.com', passwordHash: 'x', role: 'landlord' });
     const shelter: any = await User.findOne({ email: 'p@test.com' }).lean();
-    await Animal.create({ shelter: shelter._id, name: 'Rex', species: 'perro', sex: 'male', age: '3', size: 'medium', code: 'REX-555', status: 'publicado', createdByRole: 'protectora' });
+    await Animal.create({ shelter: shelter._id, ownerId: new mongoose.Types.ObjectId(userId), isPersonalPet: true, name: 'Rex', species: 'perro', sex: 'male', age: '3', size: 'medium', code: 'REX-555', status: 'publicado', createdByRole: 'tenant' });
 
     const created = await createAppt(userH, { animalCode: 'REX-555' }).expect(201);
     const id = created.body._id;
@@ -149,6 +149,18 @@ describe('Citas veterinarias', () => {
   it('un adoptante no fija coste en Patitas (se ignora)', async () => {
     const res = await createAppt(userH, { patitasCost: 30 }).expect(201);
     expect(res.body.patitasCost).toBe(0);
+  });
+
+  it('solo permite agendar para una mascota propia', async () => {
+    const otherShelter: any = await User.create({ _id: new mongoose.Types.ObjectId(), name: 'Otra', email: 'otra@test.com', passwordHash: 'x', role: 'landlord' });
+    // Animal ajeno (de otra protectora): el adoptante no puede usarlo.
+    await Animal.create({ shelter: otherShelter._id, name: 'Ajeno', species: 'gato', sex: 'female', age: '2', size: 'small', code: 'AJENO-1', status: 'publicado', createdByRole: 'protectora' });
+    await createAppt(userH, { animalCode: 'AJENO-1' }).expect(403);
+
+    // Mascota propia del adoptante: sí permitida.
+    await Animal.create({ shelter: otherShelter._id, ownerId: new mongoose.Types.ObjectId(userId), isPersonalPet: true, name: 'Mío', species: 'perro', sex: 'male', age: '1', size: 'small', code: 'MIO-1', status: 'no_disponible', createdByRole: 'tenant' });
+    const ok = await createAppt(userH, { animalCode: 'MIO-1' }).expect(201);
+    expect(ok.body.animalCode).toBe('MIO-1');
   });
 
   it('rechaza transición inválida y a terceros', async () => {
