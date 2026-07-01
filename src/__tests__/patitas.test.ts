@@ -110,32 +110,6 @@ describe('Patitas API', () => {
     expect(res.body?.error).toBe('invalid_amount');
   });
 
-  it('allows a protectora to spend Patitas with logging', async () => {
-    const shelter = await User.create({
-      name: 'Protectora Solidaria',
-      email: 'solidaria@shelter.app',
-      passwordHash: 'hash',
-      role: 'landlord',
-      patitas: 8,
-    });
-
-    const res = await request(app)
-      .post('/api/patitas/spend')
-      .set(testUserHeaders('landlord', shelter.id))
-      .send({ amount: 5, partnerType: 'store', concept: 'Arena' });
-
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, newBalance: 3 });
-
-    const refreshed = await User.findById(shelter.id);
-    expect(refreshed?.patitas).toBe(3);
-
-    const logs = await PatitaLog.find({ shelterId: shelter.id, source: 'store' }).lean();
-    expect(logs).toHaveLength(1);
-    expect(logs[0].amount).toBe(-5);
-    expect(logs[0].concept).toBe('Arena');
-  });
-
   it('exposes the list of protector as for selection', async () => {
     const shelter = await User.create({
       name: 'Protectora Esperanza',
@@ -151,24 +125,6 @@ describe('Patitas API', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.items)).toBe(true);
     expect(res.body.items.some((item: any) => item.id === String(shelter._id))).toBe(true);
-  });
-
-  it('prevents spending more Patitas than available', async () => {
-    const shelter = await User.create({
-      name: 'Protectora Limitada',
-      email: 'limit@shelter.app',
-      passwordHash: 'hash',
-      role: 'landlord',
-      patitas: 2,
-    });
-
-    const res = await request(app)
-      .post('/api/patitas/spend')
-      .set(testUserHeaders('landlord', shelter.id))
-      .send({ amount: 5, partnerType: 'vet', concept: 'Chequeo' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('insufficient_patitas');
   });
 
   it('allows partners to register purchases that generate Patitas automatically', async () => {

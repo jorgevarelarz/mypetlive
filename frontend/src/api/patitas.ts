@@ -92,12 +92,6 @@ export async function redeemConfirm(payload: { walletToken?: string; code?: stri
   };
 }
 
-// --- Gasto directo de la protectora en un partner (flujo legado) ---
-export async function spendPatitas(payload: { amount: number; partnerType: 'store' | 'vet'; concept: string; animalId?: string; couponId?: string }) {
-  const { data } = await client.post('/api/patitas/spend', payload);
-  return data as { ok: boolean; newBalance: number };
-}
-
 // --- legado (dashboard de protectora / admin) ---
 export async function getPatitasBalance(shelterId?: string) {
   const params: Record<string, string> = {};

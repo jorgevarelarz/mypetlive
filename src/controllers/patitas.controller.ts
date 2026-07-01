@@ -2,8 +2,6 @@ import { Request, Response } from 'express';
 import { isValidObjectId, Types } from 'mongoose';
 import { User } from '../models/user.model';
 import { PatitaTxn } from '../models/patitaTxn.model';
-import { PatitaLog } from '../models/patitaLog.model';
-import { Coupon } from '../models/coupon.model';
 import {
   PATITA_VALUE_EUR,
   VISIT_PATITAS_REWARD,
@@ -359,47 +357,3 @@ export async function addPatitas(req: Request, res: Response) {
   return res.json({ patitas: updated.patitas || 0, protectoraId: updated.id });
 }
 
-// ---------------------------------------------------------------------------
-// Gasto directo de la protectora en un partner (flujo legado). Debita el saldo
-// `User.patitas` y registra en el ledger antiguo `PatitaLog`.
-// ---------------------------------------------------------------------------
-
-export async function spendPatitas(req: Request, res: Response) {
-  const actor: any = (req as any).user;
-  if (!actor) return res.status(401).json({ error: 'unauthorized' });
-  const { amount, partnerType, concept, shelterId, animalId, couponId } = (req.body || {}) as any;
-  const numericAmount = Number(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) return res.status(400).json({ error: 'invalid_amount' });
-  if (!['store', 'vet'].includes(String(partnerType))) return res.status(400).json({ error: 'invalid_partner_type' });
-  const trimmedConcept = (concept || '').trim();
-  if (!trimmedConcept) return res.status(400).json({ error: 'concept_required' });
-
-  let coupon: any;
-  if (couponId) {
-    if (!isValidObjectId(couponId)) return res.status(400).json({ error: 'invalid_coupon' });
-    coupon = await Coupon.findById(couponId).lean();
-    if (!coupon) return res.status(404).json({ error: 'coupon_not_found' });
-    if (coupon.partnerType !== partnerType) return res.status(400).json({ error: 'coupon_partner_mismatch' });
-  }
-
-  const targetShelter = actor.role === 'landlord' ? String(actor._id || actor.id) : (actor.role === 'admin' ? normalizeId(shelterId) : undefined);
-  if (!targetShelter) return res.status(400).json({ error: 'invalid_shelter_context' });
-
-  const debited = await User.findOneAndUpdate(
-    { _id: targetShelter, role: 'landlord', patitas: { $gte: numericAmount } },
-    { $inc: { patitas: -numericAmount } },
-    { new: true },
-  ).select('patitas');
-  if (!debited) return res.status(400).json({ error: 'insufficient_patitas' });
-
-  await PatitaLog.create({
-    shelterId: targetShelter,
-    userId: String(actor._id || actor.id || targetShelter),
-    animalId: normalizeId(animalId),
-    amount: -numericAmount,
-    source: partnerType,
-    concept: trimmedConcept,
-    couponId: coupon?._id,
-  });
-  return res.json({ ok: true, newBalance: debited.patitas ?? 0 });
-}

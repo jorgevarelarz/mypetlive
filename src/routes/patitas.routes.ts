@@ -14,7 +14,6 @@ import {
   redeemPreview,
   redeemConfirm,
   addPatitas,
-  spendPatitas,
   getMyCode,
   identifyUser,
 } from '../controllers/patitas.controller';
@@ -50,9 +49,6 @@ router.get('/patitas/wallet/token', ...assertRole('landlord', 'protectora'), asy
 // Canje partner ← protectora.
 router.post('/patitas/redeem/preview', ...assertRole('store', 'vet'), asyncHandler(redeemPreview));
 router.post('/patitas/redeem/confirm', ...assertRole('store', 'vet'), asyncHandler(redeemConfirm));
-
-// Gasto directo de la protectora en un partner (legado).
-router.post('/patitas/spend', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(spendPatitas));
 
 // Alta manual (admin).
 router.post('/protectora/:id/patitas/add', authenticate, requireAdmin, asyncHandler(addPatitas));

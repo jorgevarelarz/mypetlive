@@ -12,8 +12,7 @@ import {
 } from '../../api/animals';
 import { toast } from 'react-hot-toast';
 import { uploadImage } from '../../api/uploads';
-import { getPatitasBalance, spendPatitas } from '../../api/patitas';
-import { listCoupons, type Coupon } from '../../api/coupons';
+import { getPatitasBalance } from '../../api/patitas';
 
 const STATUS_OPTIONS: Array<{ value: AnimalStatus; label: string }> = [
   { value: 'borrador', label: 'Borrador' },
@@ -64,45 +63,12 @@ export default function AnimalsPage() {
   const [editingImagesList, setEditingImagesList] = useState<string[]>([]);
   const shelterId = useMemo(() => String(user?._id || ''), [user?._id]);
   const queryClient = useQueryClient();
-  const [spendOpen, setSpendOpen] = useState(false);
-  const [spendForm, setSpendForm] = useState({ amount: '', partnerType: 'store', concept: '', animalId: '', couponId: '' });
 
   const { data: patitasData, isLoading: patitasLoading } = useQuery({
     queryKey: ['patitas-balance', shelterId || 'protectora'],
     queryFn: () => getPatitasBalance(shelterId),
     enabled: !!shelterId,
     staleTime: 30_000,
-  });
-
-  const { data: couponsData } = useQuery({
-    queryKey: ['coupons', 'active'],
-    queryFn: listCoupons,
-    staleTime: 30_000,
-  });
-  const coupons = useMemo(() => (couponsData?.items || []) as Coupon[], [couponsData?.items]);
-
-  const spendMutation = useMutation({
-    mutationFn: async () => {
-      const parsedAmount = Number(spendForm.amount);
-      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) throw new Error('Importe inválido');
-      if (!spendForm.concept.trim()) throw new Error('Concepto requerido');
-      return spendPatitas({
-        amount: parsedAmount,
-        partnerType: spendForm.partnerType as 'store' | 'vet',
-        concept: spendForm.concept.trim(),
-        animalId: spendForm.animalId.trim() || undefined,
-        couponId: spendForm.couponId || undefined,
-      });
-    },
-    onSuccess: () => {
-      toast.success('Patitas usadas');
-      setSpendOpen(false);
-      setSpendForm({ amount: '', partnerType: 'store', concept: '', animalId: '', couponId: '' });
-      queryClient.invalidateQueries({ queryKey: ['patitas-balance'] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.error || error?.message || 'No se pudo registrar el gasto');
-    },
   });
 
   const load = useCallback(async () => {
@@ -119,39 +85,6 @@ export default function AnimalsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const selectedAnimal = useMemo(() => {
-    if (!spendForm.animalId) return undefined;
-    return list.find(item => String(item._id || item.id) === spendForm.animalId);
-  }, [list, spendForm.animalId]);
-
-  const filteredCoupons = useMemo(() => {
-    return coupons.filter(coupon => {
-      if (!coupon.targetAnimalCode) return true;
-      const code = selectedAnimal?.code;
-      return Boolean(code) && coupon.targetAnimalCode === code;
-    });
-  }, [coupons, selectedAnimal?.code]);
-
-  useEffect(() => {
-    if (spendForm.couponId && !filteredCoupons.some(c => c._id === spendForm.couponId)) {
-      setSpendForm(prev => ({ ...prev, couponId: '' }));
-    }
-  }, [filteredCoupons, spendForm.couponId]);
-
-  const handleCouponChange = (value: string) => {
-    setSpendForm(prev => {
-      const next = { ...prev, couponId: value };
-      const coupon = coupons.find(c => c._id === value);
-      if (coupon?.targetAnimalCode) {
-        const match = list.find(a => a.code === coupon.targetAnimalCode);
-        if (match) {
-          next.animalId = String(match._id || match.id);
-        }
-      }
-      return next;
-    });
-  };
 
   const uploadFiles = async (files: FileList | null, target: 'form' | 'edit') => {
     if (!files?.length) return;
@@ -221,69 +154,8 @@ export default function AnimalsPage() {
         <div className="mt-3 inline-flex flex-col rounded-lg border border-teal-100 bg-white px-4 py-3 shadow-sm gap-1">
           <span className="text-xs uppercase tracking-wide text-teal-700">Patitas disponibles</span>
           <span className="text-2xl font-semibold text-teal-700">{patitasLoading ? '…' : (patitasData?.patitas ?? 0)}</span>
-          <button type="button" className="mt-1 text-sm" onClick={() => setSpendOpen(true)} disabled={patitasLoading}>
-            Usar Patitas
-          </button>
         </div>
       </header>
-
-      {spendOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 border border-teal-100 grid gap-3">
-            <h2 className="text-lg font-medium">Usar Patitas</h2>
-            <label className="text-sm text-gray-600 grid gap-1">
-              Importe
-              <input type="number" min="1" className="border rounded px-3 py-2" value={spendForm.amount} onChange={e => setSpendForm(f => ({ ...f, amount: e.target.value }))} />
-            </label>
-            <label className="text-sm text-gray-600 grid gap-1">
-              Proveedor
-              <select className="border rounded px-3 py-2" value={spendForm.partnerType} onChange={e => setSpendForm(f => ({ ...f, partnerType: e.target.value }))}>
-                <option value="store">Tienda</option>
-                <option value="vet">Veterinario</option>
-              </select>
-            </label>
-            <label className="text-sm text-gray-600 grid gap-1">
-              Concepto
-              <input type="text" className="border rounded px-3 py-2" value={spendForm.concept} onChange={e => setSpendForm(f => ({ ...f, concept: e.target.value }))} />
-            </label>
-            <label className="text-sm text-gray-600 grid gap-1">
-              Mascota (opcional)
-              <select className="border rounded px-3 py-2" value={spendForm.animalId} onChange={e => setSpendForm(f => ({ ...f, animalId: e.target.value }))}>
-                <option value="">Sin asignar</option>
-                {list.map(animal => (
-                  <option key={animal._id || animal.id} value={String(animal._id || animal.id)}>
-                    {animal.name}
-                    {animal.code ? ` · ${animal.code}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm text-gray-600 grid gap-1">
-              Cupón (opcional)
-              <select className="border rounded px-3 py-2" value={spendForm.couponId} onChange={e => handleCouponChange(e.target.value)}>
-                <option value="">Sin cupón</option>
-                {filteredCoupons.map(coupon => (
-                  <option key={coupon._id} value={coupon._id}>
-                    {coupon.title}
-                    {coupon.targetAnimalCode ? ` · ${coupon.targetAnimalCode}` : ''}
-                  </option>
-                ))}
-              </select>
-              {coupons.length > 0 && filteredCoupons.length === 0 && (
-                <span className="text-xs text-gold-700">Selecciona una mascota con código para ver cupones asociados.</span>
-              )}
-            </label>
-            <div className="flex gap-2 justify-end pt-2">
-              <button type="button" onClick={() => setSpendOpen(false)} className="px-4 py-2 rounded border">
-                Cancelar
-              </button>
-              <button type="button" onClick={() => spendMutation.mutate()} className="px-4 py-2 rounded" disabled={spendMutation.isPending}>
-                {spendMutation.isPending ? 'Procesando…' : 'Confirmar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <form onSubmit={onCreate} className="grid gap-3 max-w-2xl p-3 border rounded">
         <div className="grid grid-cols-2 gap-2">
