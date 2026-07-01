@@ -52,6 +52,8 @@ function serializeCoupon(doc: any) {
     discount: doc.discount,
     bonusPatitas: doc.bonusPatitas,
     active: doc.active,
+    sponsored: !!doc.sponsored,
+    sponsorshipStatus: doc.sponsorshipStatus || 'none',
     targetAnimalCode: doc.targetAnimalCode,
     expiresAt: doc.expiresAt,
     usedAt: doc.usedAt,

@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Copy, Gift, Scissors, Shield, ShoppingBag, Stethoscope, X } from 'lucide-react';
-import { listCoupons, Coupon } from '../../api/coupons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+import { Copy, Gift, Scissors, Shield, ShoppingBag, Star, Stethoscope, X } from 'lucide-react';
+import { listCoupons, sponsorCoupon, Coupon } from '../../api/coupons';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
@@ -24,7 +25,30 @@ function categoryLabel(type: string) {
 
 export default function CouponsList() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: listCoupons });
+
+  // Un partner puede destacar sus propios cupones (o el admin cualquiera).
+  const canSponsor = (coupon: Coupon) =>
+    Boolean(user) && (user!.role === 'admin' || String(coupon.partnerId || '') === String((user as any)?._id || (user as any)?.id || ''));
+
+  const sponsorMutation = useMutation({
+    mutationFn: (couponId: string) => sponsorCoupon(couponId),
+    onSuccess: result => {
+      if (result.alreadyActive) {
+        toast.success('Este cupón ya está destacado');
+      } else if (result.configured && result.url) {
+        window.location.href = result.url; // Stripe Checkout
+        return;
+      } else {
+        toast.success(result.message || 'Placement marcado como pendiente; se activará al habilitar los pagos.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['coupons'] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.error || 'No se pudo destacar el cupón');
+    },
+  });
   const [selected, setSelected] = useState<Coupon | null>(null);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [preferredProtectora, setPreferredProtectoraState] = useState<PreferredProtectora | null>(() => loadPreferredProtectora());
@@ -161,9 +185,23 @@ export default function CouponsList() {
                       <PawMark size={15} color={MPL.gold} />
                       +{coupon.bonusPatitas || 40}
                     </span>
-                    <button type="button" onClick={() => setSelected(coupon)} style={{ background: MPL.teal, color: '#fff', fontSize: 13.5, fontWeight: 800, padding: '10px 18px', border: 'none', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      Canjear
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      {canSponsor(coupon) && (
+                        coupon.sponsored && coupon.sponsorshipStatus === 'active' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: MPL.goldDark }}>
+                            <Star size={14} fill={MPL.gold} color={MPL.gold} /> Destacado
+                          </span>
+                        ) : (
+                          <button type="button" onClick={() => sponsorMutation.mutate(coupon._id)} disabled={sponsorMutation.isPending} title="Destacar este cupón (9,99€)" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', color: MPL.goldDark, fontSize: 12.5, fontWeight: 800, padding: '9px 12px', border: `1.5px solid ${MPL.gold}`, borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            <Star size={14} color={MPL.gold} />
+                            {sponsorMutation.isPending ? '…' : 'Destacar'}
+                          </button>
+                        )
+                      )}
+                      <button type="button" onClick={() => setSelected(coupon)} style={{ background: MPL.teal, color: '#fff', fontSize: 13.5, fontWeight: 800, padding: '10px 18px', border: 'none', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        Canjear
+                      </button>
+                    </div>
                   </div>
                 </article>
               );

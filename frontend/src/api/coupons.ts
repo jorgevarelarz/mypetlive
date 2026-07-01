@@ -10,11 +10,30 @@ export type Coupon = {
   description: string;
   discount: string;
   active: boolean;
+  sponsored?: boolean;
+  sponsorshipStatus?: 'none' | 'pending' | 'active';
   targetAnimalCode?: string | null;
   bonusPatitas?: number | null;
   expiresAt?: string | null;
   usedAt?: string | null;
 };
+
+export type SponsorResult = {
+  status: 'active' | 'pending';
+  sponsored?: boolean;
+  alreadyActive?: boolean;
+  configured?: boolean;
+  url?: string | null;
+  priceEur?: number;
+  message?: string;
+};
+
+// El partner dueño (o admin) paga el placement destacado del cupón. Con Stripe
+// configurado devuelve la URL de Checkout; si no, queda 'pending' sin cobrar.
+export async function sponsorCoupon(couponId: string) {
+  const { data } = await client.post(`/api/offers/coupons/${couponId}/sponsor`);
+  return data as SponsorResult;
+}
 
 export async function listCoupons() {
   const { data } = await client.get('/api/coupons');
