@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
-import { listMyAdoptions, ADOPTION_STATUS_LABEL, type AdoptionStatus } from '../../api/adoptions';
+import { listMyAdoptions, cancelAdoption, ADOPTION_STATUS_LABEL, type AdoptionStatus } from '../../api/adoptions';
 import { toAbsoluteUrl } from '../../utils/media';
 
 const STATUS_STEPS: AdoptionStatus[] = [
@@ -68,7 +69,7 @@ function formatDate(value?: string) {
   return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
-function AdoptionCard({ item }: { item: any }) {
+function AdoptionCard({ item, onCancel, canceling }: { item: any; onCancel: (id: string) => void; canceling: boolean }) {
   const status = item.status as AdoptionStatus;
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
   const animal = item.animal || {};
@@ -159,6 +160,17 @@ function AdoptionCard({ item }: { item: any }) {
             >
               Ver solicitud
             </Link>
+            {!isTerminal && (
+              <button
+                type="button"
+                onClick={() => onCancel(String(item.id))}
+                disabled={canceling}
+                className="border px-3 py-2 text-sm font-medium"
+                style={{ borderColor: '#C05656', borderRadius: 8, color: '#8F2F2F', background: '#fff', cursor: canceling ? 'default' : 'pointer' }}
+              >
+                {canceling ? 'Cancelando…' : 'Cancelar solicitud'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -167,8 +179,24 @@ function AdoptionCard({ item }: { item: any }) {
 }
 
 export default function MyAdoptions() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['my-adoptions'], queryFn: listMyAdoptions });
   const items = useMemo(() => data?.items || [], [data?.items]);
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => cancelAdoption(id),
+    onSuccess: () => {
+      toast.success('Solicitud cancelada');
+      queryClient.invalidateQueries({ queryKey: ['my-adoptions'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error === 'already_closed' ? 'Esta solicitud ya está cerrada' : 'No se pudo cancelar la solicitud'),
+  });
+
+  const handleCancel = (id: string) => {
+    if (window.confirm('¿Seguro que quieres retirar esta solicitud de adopción? Esta acción no se puede deshacer.')) {
+      cancelMutation.mutate(id);
+    }
+  };
   const activeCount = items.filter((item: any) => !TERMINAL_STATUS.has(item.status)).length;
   const approvedCount = items.filter((item: any) => item.status === 'aprobada').length;
 
@@ -223,7 +251,12 @@ export default function MyAdoptions() {
       ) : (
         <section className="grid gap-3">
           {items.map((item: any) => (
-            <AdoptionCard key={item.id} item={item} />
+            <AdoptionCard
+              key={item.id}
+              item={item}
+              onCancel={handleCancel}
+              canceling={cancelMutation.isPending && cancelMutation.variables === String(item.id)}
+            />
           ))}
         </section>
       )}

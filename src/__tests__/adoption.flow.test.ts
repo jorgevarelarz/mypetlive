@@ -108,3 +108,44 @@ describe('Flujo completo de adopción (MyPetLive)', () => {
       .expect(400);
   });
 });
+
+const otherAdopterId = new mongoose.Types.ObjectId().toHexString();
+const otherAdopterHeaders = { 'x-user-id': otherAdopterId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
+
+describe('Cancelación de la solicitud por el adoptante', () => {
+  async function setupApplication() {
+    const create = await request(app)
+      .post('/api/animals')
+      .set(protectoraHeaders)
+      .send({ shelter: shelterId, name: 'Nina', species: 'perro', sex: 'female', age: '3 años', size: 'medium' })
+      .expect(201);
+    const animalId = create.body._id;
+    await request(app).patch(`/api/animals/${animalId}/status`).set(protectoraHeaders).send({ status: 'publicado' }).expect(200);
+    const apply = await request(app).post('/api/adoptions').set(adopterHeaders).send({ animalId }).expect(201);
+    return { animalId, adoptionId: apply.body.id };
+  }
+
+  it('el adoptante retira su propia solicitud y libera al animal reservado', async () => {
+    const { animalId, adoptionId } = await setupApplication();
+    await request(app).patch(`/api/adoptions/${adoptionId}/status`).set(protectoraHeaders).send({ status: 'preaprobada' }).expect(200);
+    const reserved = await request(app).get(`/api/animals/${animalId}`).expect(200);
+    expect(reserved.body.status).toBe('reservado');
+
+    const cancel = await request(app).post(`/api/adoptions/${adoptionId}/cancel`).set(adopterHeaders).expect(200);
+    expect(cancel.body.status).toBe('cancelada');
+
+    const released = await request(app).get(`/api/animals/${animalId}`).expect(200);
+    expect(released.body.status).toBe('publicado');
+  });
+
+  it('otro adoptante no puede cancelar una solicitud ajena', async () => {
+    const { adoptionId } = await setupApplication();
+    await request(app).post(`/api/adoptions/${adoptionId}/cancel`).set(otherAdopterHeaders).expect(403);
+  });
+
+  it('no se puede cancelar una solicitud ya cerrada', async () => {
+    const { adoptionId } = await setupApplication();
+    await request(app).patch(`/api/adoptions/${adoptionId}/status`).set(protectoraHeaders).send({ status: 'aprobada' }).expect(200);
+    await request(app).post(`/api/adoptions/${adoptionId}/cancel`).set(adopterHeaders).expect(400);
+  });
+});

@@ -55,3 +55,9 @@ export async function getAdoption(id: string) {
   const { data } = await client.get(`/api/adoptions/${id}`);
   return data;
 }
+
+// El adoptante retira su propia solicitud (solo estados no terminales).
+export async function cancelAdoption(id: string, note?: string) {
+  const { data } = await client.post(`/api/adoptions/${id}/cancel`, { note });
+  return data as { ok: boolean; id: string; status: AdoptionStatus };
+}

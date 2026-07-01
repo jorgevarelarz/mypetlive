@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getAdoption, setAdoptionStatus, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
+import { getAdoption, setAdoptionStatus, cancelAdoption, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
@@ -80,6 +80,7 @@ export default function AdoptionDetail() {
   const animal = adoption.animal || {};
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
   const canManage = user?.role === 'landlord' || user?.role === 'admin';
+  const isTerminal = ['aprobada', 'rechazada', 'cancelada'].includes(status);
   const image = Array.isArray(animal.images) ? animal.images[0] : undefined;
 
   const decide = async (newStatus: AdoptionShelterStatus) => {
@@ -89,6 +90,17 @@ export default function AdoptionDetail() {
       refetch();
     } catch {
       toast.error('Error actualizando');
+    }
+  };
+
+  const cancel = async () => {
+    if (!window.confirm('¿Seguro que quieres retirar esta solicitud de adopción? Esta acción no se puede deshacer.')) return;
+    try {
+      await cancelAdoption(String(id));
+      toast.success('Solicitud cancelada');
+      refetch();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error === 'already_closed' ? 'Esta solicitud ya está cerrada' : 'No se pudo cancelar la solicitud');
     }
   };
 
@@ -176,6 +188,25 @@ export default function AdoptionDetail() {
                 {statusLabel(newStatus)}
               </button>
             ))}
+          </div>
+        </section>
+      )}
+
+      {!canManage && !isTerminal && (
+        <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+          <h2 className="text-lg font-semibold">¿Ya no quieres continuar?</h2>
+          <p className="text-sm" style={{ color: '#7A8273' }}>
+            Puedes retirar tu solicitud mientras esté en proceso. El animal volverá a estar disponible para otras personas.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={cancel}
+              className="border px-4 py-2 text-sm font-medium"
+              style={{ borderColor: '#C05656', borderRadius: 8, color: '#8F2F2F', background: '#fff' }}
+            >
+              Retirar solicitud
+            </button>
           </div>
         </section>
       )}

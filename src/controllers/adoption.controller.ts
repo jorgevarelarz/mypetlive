@@ -228,6 +228,57 @@ export async function setStatus(req: Request, res: Response) {
   res.json({ ok: true, id: app._id, status: app.status });
 }
 
+// El adoptante retira su propia solicitud (o el admin). Solo desde estados no
+// terminales; libera al animal si estaba reservado por este proceso.
+export async function cancelByAdopter(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = user?._id || user?.id;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const { id } = req.params;
+  const { note } = (req.body || {}) as { note?: string };
+
+  const app = await Adoption.findById(id);
+  if (!app) return res.status(404).json({ error: 'not_found' });
+
+  const isAdmin = user?.role === 'admin';
+  const isAdopter = String(app.adopterId) === String(userId);
+  if (!isAdmin && !isAdopter) return res.status(403).json({ error: 'forbidden' });
+
+  if (['aprobada', 'rechazada', 'cancelada'].includes(app.status)) {
+    return res.status(400).json({ error: 'already_closed' });
+  }
+
+  app.status = 'cancelada';
+  app.history = app.history || [];
+  app.history.push({
+    ts: new Date(),
+    actorId: String(userId),
+    action: 'status_change',
+    payload: { status: 'cancelada', by: 'adopter', ...(note ? { note: note.slice(0, 1000) } : {}) },
+  });
+  await app.save();
+
+  const animal = await Animal.findById(app.animalId);
+  if (animal && animal.status === 'reservado') {
+    // Se libera de nuevo al retirarse el proceso.
+    animal.status = 'publicado';
+    await animal.save();
+    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
+  }
+
+  // Aviso a la protectora de que el adoptante retiró la solicitud.
+  try {
+    if (animal?.shelter) {
+      const shelter = await User.findById(animal.shelter);
+      if (shelter?.email) {
+        await sendEmail(shelter.email, 'Solicitud de adopción cancelada', `El adoptante ha retirado su solicitud de adopción para ${animal.name}.`);
+      }
+    }
+  } catch {}
+
+  res.json({ ok: true, id: app._id, status: app.status });
+}
+
 export async function listAll(_req: Request, res: Response) {
   const { page = '1', limit = '20', status } = _req.query as any;
   const pg = Math.max(1, parseInt(String(page), 10) || 1);

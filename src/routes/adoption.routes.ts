@@ -10,6 +10,7 @@ const r = Router();
 // Adoptante
 r.post('/', ...assertRole('tenant', 'adoptante', 'admin'), validate(adoptionCreateSchema), asyncHandler(ctrl.create));
 r.get('/mine', ...assertRole('tenant', 'adoptante', 'admin'), asyncHandler(ctrl.listMine));
+r.post('/:id/cancel', ...assertRole('tenant', 'adoptante', 'admin'), asyncHandler(ctrl.cancelByAdopter));
 
 // Protectora
 r.get('/for-my-animals', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.listForMyAnimals));
