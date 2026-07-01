@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { markAnimalFeeding, markAnimalLitter } from '../../api/animals';
-import { echoPatita, getPatitasBalance } from '../../api/patitas';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
@@ -109,53 +108,6 @@ export default function Home() {
     staleTime: 60_000,
   });
 
-  const shelterId = featuredAnimal?.shelter ? String(featuredAnimal.shelter) : undefined;
-  const patitasQueryKey: [string, string] = ['patitas-balance', shelterId || 'global'];
-
-  const {
-    data: patitasData,
-    isLoading: patitasLoading,
-  } = useQuery({
-    queryKey: patitasQueryKey,
-    queryFn: () => getPatitasBalance(shelterId),
-    enabled: !!user,
-    staleTime: 30_000,
-  });
-
-  const echoMutation = useMutation<{ ok: boolean; newBalance: number }, unknown, void, { previous?: any }>({
-    mutationFn: async () => {
-      if (!shelterId) throw new Error('missing_shelter');
-      const animalRef = featuredAnimal?._id || featuredAnimal?.id;
-      return echoPatita({ shelterId, animalId: animalRef ? String(animalRef) : undefined });
-    },
-    onMutate: async () => {
-      if (!shelterId) return {};
-      await queryClient.cancelQueries({ queryKey: patitasQueryKey });
-      const previous = queryClient.getQueryData(patitasQueryKey);
-      queryClient.setQueryData(patitasQueryKey, (old: any) => ({
-        ...(old || {}),
-        patitas: Math.max(0, (old?.patitas ?? 0) + 1),
-      }));
-      return { previous };
-    },
-    onSuccess: data => {
-      toast.success('Tu ayuda llegó donde hace falta');
-      queryClient.setQueryData(patitasQueryKey, (old: any) => ({
-        ...(old || {}),
-        patitas: data?.newBalance ?? old?.patitas ?? 0,
-      }));
-    },
-    onError: (_error, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(patitasQueryKey, context.previous);
-      }
-      toast.error('No se pudo registrar. Inténtalo de nuevo');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['patitas-balance'] });
-    },
-  });
-
   const careMutation = useMutation<{ ok: boolean } | any, unknown, 'feed' | 'litter'>({
     mutationFn: async type => {
       if (!featuredAnimal) throw new Error('missing_animal');
@@ -185,20 +137,11 @@ export default function Home() {
     return hours < 72 ? 'Arena en buen estado.' : 'Conviene revisar la arena pronto.';
   };
 
-  const handleEchoPatita = () => {
-    if (!shelterId) {
-      toast.error('No encontramos una protectora para esta mascota.');
-      return;
-    }
-    echoMutation.mutate();
-  };
-
   const hasPet = Boolean(featuredAnimal);
   const displayName = featuredAnimal?.name || 'tu mascota';
   const displaySpecies = featuredAnimal?.species || '';
   const displayAge = featuredAnimal?.age || '';
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
-  const patitas = patitasData?.patitas ?? 0;
 
   return (
     <main style={{ background: colors.bg, color: colors.ink, margin: '-24px -16px', minHeight: 'calc(100vh - 56px)' }}>
@@ -362,44 +305,24 @@ export default function Home() {
           <Card className="grid gap-5 p-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.14em]" style={{ color: colors.soft }}>
-                Patitas
+                Cupones
               </p>
               <h2
                 className="mt-2 text-2xl font-extrabold"
                 style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
               >
-                Impacto mensual
+                Ventajas para ti
               </h2>
             </div>
 
-            <div className="inline-flex w-max items-center gap-3 rounded-full px-5 py-3" style={{ background: colors.goldSoft, color: '#A77B1C' }}>
-              <span style={{ color: colors.gold }}>{paw}</span>
-              <span className="text-3xl font-extrabold" style={{ fontFamily: '"Bricolage Grotesque", sans-serif' }}>
-                {patitasLoading ? '...' : patitas}
-              </span>
-              <span className="text-sm font-bold">Patitas</span>
-            </div>
-
             <p className="text-sm leading-6" style={{ color: colors.muted }}>
-              Cada Patita suma ayuda directa para la protectora vinculada a {displayName}.
+              Descubre cupones de tiendas y veterinarios aliados. Al usarlos, generas Patitas para apoyar a las protectoras.
             </p>
 
             <div className="grid gap-2">
-              <ActionButton
-                variant="gold"
-                onClick={handleEchoPatita}
-                disabled={!shelterId || echoMutation.isPending}
-              >
-                {echoMutation.isPending ? 'Registrando' : 'Echar una Patita'}
-              </ActionButton>
-              <button
-                type="button"
-                onClick={() => nav('/coupons')}
-                className="text-left text-sm font-bold underline"
-                style={{ color: colors.teal, textUnderlineOffset: 4, background: 'transparent', border: 0, padding: 0 }}
-              >
+              <ActionButton variant="gold" onClick={() => nav('/coupons')}>
                 Ver cupones disponibles
-              </button>
+              </ActionButton>
             </div>
           </Card>
         </section>

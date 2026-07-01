@@ -92,12 +92,6 @@ export async function redeemConfirm(payload: { walletToken?: string; code?: stri
   };
 }
 
-// --- "Dar Patita" social (apoyo con un click, acredita a la protectora) ---
-export async function echoPatita(payload: { shelterId: string; animalId?: string | null }) {
-  const { data } = await client.post('/api/patitas/echo', payload);
-  return data as { ok: boolean; newBalance: number };
-}
-
 // --- Gasto directo de la protectora en un partner (flujo legado) ---
 export async function spendPatitas(payload: { amount: number; partnerType: 'store' | 'vet'; concept: string; animalId?: string; couponId?: string }) {
   const { data } = await client.post('/api/patitas/spend', payload);

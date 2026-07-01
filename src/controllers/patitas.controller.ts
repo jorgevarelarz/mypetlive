@@ -360,53 +360,9 @@ export async function addPatitas(req: Request, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
-// "Dar Patita" social y gasto directo de la protectora (flujo legado, conservado
-// para los botones de apoyo en las páginas de contenido). Acreditan/debitan el
-// mismo saldo `User.patitas` y registran en el ledger antiguo `PatitaLog`.
+// Gasto directo de la protectora en un partner (flujo legado). Debita el saldo
+// `User.patitas` y registra en el ledger antiguo `PatitaLog`.
 // ---------------------------------------------------------------------------
-
-const CLICK_LIMIT = 10;
-const CLICK_WINDOW_MS = 60 * 60 * 1000;
-const clickRateStore = new Map<string, { count: number; resetAt: number }>();
-
-function consumeClickAllowance(userId: string) {
-  const now = Date.now();
-  const entry = clickRateStore.get(userId);
-  if (!entry || entry.resetAt <= now) {
-    clickRateStore.set(userId, { count: 1, resetAt: now + CLICK_WINDOW_MS });
-    return { ok: true } as const;
-  }
-  if (entry.count >= CLICK_LIMIT) return { ok: false, retryAfterMs: entry.resetAt - now } as const;
-  entry.count += 1;
-  return { ok: true } as const;
-}
-
-export async function echoPatita(req: Request, res: Response) {
-  const user: any = (req as any).user;
-  const userId = user?._id || user?.id;
-  if (!userId) return res.status(401).json({ error: 'unauthorized' });
-  const { shelterId, animalId } = (req.body || {}) as { shelterId?: string; animalId?: string };
-  const normalizedShelter = normalizeId(shelterId);
-  if (!normalizedShelter) return res.status(400).json({ error: 'invalid_shelter_id' });
-
-  const shelter = await User.findOne({ _id: normalizedShelter, role: 'landlord' }).select('patitas');
-  if (!shelter) return res.status(404).json({ error: 'protectora_not_found' });
-
-  const rate = consumeClickAllowance(String(userId));
-  if (!rate.ok) {
-    const retryAfter = rate.retryAfterMs ? Math.ceil(rate.retryAfterMs / 1000) : 3600;
-    res.setHeader('Retry-After', retryAfter);
-    return res.status(429).json({ error: 'patitas_rate_limited', retryAfter });
-  }
-
-  const updated = await User.findOneAndUpdate(
-    { _id: normalizedShelter, role: 'landlord' },
-    { $inc: { patitas: 1 } },
-    { new: true },
-  ).select('patitas');
-  await PatitaLog.create({ shelterId: normalizedShelter, userId, animalId: normalizeId(animalId), amount: 1, source: 'click' });
-  return res.json({ ok: true, newBalance: updated?.patitas ?? (shelter.patitas || 0) + 1 });
-}
 
 export async function spendPatitas(req: Request, res: Response) {
   const actor: any = (req as any).user;

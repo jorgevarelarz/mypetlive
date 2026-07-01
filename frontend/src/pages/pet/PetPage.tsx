@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
-import { getPatitasBalance, echoPatita } from '../../api/patitas';
 import {
   listMyPets,
   markAnimalFeeding,
@@ -127,14 +126,6 @@ export default function PetPage() {
   const isPersonal = Boolean(featuredAnimal?.isPersonalPet);
   const shelterId = !isPersonal && featuredAnimal?.shelter ? String(featuredAnimal.shelter) : undefined;
 
-  const patitasKey: [string, string] = ['patitas-balance', shelterId || 'pet'];
-  const { data: patitasData, isLoading: patitasLoading } = useQuery({
-    queryKey: patitasKey,
-    queryFn: () => getPatitasBalance(shelterId),
-    enabled: Boolean(shelterId),
-    staleTime: 30_000,
-  });
-
   const petCode: string | undefined = featuredAnimal?.code;
   const { data: offersData } = useQuery({
     queryKey: ['offers-animal', petCode],
@@ -162,32 +153,6 @@ export default function PetPage() {
       if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
     }
   };
-
-  const echoMutation = useMutation({
-    mutationFn: async () => {
-      if (!featuredAnimal) throw new Error('missing_animal');
-      if (!shelterId) throw new Error('missing_shelter');
-      const animalRef = featuredAnimal._id || featuredAnimal.id;
-      return echoPatita({ shelterId, animalId: animalRef ? String(animalRef) : undefined });
-    },
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: patitasKey });
-      const previous = queryClient.getQueryData(patitasKey);
-      queryClient.setQueryData(patitasKey, (old: any) => ({ ...old, patitas: (old?.patitas ?? 0) + 1 }));
-      return { previous };
-    },
-    onSuccess: data => {
-      toast.success('Tu ayuda llegó donde hace falta 🤍');
-      queryClient.setQueryData(patitasKey, (old: any) => ({ ...old, patitas: data?.newBalance ?? old?.patitas ?? 0 }));
-    },
-    onError: (_error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(patitasKey, context.previous);
-      toast.error('No se pudo registrar. Inténtalo de nuevo');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['patitas-balance'] });
-    },
-  });
 
   const careMutation = useMutation<{ ok: boolean } | any, unknown, 'feed' | 'litter'>({
     mutationFn: async type => {
@@ -426,16 +391,10 @@ export default function PetPage() {
         </div>
 
         <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">Patitas</h2>
+          <h2 className="text-lg font-semibold">Cupones</h2>
           {shelterId ? (
             <>
-              <p style={{ margin: 0 }}>
-                {patitasLoading ? 'Cargando Patitas…' : `Has echado ${(patitasData?.patitas ?? 0)} Patitas este mes.`}
-              </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => echoMutation.mutate()} disabled={echoMutation.isPending}>
-                  {echoMutation.isPending ? 'Registrando…' : 'Echar una Patita'}
-                </button>
                 <button
                   type="button"
                   onClick={handleViewCoupons}
@@ -446,7 +405,7 @@ export default function PetPage() {
                 </button>
               </div>
               <p className="text-xs" style={{ color: '#6A7B4F' }}>
-                Usando este cupón estás echando Patitas a la protectora que elijas 🤍
+                Al usar un cupón generas Patitas para la protectora que elijas 🤍
                 {preferredProtectora ? ` · ${preferredProtectora.name}` : ''}
               </p>
               {!preferredProtectora && (
@@ -464,7 +423,7 @@ export default function PetPage() {
               )}
             </>
           ) : (
-            <p style={{ color: '#7A8273' }}>Esta mascota no está vinculada a una protectora, por lo que no usa Patitas.</p>
+            <p style={{ color: '#7A8273' }}>Esta mascota no está vinculada a una protectora, por lo que no tiene cupones asociados.</p>
           )}
         </div>
       </div>

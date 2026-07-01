@@ -5,7 +5,6 @@ import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home,
 import { toast } from 'react-hot-toast';
 import { getAnimal } from '../../api/animals';
 import { createAdoption } from '../../api/adoptions';
-import { echoPatita } from '../../api/patitas';
 import { getQuestionnaireByProtectora } from '../../api/questionnaire';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
@@ -128,16 +127,6 @@ export default function AnimalDetail() {
     },
   });
 
-  const patitaMutation = useMutation({
-    mutationFn: async () => {
-      if (!data?.shelter) throw new Error('missing_shelter');
-      const resolvedShelterId = typeof data.shelter === 'object' ? data.shelter._id || data.shelter.id : data.shelter;
-      return echoPatita({ shelterId: String(resolvedShelterId || ''), animalId: String(data._id || data.id || '') });
-    },
-    onSuccess: () => toast.success('Tu ayuda llegó donde hace falta'),
-    onError: () => toast.error('No se pudo registrar. Inténtalo de nuevo'),
-  });
-
   const proceedAdopt = () => {
     if (questions.length > 0) {
       setQuestionnaireOpen(true);
@@ -156,18 +145,6 @@ export default function AnimalDetail() {
       return;
     }
     proceedAdopt();
-  };
-
-  const handlePatitaClick = () => {
-    if (!user) {
-      openAuth({
-        mode: 'login',
-        message: 'Inicia sesión para echar una Patita.',
-        onSuccess: () => patitaMutation.mutate(),
-      });
-      return;
-    }
-    patitaMutation.mutate();
   };
 
   const submitAnswers = () => {
@@ -336,22 +313,6 @@ export default function AnimalDetail() {
             </section>
 
             <section style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 22 }}>
-              <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, margin: '0 0 12px' }}>Impacto</h3>
-              <div style={{ display: 'grid', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ width: 38, height: 38, borderRadius: 12, background: MPL.gold100, color: MPL.goldDark, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PawMark size={18} /></span>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>Echar una Patita</div>
-                    <div style={{ color: MPL.faint, fontSize: 12.5 }}>Apoyo directo a la protectora</div>
-                  </div>
-                </div>
-                <button type="button" onClick={handlePatitaClick} disabled={patitaMutation.isPending || !shelterId} style={{ background: '#fff', color: MPL.teal, border: `1.5px solid ${MPL.teal}`, borderRadius: 13, padding: '12px 16px', font: 'inherit', fontWeight: 800, cursor: shelterId ? 'pointer' : 'not-allowed' }}>
-                  {patitaMutation.isPending ? 'Registrando...' : 'Sumar Patita'}
-                </button>
-              </div>
-            </section>
-
-            <section style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 22 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: MPL.muted, fontSize: 14 }}>
                 <CalendarDays size={18} color={MPL.teal} />
                 Si la solicitud avanza, la protectora propondrá una cita desde el panel.
@@ -364,9 +325,6 @@ export default function AnimalDetail() {
       <div className="detail-mobile-cta">
         <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
           {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
-        </button>
-        <button type="button" onClick={handlePatitaClick} disabled={patitaMutation.isPending || !shelterId} aria-label="Echar una Patita" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.gold, cursor: shelterId ? 'pointer' : 'not-allowed' }}>
-          <PawMark size={22} />
         </button>
         <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
           <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />

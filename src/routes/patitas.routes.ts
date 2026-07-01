@@ -14,7 +14,6 @@ import {
   redeemPreview,
   redeemConfirm,
   addPatitas,
-  echoPatita,
   spendPatitas,
   getMyCode,
   identifyUser,
@@ -52,8 +51,7 @@ router.get('/patitas/wallet/token', ...assertRole('landlord', 'protectora'), asy
 router.post('/patitas/redeem/preview', ...assertRole('store', 'vet'), asyncHandler(redeemPreview));
 router.post('/patitas/redeem/confirm', ...assertRole('store', 'vet'), asyncHandler(redeemConfirm));
 
-// "Dar Patita" social + gasto directo (legado).
-router.post('/patitas/echo', ...assertRole('tenant', 'adoptante'), asyncHandler(echoPatita));
+// Gasto directo de la protectora en un partner (legado).
 router.post('/patitas/spend', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(spendPatitas));
 
 // Alta manual (admin).
