@@ -156,6 +156,53 @@ export default function AdoptionDetail() {
         </div>
       </section>
 
+      {canManage && adoption.adopter && (
+        <section className="grid gap-4 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+          <h2 className="text-lg font-semibold">Perfil del solicitante</h2>
+          <div className="flex flex-wrap items-start gap-4">
+            <div style={{ width: 72, height: 72, borderRadius: 999, overflow: 'hidden', background: '#F6F3EC', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {adoption.adopter.avatarUrl ? (
+                <img src={toAbsoluteUrl(adoption.adopter.avatarUrl)} alt={adoption.adopter.name} className="h-full w-full object-cover" />
+              ) : (
+                <span style={{ fontSize: 26, fontWeight: 700, color: '#7A8273' }}>{(adoption.adopter.name || '?').slice(0, 1).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="min-w-0 grid gap-1">
+              <div className="text-lg font-semibold">
+                {adoption.adopter.name || 'Solicitante'}
+                {adoption.adopter.age ? <span className="text-sm font-normal" style={{ color: '#7A8273' }}> · {adoption.adopter.age} años</span> : null}
+              </div>
+              <div className="text-sm" style={{ color: '#7A8273' }}>
+                {[adoption.adopter.city, adoption.adopter.email, adoption.adopter.phone].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+              </div>
+              {adoption.adopter.memberSince && (
+                <div className="text-xs" style={{ color: '#9AA08F' }}>Miembro desde {formatDate(adoption.adopter.memberSince)}</div>
+              )}
+              {adoption.adopter.bio && <p className="mt-1 text-sm" style={{ color: '#3F4A3C' }}>{adoption.adopter.bio}</p>}
+            </div>
+          </div>
+          <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
+            <div className="text-sm font-medium">
+              {adoption.adopter.petsCount > 0
+                ? `Ya tiene ${adoption.adopter.petsCount} ${adoption.adopter.petsCount === 1 ? 'animal' : 'animales'}`
+                : 'No tiene otros animales registrados'}
+            </div>
+            {Array.isArray(adoption.adopter.pets) && adoption.adopter.pets.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {adoption.adopter.pets.map((pet: any) => (
+                  <div key={pet.id} className="flex items-center gap-2 border px-2 py-1" style={{ borderColor: '#E7E1D5', borderRadius: 999 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 999, overflow: 'hidden', background: '#F6F3EC', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {pet.image ? <img src={toAbsoluteUrl(pet.image)} alt={pet.name} className="h-full w-full object-cover" /> : <span style={{ fontSize: 11, color: '#7A8273' }}>🐾</span>}
+                    </div>
+                    <span className="text-sm">{pet.name}{pet.species ? ` · ${pet.species}` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {Array.isArray(adoption.answers) && adoption.answers.length > 0 && (
         <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
           <h2 className="text-lg font-semibold">Respuestas del cuestionario</h2>

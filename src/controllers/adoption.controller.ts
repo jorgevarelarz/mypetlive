@@ -306,5 +306,39 @@ export async function getById(req: Request, res: Response) {
   const isAdopter = String(app.adopterId) === String(user?._id || user?.id);
   const isShelter = animal && String(animal.shelter) === String(user?._id || user?.id);
   if (!isAdmin && !isAdopter && !isShelter) return res.status(403).json({ error: 'forbidden' });
-  res.json({ ...app, animal });
+
+  // Resumen del perfil del solicitante para la protectora/admin (no para el propio adoptante).
+  let adopter: any = undefined;
+  if ((isShelter || isAdmin) && app.adopterId) {
+    const [adopterUser, pets, petsCount] = await Promise.all([
+      User.findById(app.adopterId).select('name email createdAt profile').lean() as any,
+      Animal.find({ ownerId: app.adopterId }).select('name species images code').sort({ createdAt: -1 }).limit(6).lean(),
+      Animal.countDocuments({ ownerId: app.adopterId }),
+    ]);
+    if (adopterUser) {
+      // Los datos personales viven en el subdocumento `profile` (city bajo profile.address).
+      const p = adopterUser.profile || {};
+      adopter = {
+        id: String(adopterUser._id),
+        name: adopterUser.name,
+        avatarUrl: p.avatarUrl,
+        age: p.age,
+        city: p.address?.city,
+        phone: p.phone,
+        email: adopterUser.email,
+        bio: p.bio,
+        memberSince: adopterUser.createdAt,
+        petsCount,
+        pets: (pets || []).map((p: any) => ({
+          id: String(p._id),
+          name: p.name,
+          species: p.species,
+          code: p.code,
+          image: Array.isArray(p.images) ? p.images[0] : undefined,
+        })),
+      };
+    }
+  }
+
+  res.json({ ...app, animal, adopter });
 }

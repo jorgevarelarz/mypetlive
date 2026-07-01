@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { User } from '../models/user.model';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -147,5 +148,21 @@ describe('Cancelación de la solicitud por el adoptante', () => {
     const { adoptionId } = await setupApplication();
     await request(app).patch(`/api/adoptions/${adoptionId}/status`).set(protectoraHeaders).send({ status: 'aprobada' }).expect(200);
     await request(app).post(`/api/adoptions/${adoptionId}/cancel`).set(adopterHeaders).expect(400);
+  });
+
+  it('la protectora ve el perfil del solicitante y su nº de mascotas en el detalle', async () => {
+    // Usuario adoptante real (los headers de test no crean documento) + una mascota suya.
+    await User.create({ _id: new mongoose.Types.ObjectId(adopterId), name: 'Ana Ruiz', email: 'ana@test.app', passwordHash: 'h', role: 'tenant', profile: { age: 30, address: { city: 'Vigo' } } });
+    const { adoptionId } = await setupApplication();
+
+    const detail = await request(app).get(`/api/adoptions/${adoptionId}`).set(protectoraHeaders).expect(200);
+    expect(detail.body.adopter?.name).toBe('Ana Ruiz');
+    expect(detail.body.adopter?.city).toBe('Vigo');
+    expect(detail.body.adopter?.age).toBe(30);
+    expect(detail.body.adopter).toHaveProperty('petsCount');
+
+    // El propio adoptante NO recibe el bloque de perfil (es para la protectora/admin).
+    const ownView = await request(app).get(`/api/adoptions/${adoptionId}`).set(adopterHeaders).expect(200);
+    expect(ownView.body.adopter).toBeUndefined();
   });
 });
