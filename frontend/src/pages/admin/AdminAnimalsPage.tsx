@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { searchAnimals } from '../../api/animals';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+import { searchAnimals, updateAnimalStatus, type AnimalStatus } from '../../api/animals';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, speciesLabel, sexLabel, sizeLabel, statusLabel } from '../../styles/mypetlive';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -10,10 +11,27 @@ const STATUS_COLORS: Record<string, string> = {
   borrador: MPL.faint,
 };
 
+const ANIMAL_STATUSES: AnimalStatus[] = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
+
 export default function AdminAnimalsPage() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['admin-animals'], queryFn: () => searchAnimals({ limit: 200, page: 1, sort: 'createdAt', dir: 'desc' }) });
   const items = useMemo(() => data?.items || [], [data]);
   const [status, setStatus] = useState('');
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: AnimalStatus }) => updateAnimalStatus(id, next),
+    onSuccess: () => {
+      toast.success('Estado del animal actualizado');
+      queryClient.invalidateQueries({ queryKey: ['admin-animals'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error || 'No se pudo actualizar el estado'),
+  });
+
+  const changeStatus = (id: string, next: AnimalStatus) => {
+    if (next === 'adoptado' && !window.confirm('¿Marcar como adoptado? Esto cierra la disponibilidad del animal.')) return;
+    statusMutation.mutate({ id, next });
+  };
 
   const statuses = useMemo(() => Array.from(new Set(items.map((a: any) => a.status).filter(Boolean))), [items]);
   const filtered = status ? items.filter((a: any) => a.status === status) : items;
@@ -61,6 +79,17 @@ export default function AdminAnimalsPage() {
                   </div>
                   <div style={{ fontSize: 13, color: MPL.muted }}>{speciesLabel(a.species)}{a.breed ? ` · ${a.breed}` : ''}</div>
                   <div style={{ fontSize: 12, color: MPL.faint }}>{sexLabel(a.sex)} · {sizeLabel(a.size)}</div>
+                  <select
+                    value=""
+                    disabled={statusMutation.isPending}
+                    onChange={e => { const v = e.target.value as AnimalStatus; if (v) changeStatus(String(a._id || a.id), v); e.target.value = ''; }}
+                    style={{ marginTop: 4, border: `1px solid ${MPL.border}`, borderRadius: 9, padding: '6px 10px', fontFamily: MPL_FONT_BODY, fontSize: 12.5, color: MPL.ink, background: '#fff' }}
+                  >
+                    <option value="">Cambiar estado…</option>
+                    {ANIMAL_STATUSES.filter(s => s !== a.status).map(s => (
+                      <option key={s} value={s}>{statusLabel(s)}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             ))}
