@@ -70,6 +70,24 @@ describe('Citas veterinarias', () => {
     expect(vetView.body.items).toHaveLength(1);
   });
 
+  it('guarda el servicio del catálogo como snapshot y rechaza servicios inexistentes', async () => {
+    await User.updateOne(
+      { _id: vetId },
+      { $set: { 'profile.vet.serviceCatalog': [{ name: 'Consulta general', priceEur: 30, pricingType: 'fijo' }] } },
+    );
+
+    const res = await createAppt(userH, { serviceName: '  consulta GENERAL ' }).expect(201);
+    expect(res.body.service).toMatchObject({ name: 'Consulta general', priceEur: 30, pricingType: 'fijo' });
+
+    // Aunque el vet cambie el precio después, la cita conserva el snapshot.
+    await User.updateOne({ _id: vetId }, { $set: { 'profile.vet.serviceCatalog.0.priceEur': 45 } });
+    const mine = await request(app).get('/api/vet-appointments/mine').set(userH).expect(200);
+    expect(mine.body.items[0].service.priceEur).toBe(30);
+
+    const bad = await createAppt(userH, { serviceName: 'Cirugía' }).expect(400);
+    expect(bad.body.error).toBe('service_not_found');
+  });
+
   it('rechaza fecha pasada y motivo vacío', async () => {
     await createAppt(userH, { requestedAt: new Date(Date.now() - 86_400_000).toISOString() }).expect(400);
     await createAppt(userH, { reason: '   ' }).expect(400);

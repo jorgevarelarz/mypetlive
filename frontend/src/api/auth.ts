@@ -23,10 +23,17 @@ export type UserProfile = {
   vet?: VetProfile;
 };
 
+export type VetServiceItem = {
+  name: string;
+  priceEur?: number;
+  pricingType: "fijo" | "variable";
+};
+
 export type VetProfile = {
   licenseNumber?: string;
   specialties?: string[];
   services?: string[];
+  serviceCatalog?: VetServiceItem[];
   schedule?: string;
   emergency24h?: boolean;
 };

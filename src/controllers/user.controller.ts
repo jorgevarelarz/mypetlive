@@ -72,6 +72,22 @@ function sanitizeProfile(input: any): Record<string, any> {
     const services = toCleanArray(input.vet.services);
     if (specialties) v.specialties = specialties;
     if (services) v.services = services;
+    if (Array.isArray(input.vet.serviceCatalog)) {
+      v.serviceCatalog = input.vet.serviceCatalog
+        .map((item: any) => {
+          if (!item || typeof item !== 'object') return null;
+          const name = typeof item.name === 'string' ? item.name.trim().slice(0, 80) : '';
+          if (!name) return null;
+          const pricingType = item.pricingType === 'fijo' ? 'fijo' : 'variable';
+          const price = Number(item.priceEur);
+          const priceEur = Number.isFinite(price) && price >= 0 ? Math.round(price * 100) / 100 : undefined;
+          // Un servicio de precio fijo sin precio no tiene sentido: se degrada a presupuesto.
+          if (pricingType === 'fijo' && priceEur === undefined) return { name, pricingType: 'variable' };
+          return { name, priceEur, pricingType };
+        })
+        .filter(Boolean)
+        .slice(0, 30);
+    }
     out.vet = v;
   }
   if (input.autoDonate && typeof input.autoDonate === 'object') {

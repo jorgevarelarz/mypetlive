@@ -60,6 +60,41 @@ describe('Perfil de veterinario', () => {
     expect(fromDb.profile.vet.schedule).toBe('L-V 9:00-20:00');
   });
 
+  it('persiste el catálogo de servicios con precio y normaliza entradas inválidas', async () => {
+    const res = await request(app)
+      .patch(`/api/users/${vetId}`)
+      .set(vetH)
+      .send({
+        profile: {
+          vet: {
+            serviceCatalog: [
+              { name: '  Consulta general ', priceEur: 30, pricingType: 'fijo' },
+              { name: 'Cirugía', pricingType: 'variable' },
+              { name: 'Vacuna', priceEur: '25.505', pricingType: 'fijo' },
+              { name: 'Radiografía', pricingType: 'fijo' }, // fijo sin precio → degrada a presupuesto
+              { name: '', priceEur: 10, pricingType: 'fijo' }, // sin nombre → fuera
+              { name: 'Negativo', priceEur: -5, pricingType: 'fijo' }, // precio inválido → fuera el precio
+              'no-un-objeto',
+            ],
+          },
+        },
+      })
+      .expect(200);
+
+    const catalog = res.body.profile.vet.serviceCatalog;
+    expect(catalog).toEqual([
+      { name: 'Consulta general', priceEur: 30, pricingType: 'fijo' },
+      { name: 'Cirugía', pricingType: 'variable' },
+      { name: 'Vacuna', priceEur: 25.51, pricingType: 'fijo' },
+      { name: 'Radiografía', pricingType: 'variable' },
+      { name: 'Negativo', pricingType: 'variable' },
+    ]);
+
+    // Y se expone en el directorio público de veterinarios.
+    const dir = await request(app).get('/api/vets').set(vetH).expect(200);
+    expect(dir.body.items[0].serviceCatalog).toEqual(catalog);
+  });
+
   it('ignora campos no permitidos y limpia arrays vacíos', async () => {
     const res = await request(app)
       .patch(`/api/users/${vetId}`)

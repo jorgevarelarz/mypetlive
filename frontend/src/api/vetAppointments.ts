@@ -1,5 +1,11 @@
 import { api as client } from './client';
 
+export type VetCatalogService = {
+  name: string;
+  priceEur?: number;
+  pricingType: 'fijo' | 'variable';
+};
+
 export type VetDirectoryItem = {
   _id: string;
   name: string;
@@ -7,6 +13,7 @@ export type VetDirectoryItem = {
   city?: string;
   specialties: string[];
   services: string[];
+  serviceCatalog: VetCatalogService[];
   schedule?: string;
   emergency24h: boolean;
 };
@@ -20,6 +27,7 @@ export type VetAppointment = {
   animalId?: any;
   animalCode?: string;
   reason: string;
+  service?: VetCatalogService;
   requestedAt: string;
   scheduledAt?: string;
   status: VetAppointmentStatus;
@@ -36,7 +44,7 @@ export async function listVets(params?: { city?: string; q?: string }) {
   return data as { items: VetDirectoryItem[] };
 }
 
-export async function createVetAppointment(payload: { vetId: string; reason: string; requestedAt: string; animalCode?: string; patitasCost?: number }) {
+export async function createVetAppointment(payload: { vetId: string; reason: string; requestedAt: string; animalCode?: string; serviceName?: string; patitasCost?: number }) {
   const { data } = await client.post('/api/vet-appointments', payload);
   return data as VetAppointment;
 }

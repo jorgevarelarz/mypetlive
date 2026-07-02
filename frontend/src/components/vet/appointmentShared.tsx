@@ -47,6 +47,14 @@ export function AppointmentCard({
         <span style={{ flex: 'none', background: s.bg, color: s.color, borderRadius: 999, padding: '4px 11px', fontSize: 12, fontWeight: 800 }}>{s.label}</span>
       </div>
       <div style={{ fontSize: 13.5, color: MPL.ink }}>{appt.reason}</div>
+      {appt.service && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'start', background: MPL.teal100, color: MPL.tealDark, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 800 }}>
+          {appt.service.name}
+          {appt.service.priceEur != null
+            ? ` · ${appt.service.priceEur.toLocaleString('es-ES')} €${appt.service.pricingType === 'fijo' ? '' : ' (orientativo)'}`
+            : ' · presupuesto'}
+        </div>
+      )}
       {(appt.patitasCost ?? 0) > 0 && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'start', background: MPL.gold100, color: MPL.goldDark, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 800 }}>
           🐾 {appt.patitasCost} Patitas {appt.patitasPaid ? '· pagadas' : appt.status === 'completed' ? '· pendiente' : '· al completar'}

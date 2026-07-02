@@ -48,6 +48,7 @@ export async function listVets(req: Request, res: Response) {
       city: v.profile?.address?.city,
       specialties: v.profile?.vet?.specialties || [],
       services: v.profile?.vet?.services || [],
+      serviceCatalog: v.profile?.vet?.serviceCatalog || [],
       schedule: v.profile?.vet?.schedule,
       emergency24h: !!v.profile?.vet?.emergency24h,
     })),
@@ -57,14 +58,26 @@ export async function listVets(req: Request, res: Response) {
 // POST /api/vet-appointments — el dueño (adoptante o protectora) solicita una cita.
 export async function createAppointment(req: Request, res: Response) {
   const { id: userId, role } = actor(req);
-  const { vetId, animalCode, reason, requestedAt } = req.body || {};
+  const { vetId, animalCode, reason, requestedAt, serviceName } = req.body || {};
 
   if (!vetId || !Types.ObjectId.isValid(String(vetId))) return res.status(400).json({ error: 'invalid_vet' });
-  const vet = await User.findOne({ _id: vetId, role: 'vet' }).select('_id').lean();
+  const vet: any = await User.findOne({ _id: vetId, role: 'vet' }).select('_id profile.vet.serviceCatalog').lean();
   if (!vet) return res.status(404).json({ error: 'vet_not_found' });
 
   const cleanReason = typeof reason === 'string' ? reason.trim() : '';
   if (!cleanReason) return res.status(400).json({ error: 'reason_required' });
+
+  // Servicio opcional: debe existir en el catálogo actual del vet. Se guarda como
+  // snapshot (nombre/precio/tipo del momento de la solicitud), nunca el precio del cliente.
+  let service: { name: string; priceEur?: number; pricingType: string } | undefined;
+  if (serviceName != null && String(serviceName).trim()) {
+    const wanted = String(serviceName).trim().toLowerCase();
+    const match = (vet.profile?.vet?.serviceCatalog || []).find(
+      (s: any) => String(s?.name || '').trim().toLowerCase() === wanted,
+    );
+    if (!match) return res.status(400).json({ error: 'service_not_found' });
+    service = { name: match.name, priceEur: match.priceEur, pricingType: match.pricingType || 'variable' };
+  }
 
   const when = requestedAt ? new Date(requestedAt) : null;
   if (!when || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
@@ -101,7 +114,7 @@ export async function createAppointment(req: Request, res: Response) {
   }
 
   const appt = await VetAppointment.create({
-    vetId, userId, animalId, animalCode: code, reason: cleanReason, requestedAt: when, status: 'requested',
+    vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
     patitasCost, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
   });
 
@@ -114,7 +127,7 @@ export async function createAppointment(req: Request, res: Response) {
     (vetUser as any)?.email,
     'Nueva solicitud de cita en MyPetLive',
     `${(owner as any)?.name || 'Un cliente'} ha solicitado una cita para el ${fmtDate(when)}.\n` +
-      `Motivo: ${cleanReason}${code ? `\nMascota: ${code}` : ''}\n\nRevísala en tu panel de MyPetLive.`,
+      `Motivo: ${cleanReason}${service ? `\nServicio: ${service.name}${service.priceEur != null ? ` (${service.priceEur} €${service.pricingType === 'fijo' ? '' : ', orientativo'})` : ' (presupuesto)'}` : ''}${code ? `\nMascota: ${code}` : ''}\n\nRevísala en tu panel de MyPetLive.`,
   );
 
   res.status(201).json(appt);

@@ -152,6 +152,21 @@ const profileSchema = new Schema(
           licenseNumber: { type: String, trim: true }, // nº de colegiado
           specialties: { type: [String], default: [] }, // felina, exoticos, cirugia, dermatologia…
           services: { type: [String], default: [] }, // vacunacion, desparasitacion, cirugia, urgencias…
+          // Catálogo de servicios con precio (Fase 1: solo informativo, sin pagos).
+          // 'fijo' lleva precio cerrado en €; 'variable' es bajo presupuesto (priceEur opcional, orientativo).
+          serviceCatalog: {
+            type: [
+              new Schema(
+                {
+                  name: { type: String, trim: true, required: true, maxlength: 80 },
+                  priceEur: { type: Number, min: 0 },
+                  pricingType: { type: String, enum: ['fijo', 'variable'], default: 'variable' },
+                },
+                { _id: false },
+              ),
+            ],
+            default: [],
+          },
           schedule: { type: String, trim: true, maxlength: 300 }, // horario en texto libre
           emergency24h: { type: Boolean, default: false },
         },

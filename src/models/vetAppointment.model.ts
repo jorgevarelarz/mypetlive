@@ -11,6 +11,18 @@ const vetAppointmentSchema = new Schema(
     animalId: { type: Schema.Types.ObjectId, ref: 'Animal' },
     animalCode: { type: String, uppercase: true, trim: true },
     reason: { type: String, required: true, trim: true, maxlength: 1000 },
+    // Servicio del catálogo del vet elegido al solicitar. Snapshot en el momento de la
+    // solicitud (el catálogo puede cambiar después); el precio es informativo, no se cobra online.
+    service: {
+      type: new Schema(
+        {
+          name: { type: String, trim: true, required: true, maxlength: 80 },
+          priceEur: { type: Number, min: 0 },
+          pricingType: { type: String, enum: ['fijo', 'variable'], default: 'variable' },
+        },
+        { _id: false },
+      ),
+    },
     // Fecha/hora propuesta por el usuario y confirmada por el vet (puede diferir si reprograma).
     requestedAt: { type: Date, required: true },
     scheduledAt: { type: Date },

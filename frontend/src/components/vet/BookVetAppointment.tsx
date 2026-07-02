@@ -7,6 +7,7 @@ import {
   listMyVetAppointments,
   createVetAppointment,
   updateVetAppointmentStatus,
+  VetCatalogService,
 } from '../../api/vetAppointments';
 import { getMyPatitas } from '../../api/patitas';
 import { listMyPets, searchAnimals } from '../../api/animals';
@@ -17,12 +18,20 @@ import { STATUS_META, AppointmentCard } from './appointmentShared';
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 const inputStyle: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '11px 13px', font: 'inherit', width: '100%', boxSizing: 'border-box', background: '#fff' };
 
+// Etiqueta de precio de un servicio del catálogo: "30 €" (fijo), "desde 30 €" o "Presupuesto".
+export function servicePriceLabel(s: VetCatalogService) {
+  if (s.priceEur == null) return 'Presupuesto';
+  const eur = `${s.priceEur.toLocaleString('es-ES')} €`;
+  return s.pricingType === 'fijo' ? eur : `desde ${eur}`;
+}
+
 export default function BookVetAppointment() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isShelter = user?.role === 'landlord';
   const [vetId, setVetId] = useState('');
   const [animalCode, setAnimalCode] = useState('');
+  const [serviceName, setServiceName] = useState('');
   const [reason, setReason] = useState('');
   const [requestedAt, setRequestedAt] = useState('');
   const [patitasCost, setPatitasCost] = useState('');
@@ -48,6 +57,19 @@ export default function BookVetAppointment() {
   const balance = patitasQ.data?.balance ?? 0;
   const vets = vetsQ.data?.items || [];
   const selectedVet = vets.find(v => v._id === vetId);
+  const catalog = selectedVet?.serviceCatalog || [];
+
+  // Al elegir servicio: prefill del motivo si está vacío y, para protectoras,
+  // sugerencia del coste en Patitas a partir del precio en € (1 Patita = 0,10 €).
+  const onSelectService = (name: string) => {
+    setServiceName(name);
+    const svc = catalog.find(s => s.name === name);
+    if (!svc) return;
+    if (!reason.trim()) setReason(svc.name);
+    if (isShelter && svc.priceEur != null && !patitasCost) {
+      setPatitasCost(String(Math.max(0, Math.round(svc.priceEur / 0.1))));
+    }
+  };
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -56,11 +78,11 @@ export default function BookVetAppointment() {
       if (!requestedAt) throw new Error('date_required');
       const cost = isShelter && patitasCost ? Math.max(0, Math.round(Number(patitasCost))) : undefined;
       if (cost && cost > balance) throw new Error('insufficient');
-      return createVetAppointment({ vetId, reason: reason.trim(), requestedAt: new Date(requestedAt).toISOString(), animalCode: animalCode.trim() || undefined, patitasCost: cost });
+      return createVetAppointment({ vetId, reason: reason.trim(), requestedAt: new Date(requestedAt).toISOString(), animalCode: animalCode.trim() || undefined, serviceName: serviceName || undefined, patitasCost: cost });
     },
     onSuccess: () => {
       toast.success('Solicitud de cita enviada');
-      setReason(''); setRequestedAt(''); setAnimalCode(''); setPatitasCost('');
+      setReason(''); setRequestedAt(''); setAnimalCode(''); setPatitasCost(''); setServiceName('');
       queryClient.invalidateQueries({ queryKey: ['my-vet-appointments'] });
     },
     onError: (e: any) => {
@@ -70,6 +92,7 @@ export default function BookVetAppointment() {
         date_in_past: 'La fecha no puede ser pasada', animal_not_found: 'No existe ese código de mascota',
         animal_not_owned: 'Solo puedes pedir cita para tus propias mascotas',
         insufficient: 'No tienes suficientes Patitas', insufficient_patitas: 'No tienes suficientes Patitas',
+        service_not_found: 'Ese servicio ya no está en el catálogo del veterinario',
       };
       toast.error(map[code] || 'No se pudo crear la solicitud');
     },
@@ -96,7 +119,7 @@ export default function BookVetAppointment() {
         <div style={{ display: 'grid', gap: 12 }}>
           <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
             Veterinario
-            <select value={vetId} onChange={e => setVetId(e.target.value)} style={inputStyle}>
+            <select value={vetId} onChange={e => { setVetId(e.target.value); setServiceName(''); }} style={inputStyle}>
               <option value="">{vetsQ.isLoading ? 'Cargando…' : 'Elige un veterinario'}</option>
               {vets.map(v => (
                 <option key={v._id} value={v._id}>{v.name}{v.city ? ` · ${v.city}` : ''}{v.emergency24h ? ' · Urgencias 24h' : ''}</option>
@@ -110,7 +133,31 @@ export default function BookVetAppointment() {
               {selectedVet.schedule && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> {selectedVet.schedule}</div>}
               {selectedVet.emergency24h && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: MPL.coralDark, fontWeight: 700 }}><ShieldAlert size={14} /> Urgencias 24 h</div>}
               {selectedVet.services.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{selectedVet.services.map(s => <span key={s} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 999, padding: '2px 9px', fontSize: 12 }}>{s}</span>)}</div>}
+              {(selectedVet.serviceCatalog || []).length > 0 && (
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontWeight: 800, fontSize: 12.5, color: MPL.ink }}>Tarifas</div>
+                  {(selectedVet.serviceCatalog || []).map((s, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 10, padding: '5px 10px', fontSize: 12.5 }}>
+                      <span>{s.name}</span>
+                      <span style={{ fontWeight: 800, whiteSpace: 'nowrap' }}>{servicePriceLabel(s)}</span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11.5, color: MPL.faint }}>Precios informativos. El pago se hace en la clínica.</div>
+                </div>
+              )}
             </div>
+          )}
+
+          {catalog.length > 0 && (
+            <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
+              Servicio (opcional)
+              <select value={serviceName} onChange={e => onSelectService(e.target.value)} style={inputStyle}>
+                <option value="">Sin especificar</option>
+                {catalog.map(s => (
+                  <option key={s.name} value={s.name}>{s.name} · {servicePriceLabel(s)}</option>
+                ))}
+              </select>
+            </label>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

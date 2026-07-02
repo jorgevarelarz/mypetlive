@@ -66,7 +66,14 @@ type FormState = {
   orgName: string;
   website: string;
   address: { street: string; city: string; postalCode: string; region: string; country: string };
-  vet: { licenseNumber: string; specialties: string[]; services: string[]; schedule: string; emergency24h: boolean };
+  vet: {
+    licenseNumber: string;
+    specialties: string[];
+    services: string[];
+    serviceCatalog: { name: string; priceEur: string; pricingType: 'fijo' | 'variable' }[];
+    schedule: string;
+    emergency24h: boolean;
+  };
 };
 
 const VET_SPECIALTIES = ['Felina', 'Canina', 'Exóticos', 'Cirugía', 'Dermatología', 'Traumatología', 'Oftalmología', 'Etología'];
@@ -99,6 +106,11 @@ function initForm(user: any): FormState {
       licenseNumber: p.vet?.licenseNumber || '',
       specialties: p.vet?.specialties || [],
       services: p.vet?.services || [],
+      serviceCatalog: (p.vet?.serviceCatalog || []).map(s => ({
+        name: s.name || '',
+        priceEur: s.priceEur != null ? String(s.priceEur) : '',
+        pricingType: s.pricingType === 'fijo' ? 'fijo' : 'variable',
+      })),
       schedule: p.vet?.schedule || '',
       emergency24h: Boolean(p.vet?.emergency24h),
     },
@@ -248,6 +260,16 @@ export default function ProfilePage() {
           licenseNumber: form.vet.licenseNumber.trim(),
           specialties: form.vet.specialties,
           services: form.vet.services,
+          serviceCatalog: form.vet.serviceCatalog
+            .filter(s => s.name.trim())
+            .map(s => {
+              const price = Number(s.priceEur.replace(',', '.'));
+              return {
+                name: s.name.trim(),
+                priceEur: s.priceEur !== '' && Number.isFinite(price) && price >= 0 ? price : undefined,
+                pricingType: s.pricingType,
+              };
+            }),
           schedule: form.vet.schedule.trim(),
           emergency24h: form.vet.emergency24h,
         };
@@ -408,6 +430,42 @@ export default function ProfilePage() {
                     );
                   })}
                 </div>
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 800, fontSize: 14 }}>Servicios con precio</span>
+                <p style={{ color: MPL.faint, fontSize: 12.5, margin: 0 }}>
+                  Precio fijo (consulta, vacuna, revisión…) o bajo presupuesto. Se muestran a los dueños al pedir cita. Todavía no se cobra online.
+                </p>
+                {form.vet.serviceCatalog.map((item, i) => {
+                  const update = (patch: Partial<typeof item>) =>
+                    set('vet', { ...form.vet, serviceCatalog: form.vet.serviceCatalog.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+                  return (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 36px', gap: 8, alignItems: 'center' }}>
+                      <input value={item.name} onChange={e => update({ name: e.target.value })} maxLength={80} style={inputStyle} placeholder="Ej. Consulta general" />
+                      <input
+                        type="number" min={0} step="0.5" value={item.priceEur}
+                        onChange={e => update({ priceEur: e.target.value })}
+                        style={inputStyle} placeholder="€"
+                        title={item.pricingType === 'variable' ? 'Opcional: precio orientativo' : 'Precio en euros'}
+                      />
+                      <select value={item.pricingType} onChange={e => update({ pricingType: e.target.value as 'fijo' | 'variable' })} style={inputStyle}>
+                        <option value="fijo">Precio fijo</option>
+                        <option value="variable">Presupuesto</option>
+                      </select>
+                      <button type="button" aria-label="Quitar servicio"
+                        onClick={() => set('vet', { ...form.vet, serviceCatalog: form.vet.serviceCatalog.filter((_, j) => j !== i) })}
+                        style={{ border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 10, padding: '8px 0', cursor: 'pointer', color: MPL.coralDark, fontWeight: 800 }}>
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+                <button type="button"
+                  onClick={() => set('vet', { ...form.vet, serviceCatalog: [...form.vet.serviceCatalog, { name: '', priceEur: '', pricingType: 'fijo' }] })}
+                  disabled={form.vet.serviceCatalog.length >= 30}
+                  style={{ justifySelf: 'start', border: `1.5px dashed ${MPL.teal}`, background: '#fff', color: MPL.teal, borderRadius: 11, padding: '8px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                  + Añadir servicio
+                </button>
               </div>
               <Field label="Horario de atención" hint="Texto libre, ej. L-V 9:00–14:00 y 17:00–20:00">
                 <textarea value={form.vet.schedule} maxLength={300} onChange={e => set('vet', { ...form.vet, schedule: e.target.value })} style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} />
