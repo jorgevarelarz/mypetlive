@@ -178,6 +178,34 @@ const STATUS_LABEL_ES: Record<string, string> = {
   cancelada: 'cancelada',
 };
 
+// Hasta `limit` animales publicados parecidos al dado (misma especie; prioriza
+// mismo tamaño y ciudad) para sugerir alternativas cuando se rechaza una solicitud.
+async function findSimilarAnimals(animal: any, limit = 3) {
+  const base: any = {
+    status: 'publicado',
+    isPersonalPet: { $ne: true },
+    species: animal.species,
+  };
+  // De más a menos parecido; los niveles sin criterios extra repiten la query
+  // anterior pero el $nin de ya-encontrados los hace inocuos.
+  const tiers = [
+    { ...base, ...(animal.size ? { size: animal.size } : {}), ...(animal.city ? { city: animal.city } : {}) },
+    { ...base, ...(animal.city ? { city: animal.city } : {}) },
+    base,
+  ];
+  const found: any[] = [];
+  for (const filter of tiers) {
+    if (found.length >= limit) break;
+    const batch = await Animal.find({ ...filter, _id: { $nin: [animal._id, ...found.map(f => f._id)] } })
+      .select('name city')
+      .sort({ createdAt: -1 })
+      .limit(limit - found.length)
+      .lean();
+    found.push(...batch);
+  }
+  return found;
+}
+
 export async function setStatus(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
@@ -239,9 +267,19 @@ export async function setStatus(req: Request, res: Response) {
     const adopter = await User.findById(app.adopterId);
     if (adopter?.email) {
       const subject = status === 'aprobada' ? '¡Tu adopción ha sido aprobada!' : 'Estado de tu solicitud de adopción';
-      const msg = status === 'aprobada'
+      let msg = status === 'aprobada'
         ? `¡Enhorabuena! La protectora ha aprobado tu adopción para ${animal.name}.`
         : `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
+      // Al rechazar, sugerimos animales parecidos para que el adoptante siga buscando.
+      if (status === 'rechazada') {
+        const similars = await findSimilarAnimals(animal);
+        if (similars.length) {
+          const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+          msg +=
+            `\n\nNo te desanimes: estos compañeros parecidos siguen buscando hogar:\n` +
+            similars.map(s => `- ${s.name}${s.city ? ` (${s.city})` : ''}: ${baseUrl}/animals/${s._id}`).join('\n');
+        }
+      }
       await sendEmail(adopter.email, subject, msg);
     }
   } catch {}

@@ -85,6 +85,43 @@ describe('Emails transaccionales de adopción', () => {
     expect(toAdopter[2]).toContain('Luna');
   });
 
+  it('al rechazar, sugiere al adoptante animales parecidos que siguen publicados', async () => {
+    const publishOther = async (name: string, species: string) => {
+      const create = await request(app)
+        .post('/api/animals')
+        .set(protectoraH)
+        .send({ shelter: shelterId, name, species, sex: 'female', age: '2 años', size: 'small' })
+        .expect(201);
+      await request(app)
+        .patch(`/api/animals/${create.body._id}/status`)
+        .set(protectoraH)
+        .send({ status: 'publicado' })
+        .expect(200);
+      return create.body._id as string;
+    };
+
+    const animalId = await publishAnimal(); // Luna, gata
+    const similarId = await publishOther('Michi', 'gato');
+    await publishOther('Toby', 'perro');
+
+    const apply = await request(app).post('/api/adoptions').set(adopterH).send({ animalId }).expect(201);
+    (sendEmail as jest.Mock).mockClear();
+
+    await request(app)
+      .patch(`/api/adoptions/${apply.body.id}/status`)
+      .set(protectoraH)
+      .send({ status: 'rechazada' })
+      .expect(200);
+
+    const toAdopter = (sendEmail as jest.Mock).mock.calls.find(c => c[0] === 'ana@test.com');
+    expect(toAdopter).toBeTruthy();
+    expect(toAdopter[2]).toContain('rechazada');
+    // Sugiere a la gata parecida con su enlace, no al perro.
+    expect(toAdopter[2]).toContain('Michi');
+    expect(toAdopter[2]).toContain(`/animals/${similarId}`);
+    expect(toAdopter[2]).not.toContain('Toby');
+  });
+
   it('avisa por alerta de búsqueda al publicar un animal que encaja', async () => {
     // Alerta del adoptante: gatos
     await request(app).post('/api/animals/alerts').set(adopterH).send({ filters: { species: 'gato' } }).expect(201);

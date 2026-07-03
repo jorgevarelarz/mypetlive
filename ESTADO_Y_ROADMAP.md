@@ -155,6 +155,7 @@ está **congelado/oculto**, no borrado.
 - [x] Uptime check cada 5 min con alerta email vía Brevo al caer/recuperarse (`/opt/mypetlive/scripts/uptime-check.sh`).
 
 ## 5.8 Hecho el 3 jul 2026
+- [x] **Similares al rechazar (P1 gap analysis):** el email de rechazo al adoptante incluye hasta 3 animales publicados parecidos (misma especie; prioriza tamaño y ciudad) con enlace a su ficha, vía `findSimilarAnimals` en `adoption.controller`. Test en `adoption.emails.test.ts`.
 - [x] **Conectar calendario del vet (feed iCal):** cada vet tiene una URL secreta `.ics` (`/api/vets/calendar/:token.ics`, token con `select:false`) que suscribe desde Google/Apple/Outlook con el botón "Conectar calendario" de su panel de citas. Estados TENTATIVE/CONFIRMED/CANCELLED para que el proveedor sincronice cambios y cancelaciones; enlace regenerable (invalida el anterior). Tests en `vetCalendarFeed.test.ts`. Nota: las suites legacy de RentalApp (`tests/`) fallan de antes, no por esto.
 
 ## 6. Operativa / notas de mantenimiento
