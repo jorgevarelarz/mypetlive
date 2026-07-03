@@ -106,6 +106,10 @@ const userSchema = new Schema(
     // Password reset support
     resetToken: { type: String },
     resetTokenExp: { type: Date },
+    // Feed iCal de la agenda del vet: token-capability de la URL de suscripción (.ics).
+    // select:false para que nunca viaje en respuestas por defecto (el directorio
+    // público /api/vets hace select de profile.vet, no de este campo).
+    calendarFeedToken: { type: String, select: false, index: true },
   },
   { timestamps: true },
 );

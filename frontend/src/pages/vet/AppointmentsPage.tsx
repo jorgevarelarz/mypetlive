@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { listMyVetAppointments, type VetAppointment } from '../../api/vetAppointments';
 import AppointmentsCalendar from '../../components/vet/AppointmentsCalendar';
+import ConnectCalendar from '../../components/vet/ConnectCalendar';
 import VetAppointmentsPanel from '../../components/vet/VetAppointmentsPanel';
 import BookVetAppointment from '../../components/vet/BookVetAppointment';
 import { MPL_FONT_DISPLAY, MPL } from '../../styles/mypetlive';
@@ -21,11 +22,14 @@ export default function AppointmentsPage() {
 
   return (
     <div style={{ display: 'grid', gap: 18, padding: 24, maxWidth: 900, margin: '0 auto' }}>
-      <header>
-        <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, margin: 0 }}>Citas veterinarias 🩺</h1>
-        <p style={{ color: MPL.muted, margin: '6px 0 0' }}>
-          {isVet ? 'Tu agenda: solicitudes y citas de tus pacientes.' : 'Tus citas con el veterinario. Solicita una nueva abajo.'}
-        </p>
+      <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, margin: 0 }}>Citas veterinarias 🩺</h1>
+          <p style={{ color: MPL.muted, margin: '6px 0 0' }}>
+            {isVet ? 'Tu agenda: solicitudes y citas de tus pacientes.' : 'Tus citas con el veterinario. Solicita una nueva abajo.'}
+          </p>
+        </div>
+        {isVet && <ConnectCalendar />}
       </header>
 
       <AppointmentsCalendar

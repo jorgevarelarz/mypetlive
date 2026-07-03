@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
+import crypto from 'crypto';
 import { VetAppointment } from '../models/vetAppointment.model';
+import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
@@ -53,6 +55,81 @@ export async function listVets(req: Request, res: Response) {
       emergency24h: !!v.profile?.vet?.emergency24h,
     })),
   });
+}
+
+// --- Feed iCal de la agenda del vet -----------------------------------------
+// El vet conecta su Google/Apple/Outlook suscribiéndolo a una URL secreta .ics
+// (token-capability). El proveedor la refresca solo; no hay OAuth ni sesión.
+
+function calendarFeedUrl(token: string) {
+  const base = process.env.PUBLIC_API_URL || process.env.FRONTEND_URL || 'https://mypetlive.es';
+  return `${base.replace(/\/$/, '')}/api/vets/calendar/${token}.ics`;
+}
+
+// GET /api/vets/me/calendar-feed — URL del feed del vet autenticado (la crea si no existe).
+export async function getCalendarFeed(req: Request, res: Response) {
+  const { id } = actor(req);
+  const user: any = await User.findById(id).select('+calendarFeedToken role');
+  if (!user || user.role !== 'vet') return res.status(403).json({ error: 'vet_only' });
+  if (!user.calendarFeedToken) {
+    user.calendarFeedToken = crypto.randomBytes(24).toString('hex');
+    await user.save();
+  }
+  res.json({ url: calendarFeedUrl(user.calendarFeedToken) });
+}
+
+// POST /api/vets/me/calendar-feed/rotate — genera un token nuevo; la URL anterior deja de valer.
+export async function rotateCalendarFeed(req: Request, res: Response) {
+  const { id } = actor(req);
+  const token = crypto.randomBytes(24).toString('hex');
+  const user = await User.findOneAndUpdate({ _id: id, role: 'vet' }, { calendarFeedToken: token }, { new: true });
+  if (!user) return res.status(403).json({ error: 'vet_only' });
+  res.json({ url: calendarFeedUrl(token) });
+}
+
+// GET /api/vets/calendar/:token.ics — feed público por token (lo consultan los
+// proveedores de calendario sin sesión; el token de 48 hex hace de credencial).
+export async function calendarFeedIcs(req: Request, res: Response) {
+  const token = String(req.params.token || '');
+  if (!/^[a-f0-9]{32,64}$/.test(token)) return res.status(404).json({ error: 'not_found' });
+  const vet: any = await User.findOne({ calendarFeedToken: token, role: 'vet' })
+    .select('name profile.orgName')
+    .lean();
+  if (!vet) return res.status(404).json({ error: 'not_found' });
+
+  // Ventana: 6 meses atrás → futuro. Las canceladas se emiten con STATUS:CANCELLED
+  // para que el proveedor las quite del calendario del vet.
+  const from = new Date(Date.now() - 182 * 24 * 3600 * 1000);
+  const appts: any[] = await VetAppointment.find({
+    vetId: vet._id,
+    $or: [{ scheduledAt: { $gte: from } }, { scheduledAt: null, requestedAt: { $gte: from } }],
+  })
+    .populate('userId', 'name')
+    .lean();
+
+  const events: IcsEvent[] = appts.map(a => {
+    const client = a.userId?.name || 'Cliente';
+    const bits = [
+      a.reason ? `Motivo: ${a.reason}` : '',
+      a.animalCode ? `Mascota: ${a.animalCode}` : '',
+      a.service?.priceEur != null ? `Precio: ${a.service.priceEur} €${a.service.pricingType === 'fijo' ? '' : ' (orientativo)'}` : '',
+      a.status === 'requested' ? 'Pendiente de confirmar en MyPetLive.' : '',
+    ].filter(Boolean);
+    return {
+      uid: `${a._id}@mypetlive.es`,
+      start: new Date(a.scheduledAt || a.requestedAt),
+      summary: `${a.service?.name || 'Cita'} — ${client}${a.animalCode ? ` (${a.animalCode})` : ''}`,
+      description: bits.join('\n'),
+      status: a.status === 'cancelled' ? 'CANCELLED' : a.status === 'requested' ? 'TENTATIVE' : 'CONFIRMED',
+      updatedAt: a.updatedAt ? new Date(a.updatedAt) : undefined,
+    };
+  });
+
+  const ics = buildCalendar(`MyPetLive — ${vet.profile?.orgName || vet.name}`, events);
+  res.set('Content-Type', 'text/calendar; charset=utf-8');
+  res.set('Content-Disposition', 'inline; filename="mypetlive.ics"');
+  res.set('Cache-Control', 'private, max-age=300');
+  res.send(ics);
 }
 
 // POST /api/vet-appointments — el dueño (adoptante o protectora) solicita una cita.

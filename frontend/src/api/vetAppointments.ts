@@ -61,3 +61,14 @@ export async function updateVetAppointmentStatus(
   const { data } = await client.patch(`/api/vet-appointments/${id}/status`, payload);
   return data as VetAppointment;
 }
+
+// Feed iCal de la agenda del vet (para suscribir Google/Apple/Outlook).
+export async function getVetCalendarFeed() {
+  const { data } = await client.get('/api/vets/me/calendar-feed');
+  return data as { url: string };
+}
+
+export async function rotateVetCalendarFeed() {
+  const { data } = await client.post('/api/vets/me/calendar-feed/rotate');
+  return data as { url: string };
+}
