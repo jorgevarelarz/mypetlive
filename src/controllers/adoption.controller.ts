@@ -65,6 +65,26 @@ export async function create(req: Request, res: Response) {
       ...(message ? [{ action: 'message', payload: { message: message.slice(0, 500) } }] : []),
     ],
   });
+
+  // Aviso a la protectora de la nueva candidatura. Best-effort: nunca rompe el alta.
+  try {
+    if (animal.shelter) {
+      const [shelter, adopter] = await Promise.all([
+        User.findById(animal.shelter).select('email').lean(),
+        User.findById(userId).select('name').lean(),
+      ]);
+      if ((shelter as any)?.email) {
+        const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+        await sendEmail(
+          (shelter as any).email,
+          `Nueva solicitud de adopción para ${animal.name}`,
+          `${(adopter as any)?.name || 'Un adoptante'} ha enviado una solicitud de adopción para ${animal.name}.\n` +
+            `Revísala en tu panel: ${baseUrl}/landlord/adoptions`,
+        );
+      }
+    }
+  } catch {}
+
   res.status(201).json({ ok: true, id: created._id, status: created.status });
 }
 
