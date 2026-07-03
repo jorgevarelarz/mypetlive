@@ -6,11 +6,17 @@ import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
+import { speciesVariants } from '../utils/species';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
 function matchesAlert(animal: any, filters: Record<string, any>) {
-  for (const key of ['species', 'size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
+  // La especie del animal se guarda canonizada (gato→cat), pero el filtro de la
+  // alerta llega tal cual lo escribió el usuario: comparar por variantes.
+  if (filters.species !== undefined && !speciesVariants(filters.species).includes(String(animal.species || '').toLowerCase())) {
+    return false;
+  }
+  for (const key of ['size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
     if (filters[key] !== undefined && animal[key] !== filters[key]) return false;
   }
   if (filters.city && !String(animal.city || '').toLowerCase().includes(String(filters.city).toLowerCase())) return false;
@@ -29,7 +35,7 @@ async function notifyMatchingAlerts(animal: any) {
   const matching = alerts.filter(alert => matchesAlert(animal, alert.filters || {}));
   if (!matching.length) return;
   const users = await User.find({ _id: { $in: matching.map(alert => alert.userId) } }).select('email name').lean();
-  const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://test.valerisstudio.es';
+  const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://mypetlive.es';
   await Promise.allSettled(users.map(user => sendEmail(
     user.email,
     `Nuevo compañero compatible: ${animal.name}`,

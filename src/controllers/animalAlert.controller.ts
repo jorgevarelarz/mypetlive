@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Animal } from '../models/animal.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { getUserId } from '../utils/getUserId';
+import { speciesVariants } from '../utils/species';
 
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
 const allowedKeys = [
@@ -32,7 +33,9 @@ function buildFilter(filters: Record<string, any>) {
     isPersonalPet: { $ne: true },
     status: { $in: PUBLIC_STATUSES },
   };
-  for (const key of ['species', 'size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
+  // La especie se guarda canonizada (gato→cat): casar por variantes es/en.
+  if (filters.species !== undefined) query.species = { $in: speciesVariants(filters.species) };
+  for (const key of ['size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
     if (filters[key] !== undefined) query[key] = filters[key];
   }
   if (filters.city) query.city = new RegExp(filters.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
