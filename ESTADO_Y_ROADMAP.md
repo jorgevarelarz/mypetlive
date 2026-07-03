@@ -146,6 +146,14 @@ está **congelado/oculto**, no borrado.
 
 ---
 
+## 5.7 Hecho el 2 jul 2026 (sesión de mejoras)
+- [x] Gap analysis del Dossier Maestro → `docs/GAP_DOSSIER.md` (cierra el pendiente de 5.6).
+- [x] Email a la protectora al recibir una solicitud nueva (los demás emails de adopción ya existían).
+- [x] **BUGFIX alertas de búsqueda:** el filtro de especie de la alerta (`gato`) nunca casaba con la especie canonizada del animal (`cat`) → las alertas no notificaban ni contaban coincidencias. Arreglado con `speciesVariants` en `matchesAlert` y `buildFilter`. Tests en `adoption.emails.test.ts`.
+- [x] `scripts/deploy.sh` (api|web|all) con validación de `.env.production` y smoke final.
+- [x] Backup diario de Mongo en el VPS (cron 03:30, rotación 7 días, `/opt/mypetlive/backups`) verificado restaurable. **Pendiente: copia off-site.**
+- [x] Uptime check cada 5 min con alerta email vía Brevo al caer/recuperarse (`/opt/mypetlive/scripts/uptime-check.sh`).
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.

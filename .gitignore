@@ -4,3 +4,4 @@ dist
 .env.staging
 .DS_Store
 uploads/
+storage/
