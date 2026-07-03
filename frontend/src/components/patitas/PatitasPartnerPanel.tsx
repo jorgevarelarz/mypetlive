@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Camera, CheckCircle2, X, UserCheck, Ticket, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, type RedeemPreview } from '../../api/patitas';
+import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, type RedeemPreview, type SaleItemInput } from '../../api/patitas';
 import { listCoupons, applyCouponToCustomer, type Coupon } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
 import PatitasHistory from './PatitasHistory';
@@ -61,6 +61,9 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [customer, setCustomer] = useState<{ userId: string; name?: string } | null>(null);
+  // Venta con ticket: importe + líneas opcionales (producto/cantidad/precio).
+  const [saleAmount, setSaleAmount] = useState('');
+  const [saleItems, setSaleItems] = useState<Array<{ name: string; qty: string; priceEur: string }>>([]);
 
   const couponsQ = useQuery({ queryKey: ['my-coupons'], queryFn: listCoupons });
   const myCoupons = (couponsQ.data?.items || []).filter(c => String(c.partnerId) === meId && !c.usedAt && c.active);
@@ -100,12 +103,36 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
     } finally { setBusy(false); }
   };
 
-  const reset = () => { setCustomer(null); setCode(''); setScanning(false); onDone(); };
+  const doSale = async () => {
+    if (!customer) return;
+    const amount = Number(saleAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { toast.error('Introduce el importe del ticket'); return; }
+    const items: SaleItemInput[] = saleItems
+      .filter(i => i.name.trim())
+      .map(i => ({
+        name: i.name.trim(),
+        ...(Number(i.qty) > 0 ? { qty: Number(i.qty) } : {}),
+        ...(Number(i.priceEur) >= 0 && i.priceEur !== '' ? { priceEur: Number(i.priceEur) } : {}),
+      }));
+    setBusy(true);
+    try {
+      const r = await registerSale({ userId: customer.userId, amountEur: amount, items });
+      toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
+      reset();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error === 'invalid_amount' ? 'Importe no válido' : 'No se pudo registrar la venta');
+    } finally { setBusy(false); }
+  };
+
+  const setItem = (idx: number, patch: Partial<{ name: string; qty: string; priceEur: string }>) =>
+    setSaleItems(items => items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+
+  const reset = () => { setCustomer(null); setCode(''); setScanning(false); setSaleAmount(''); setSaleItems([]); onDone(); };
 
   return (
     <div style={card}>
-      <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Generar Patitas a un cliente</h3>
-      <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Identifica al cliente por su QR o código y súmale Patitas por su visita o al usar un cupón.</p>
+      <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Registrar venta o visita de un cliente</h3>
+      <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Identifica al cliente por su QR o código y registra su compra (gana Patitas según el importe), una visita o un cupón.</p>
 
       {!customer ? (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -142,8 +169,34 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
             <button type="button" onClick={reset} style={{ marginLeft: 'auto', background: 'none', border: 0, color: MPL.faint, cursor: 'pointer', fontWeight: 800, fontSize: 13 }}>Cambiar</button>
           </div>
 
+          <div style={{ display: 'grid', gap: 10, background: MPL.bg, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Registrar venta</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+              <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 13 }}>
+                Importe del ticket (€)
+                <input type="number" min={0} step="0.01" value={saleAmount} onChange={e => setSaleAmount(e.target.value)} placeholder="0.00" style={{ ...input, width: 140 }} />
+              </label>
+              <button type="button" onClick={doSale} disabled={busy || !saleAmount} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.coral, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+                {busy ? '…' : 'Registrar venta'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {saleItems.map((it, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input value={it.name} onChange={e => setItem(idx, { name: e.target.value })} placeholder="Producto (p. ej. pienso cachorro 3kg)" style={{ ...input, flex: 1, minWidth: 180, padding: '9px 11px' }} />
+                  <input type="number" min={1} value={it.qty} onChange={e => setItem(idx, { qty: e.target.value })} placeholder="Cant." style={{ ...input, width: 70, padding: '9px 11px' }} />
+                  <input type="number" min={0} step="0.01" value={it.priceEur} onChange={e => setItem(idx, { priceEur: e.target.value })} placeholder="€" style={{ ...input, width: 90, padding: '9px 11px' }} />
+                  <button type="button" onClick={() => setSaleItems(items => items.filter((_, i) => i !== idx))} aria-label="Quitar línea" style={{ background: 'none', border: 0, color: MPL.faint, cursor: 'pointer' }}><X size={16} /></button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setSaleItems(items => [...items, { name: '', qty: '1', priceEur: '' }])} style={{ justifySelf: 'start', background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
+                + Añadir línea del ticket (para ofertas personalizadas)
+              </button>
+            </div>
+          </div>
+
           <button type="button" onClick={doVisit} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifySelf: 'start', background: MPL.olive, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
-            <Store size={17} /> Registrar visita
+            <Store size={17} /> Solo visita (sin compra)
           </button>
 
           <div>

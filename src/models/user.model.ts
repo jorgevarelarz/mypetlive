@@ -149,6 +149,9 @@ const profileSchema = new Schema(
     // Organización
     orgName: { type: String, trim: true },
     website: { type: String, trim: true },
+    // Partner (tienda/vet): % de comisión de plataforma sobre sus ventas.
+    // Si falta, aplica el default global (PLATFORM_SALE_COMMISSION_PCT).
+    commissionPct: { type: Number, min: 0, max: 100 },
     // Veterinario: datos de la clínica/profesional.
     vet: {
       type: new Schema(

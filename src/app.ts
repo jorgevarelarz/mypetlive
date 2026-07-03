@@ -37,6 +37,7 @@ import signatureRoutes from './routes/signature.routes';
 import serviceOffersRoutes from './routes/serviceOffers.routes';
 import adminRoutes from './routes/admin.routes';
 import adminEarningsRoutes from './routes/admin.earnings.routes';
+import adminSalesRoutes from './routes/admin.sales.routes';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
 import applicationRoutes from './routes/application.routes';
 import colivingRoutes from './routes/coliving.routes';
@@ -264,6 +265,7 @@ app.use(
   requireAdmin,
   adminRoutes,
   adminEarningsRoutes,
+  adminSalesRoutes,
   adminTenantProRoutes,
 );
 

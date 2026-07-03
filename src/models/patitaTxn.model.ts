@@ -17,7 +17,7 @@ const patitaTxnSchema = new Schema(
     partnerId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     amount: { type: Number, required: true }, // Patitas (positivo)
     valueEur: { type: Number }, // solo redeem: amount * PATITA_VALUE_EUR
-    source: { type: String, enum: ['coupon', 'visit', 'manual'] }, // solo earn
+    source: { type: String, enum: ['coupon', 'visit', 'manual', 'purchase'] }, // solo earn
     couponId: { type: Schema.Types.ObjectId, ref: 'Coupon' },
     animalId: { type: Schema.Types.ObjectId, ref: 'Animal' },
     concept: { type: String },

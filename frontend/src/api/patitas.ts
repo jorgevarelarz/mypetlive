@@ -104,3 +104,11 @@ export async function addPatitas(protectoraId: string, amount: number) {
   const { data } = await client.post(`/api/protectora/${protectoraId}/patitas/add`, { amount });
   return data as { patitas: number; protectoraId?: string };
 }
+
+// Venta del partner: importe del ticket + líneas opcionales → comisión + Patitas proporcionales.
+export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
+
+export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[] }) {
+  const { data } = await client.post('/api/patitas/sales', payload);
+  return data as { ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number; balance?: number; autoDonated?: boolean };
+}

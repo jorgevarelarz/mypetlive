@@ -102,7 +102,7 @@ export async function transferPatitas(
 export type EarnInput = {
   userId: string;
   amount: number;
-  source: 'coupon' | 'visit' | 'manual';
+  source: 'coupon' | 'visit' | 'manual' | 'purchase';
   partnerId?: string;
   couponId?: string;
   animalId?: string;

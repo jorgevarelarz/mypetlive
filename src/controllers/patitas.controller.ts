@@ -17,6 +17,12 @@ import {
 } from '../utils/patitas';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
+import { Sale } from '../models/sale.model';
+import { PartnerIdentification } from '../models/partnerIdentification.model';
+
+// Comisión de plataforma por defecto (%) sobre ventas de partners y Patitas por € de compra.
+const DEFAULT_SALE_COMMISSION_PCT = Number(process.env.PLATFORM_SALE_COMMISSION_PCT || 5);
+const PATITAS_PER_EUR = Number(process.env.PATITAS_PER_EUR || 1);
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
 
@@ -190,7 +196,84 @@ export async function identifyUser(req: Request, res: Response) {
   if (!userId) return res.status(400).json({ error: 'invalid_user_code' });
   const user = await User.findById(userId).select('name email role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
+  // Persistir la identificación: si no acaba enlazada a una venta, es una
+  // venta probablemente no declarada (informe de fugas de comisión).
+  await PartnerIdentification.create({ partnerId: actorId(req), userId: String(user._id) });
   res.json({ userId: String(user._id), name: user.name, email: user.email, role: user.role });
+}
+
+// POST /api/patitas/sales — el partner registra una venta con el código del cliente:
+// importe del ticket + líneas opcionales (producto/cantidad/precio). Deja calculada
+// la comisión de plataforma y da al cliente Patitas proporcionales al importe.
+export async function registerSale(req: Request, res: Response) {
+  const partner: any = (req as any).user;
+  const partnerId = actorId(req);
+  if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
+
+  const target = resolveUserFromBody(req.body || {});
+  if (!target) return res.status(400).json({ error: 'invalid_user' });
+  const user = await User.findById(target).select('role');
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+
+  const amountEur = Number(req.body?.amountEur);
+  if (!Number.isFinite(amountEur) || amountEur <= 0 || amountEur > 100000) {
+    return res.status(400).json({ error: 'invalid_amount' });
+  }
+
+  const rawItems = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
+  const items = rawItems
+    .map((i: any) => ({
+      name: String(i?.name || '').trim().slice(0, 120),
+      qty: Number.isFinite(Number(i?.qty)) && Number(i.qty) > 0 ? Number(i.qty) : 1,
+      priceEur: Number.isFinite(Number(i?.priceEur)) && Number(i.priceEur) >= 0 ? Number(i.priceEur) : undefined,
+    }))
+    .filter((i: any) => i.name);
+
+  const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
+  const partnerType = partnerDoc?.role === 'vet' ? 'vet' : 'store';
+  const commissionPct = partnerDoc?.profile?.commissionPct ?? DEFAULT_SALE_COMMISSION_PCT;
+  const commissionEur = Math.round(amountEur * commissionPct) / 100; // redondeo a céntimos
+  const patitas = Math.floor(amountEur * PATITAS_PER_EUR);
+
+  const sale = await Sale.create({
+    partnerId, partnerType, userId: target, amountEur, items,
+    commissionPct, commissionEur, patitasEarned: patitas,
+  });
+
+  // Enlazar la identificación previa más reciente aún sin venta.
+  await PartnerIdentification.findOneAndUpdate(
+    { partnerId, userId: target, saleId: null },
+    { saleId: sale._id },
+    { sort: { createdAt: -1 } },
+  );
+
+  const partnerName = partnerDoc?.profile?.orgName || partnerDoc?.name || 'partner';
+  const earn = patitas > 0
+    ? await earnForUser({
+        userId: target, amount: patitas, source: 'purchase', partnerId,
+        concept: `Compra de ${amountEur.toFixed(2)} € en ${partnerName}`,
+      })
+    : null;
+
+  res.status(201).json({
+    ok: true, saleId: sale._id, commissionPct, commissionEur, patitasEarned: patitas,
+    ...(earn ? { balance: earn.balance, autoDonated: earn.autoDonated } : {}),
+  });
+}
+
+// GET /api/patitas/sales/mine — ventas registradas por el partner autenticado.
+export async function listMySales(req: Request, res: Response) {
+  const partnerId = actorId(req);
+  const items = await Sale.find({ partnerId })
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .populate('userId', 'name')
+    .lean();
+  const totals = items.reduce(
+    (acc, s: any) => ({ amountEur: acc.amountEur + (s.amountEur || 0), commissionEur: acc.commissionEur + (s.commissionEur || 0) }),
+    { amountEur: 0, commissionEur: 0 },
+  );
+  res.json({ items, totals: { ...totals, count: items.length } });
 }
 
 // Check-in de visita a tienda: el partner identifica a un usuario y le genera Patitas.

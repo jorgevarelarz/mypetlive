@@ -16,6 +16,8 @@ import {
   addPatitas,
   getMyCode,
   identifyUser,
+  registerSale,
+  listMySales,
 } from '../controllers/patitas.controller';
 
 const router = Router();
@@ -42,6 +44,10 @@ router.post('/patitas/identify', ...assertRole('store', 'vet', 'admin'), asyncHa
 
 // Generación por visita a tienda (el partner identifica al usuario).
 router.post('/patitas/earn/visit', ...assertRole('store', 'vet', 'admin'), asyncHandler(earnVisit));
+
+// Venta del partner: importe + ticket → comisión de plataforma + Patitas proporcionales.
+router.post('/patitas/sales', ...assertRole('store', 'vet', 'admin'), asyncHandler(registerSale));
+router.get('/patitas/sales/mine', ...assertRole('store', 'vet', 'admin'), asyncHandler(listMySales));
 
 // Protectora: token + código de su wallet para el QR de canje.
 router.get('/patitas/wallet/token', ...assertRole('landlord', 'protectora'), asyncHandler(getWalletToken));
