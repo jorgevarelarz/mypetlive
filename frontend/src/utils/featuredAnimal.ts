@@ -23,6 +23,9 @@ export type AnimalDoc = {
 
 export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<AnimalDoc | null> {
   const triedIds = new Set<string>();
+  // Doc ya obtenido de /animals/mine o /adoptions/mine: /animals/:id devuelve 404
+  // para mascotas personales, así que sin este respaldo se perderían del panel.
+  let fallback: AnimalDoc | null = null;
 
   const enqueue = (value?: string | null) => {
     if (!value) return;
@@ -52,6 +55,7 @@ export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<A
       if (preferred.images?.length) {
         return preferred;
       }
+      fallback = preferred;
       enqueue(preferred._id || preferred.id);
     }
   } catch (error) {
@@ -69,6 +73,7 @@ export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<A
         if (adopted.animal?.images?.length) {
           return adopted.animal;
         }
+        if (adopted.animal) fallback = fallback || adopted.animal;
         enqueue(adopted.animal?._id || adopted.animalId);
       }
     } catch (error) {
@@ -78,6 +83,7 @@ export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<A
 
   const detailed = await loadDetailed();
   if (detailed) return detailed;
+  if (fallback) return fallback;
 
   // Sin mascota personal ni adopción no hay animal destacado: el UI muestra un
   // estado vacío honesto en vez de un placeholder de demo ("Popeye").

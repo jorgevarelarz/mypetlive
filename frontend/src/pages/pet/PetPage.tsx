@@ -219,6 +219,9 @@ export default function PetPage() {
       setRegisterOpen(false);
       setRegisterForm(REGISTER_INITIAL);
       refetchPets();
+      // El panel de inicio cachea su animal destacado: sin esto no refleja
+      // la mascota recién registrada hasta que expira el staleTime.
+      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
       const newId = String(pet?._id || pet?.id || '');
       if (newId) setSelectedPetId(newId);
     },
