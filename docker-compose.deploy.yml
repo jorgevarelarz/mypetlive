@@ -28,6 +28,9 @@ services:
       MONGO_URI: "mongodb://mongo:27017/mypetlive"
       JWT_SECRET: "${JWT_SECRET}"
       CORS_ORIGIN: "${CORS_ORIGIN}"
+      VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY}"
+      VAPID_PRIVATE_KEY: "${VAPID_PRIVATE_KEY}"
+      VAPID_SUBJECT: "${VAPID_SUBJECT}"
       ESCROW_DRIVER: mock
       SIGN_PROVIDER: mock
       SMS_PROVIDER: mock
@@ -40,6 +43,16 @@ services:
       SMTP_SECURE: "${SMTP_SECURE}"
       SMTP_TLS_REJECT_UNAUTHORIZED: "${SMTP_TLS_REJECT_UNAUTHORIZED}"
       FRONTEND_URL: "${FRONTEND_URL}"
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+      DONATION_FEE_PERCENT: "${DONATION_FEE_PERCENT}"
+      PATITA_VALUE_EUR: "${PATITA_VALUE_EUR}"
+      VISIT_PATITAS_REWARD: "${VISIT_PATITAS_REWARD}"
+      COUPON_PATITAS_REWARD_DEFAULT: "${COUPON_PATITAS_REWARD_DEFAULT}"
+    # Las fotos subidas (uploads) viven en el host: sin este volumen se pierden
+    # cada vez que se recrea el contenedor.
+    volumes:
+      - ./uploads:/app/uploads
     # Mapea el hostname del cert de mail al host para que el contenedor alcance
     # el Postfix de Plesk a través del gateway de la red Docker.
     extra_hosts:
