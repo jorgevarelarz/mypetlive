@@ -27,7 +27,7 @@ export async function listConversations(params: { page?: number; limit?: number 
   return data;
 }
 
-export async function ensureConversation(kind: 'ticket'|'contract'|'appointment'|'application', refId: string) {
+export async function ensureConversation(kind: 'ticket'|'contract'|'appointment'|'application'|'adoption', refId: string) {
   const { data } = await axios.post<Conversation>(`/api/chat/conversations/ensure`, { kind, refId });
   return data;
 }

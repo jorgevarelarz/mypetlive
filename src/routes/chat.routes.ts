@@ -6,8 +6,11 @@ import Ticket from '../models/ticket.model';
 import Appointment from '../models/appointment.model';
 import { Application } from '../models/application.model';
 import { Property } from '../models/property.model';
+import { Adoption } from '../models/adoption.model';
+import { Animal } from '../models/animal.model';
 import { getUserId } from '../utils/getUserId';
 import { User } from '../models/user.model';
+import { sendPushToUser } from '../utils/push';
 
 const r = Router();
 
@@ -19,7 +22,14 @@ function parsePagination(query: any) {
 
 async function ensureConversation(kind: string, refId: string, userId: string) {
   let conv = await Conversation.findOne({ kind, refId });
-  if (conv) return conv;
+  if (conv) {
+    // Una conversación existente también exige ser participante: sin esto,
+    // cualquier usuario autenticado obtenía sus metadatos (y el id para intentar más).
+    if (!conv.participants.includes(userId)) {
+      throw Object.assign(new Error('Forbidden'), { status: 403 });
+    }
+    return conv;
+  }
 
   let participants: string[] = [];
   let meta: any = {};
@@ -72,6 +82,22 @@ async function ensureConversation(kind: string, refId: string, userId: string) {
     meta.ownerId = ownerId;
     meta.tenantId = app.tenantId;
     meta.propertyId = app.propertyId;
+  } else if (kind === 'adoption') {
+    // Chat adoptante ↔ protectora sobre una solicitud de adopción concreta.
+    const adoption = await Adoption.findById(refId).lean();
+    if (!adoption) throw Object.assign(new Error('Adoption not found'), { status: 404 });
+    const animal = await Animal.findById(adoption.animalId).select('shelter').lean();
+    if (!animal?.shelter) throw Object.assign(new Error('Animal not found'), { status: 404 });
+    const shelterId = String(animal.shelter);
+    const adopterId = String(adoption.adopterId);
+    if (![shelterId, adopterId].includes(userId)) {
+      throw Object.assign(new Error('Forbidden'), { status: 403 });
+    }
+    participants = [adopterId, shelterId];
+    meta.adoptionId = refId;
+    meta.animalId = String(adoption.animalId);
+    meta.shelterId = shelterId;
+    meta.adopterId = adopterId;
   } else {
     throw Object.assign(new Error('Invalid kind'), { status: 400 });
   }
@@ -186,7 +212,21 @@ r.post('/:conversationId/messages', async (req, res) => {
         conv.unread[p] = (conv.unread[p] || 0) + 1;
       }
     });
+    conv.markModified('unread');
     await conv.save();
+
+    // Push al resto de participantes; en segundo plano, sin bloquear la respuesta.
+    const sender = await User.findById(userId).select('name').lean();
+    conv.participants
+      .filter(p => p !== userId)
+      .forEach(p => {
+        void sendPushToUser(p, {
+          title: sender?.name ? `Mensaje de ${sender.name}` : 'Nuevo mensaje',
+          body: text ? text.slice(0, 120) : 'Te han enviado un adjunto',
+          url: '/chat',
+        });
+      });
+
     res.status(201).json(msg);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });
@@ -221,7 +261,10 @@ r.post('/:conversationId/read', async (req, res) => {
     if (!conv.participants.includes(userId)) {
       throw Object.assign(new Error('Forbidden'), { status: 403 });
     }
-    conv.unread[userId] = 0;
+    // `unread` es Mixed: la mutación anidada no se detecta sin markModified,
+    // así que el contador nunca se reseteaba en BD.
+    conv.unread = { ...(conv.unread || {}), [userId]: 0 };
+    conv.markModified('unread');
     await conv.save();
     await Message.updateMany({ conversationId, readBy: { $ne: userId } }, { $addToSet: { readBy: userId } });
     res.json({ ok: true });

@@ -1,7 +1,7 @@
 import { Schema, model, Document } from 'mongoose';
 
 export interface IConversation extends Document {
-  kind: 'contract' | 'ticket' | 'appointment' | 'application';
+  kind: 'contract' | 'ticket' | 'appointment' | 'application' | 'adoption';
   refId: string;
   participants: string[]; // exactly 2
   lastMessageAt?: Date;
@@ -15,6 +15,11 @@ export interface IConversation extends Document {
     propertyId?: string;
     appointmentId?: string;
     applicationId?: string;
+    // Chat de adopción (MyPetLive)
+    adoptionId?: string;
+    animalId?: string;
+    shelterId?: string;
+    adopterId?: string;
   };
   createdAt?: Date;
   updatedAt?: Date;

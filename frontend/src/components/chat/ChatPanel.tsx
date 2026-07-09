@@ -3,7 +3,7 @@ import { ensureConversation, getMessages, sendMessage, markRead, type Message } 
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
-export default function ChatPanel({ kind, refId }: { kind: 'ticket'|'contract'|'appointment'; refId: string }) {
+export default function ChatPanel({ kind, refId, title }: { kind: 'ticket'|'contract'|'appointment'|'adoption'; refId: string; title?: string }) {
   const [conversationId, setConversationId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState('');
@@ -97,7 +97,7 @@ export default function ChatPanel({ kind, refId }: { kind: 'ticket'|'contract'|'
   if (!refId) return null;
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
-      <h3 style={{ marginTop: 0 }}>Conversación</h3>
+      {title !== '' && <h3 style={{ marginTop: 0 }}>{title || 'Conversación'}</h3>}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <button onClick={loadMore} disabled={loadingMore || !messages.length} className="btn">
           {loadingMore ? 'Cargando…' : 'Cargar mensajes anteriores'}
