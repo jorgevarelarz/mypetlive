@@ -6,6 +6,7 @@ import { User } from '../models/user.model';
 import { PatitaLog } from '../models/patitaLog.model';
 import { Animal } from '../models/animal.model';
 import { Coupon } from '../models/coupon.model';
+import { Verification } from '../models/verification.model';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -25,7 +26,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Promise.all([User.deleteMany({}), PatitaLog.deleteMany({}), Animal.deleteMany({}), Coupon.deleteMany({})]);
+  await Promise.all([User.deleteMany({}), Verification.deleteMany({}), PatitaLog.deleteMany({}), Animal.deleteMany({}), Coupon.deleteMany({})]);
 });
 
 const testUserHeaders = (role: string, id?: string) => {
@@ -117,6 +118,7 @@ describe('Patitas API', () => {
       passwordHash: 'hash',
       role: 'landlord',
     });
+    await Verification.create({ userId: String(shelter._id), status: 'verified', verificationLevel: 'animal_protection_entity' });
 
     const res = await request(app)
       .get('/api/protectoras')
@@ -125,6 +127,19 @@ describe('Patitas API', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.items)).toBe(true);
     expect(res.body.items.some((item: any) => item.id === String(shelter._id))).toBe(true);
+  });
+
+  it('blocks Patitas donations to an unverified protectora', async () => {
+    const donor = await User.create({ name: 'Ana', email: 'ana@user.app', passwordHash: 'hash', role: 'tenant', patitas: 10 });
+    const shelter = await User.create({ name: 'Sin verificar', email: 'pending@shelter.app', passwordHash: 'hash', role: 'landlord' });
+
+    const res = await request(app)
+      .post('/api/patitas/donate')
+      .set(testUserHeaders('tenant', donor.id))
+      .send({ shelterId: shelter.id, amount: 3 });
+
+    expect(res.status).toBe(403);
+    expect(res.body?.error).toBe('shelter_verification_required');
   });
 
   it('allows partners to register purchases that generate Patitas automatically', async () => {
@@ -164,5 +179,33 @@ describe('Patitas API', () => {
     expect(logs).toHaveLength(1);
     expect(String(logs[0].animalId)).toBe(String(animal.id));
     expect(String(logs[0].partnerId)).toBe(partner.id);
+  });
+
+  // Regresión: el QR de canje daba 403 si la sesión llevaba role 'protectora'
+  // (el controller solo aceptaba el rol legado 'landlord'). En BD las
+  // protectoras se guardan como 'landlord' (el enum no admite 'protectora').
+  it('issues the redemption wallet QR for both protectora and legacy landlord sessions', async () => {
+    for (const role of ['protectora', 'landlord'] as const) {
+      const shelter = await User.create({
+        name: `Protectora ${role}`,
+        email: `${role}@example.com`,
+        passwordHash: 'hash',
+        role: 'landlord',
+        patitas: 50,
+      });
+
+      const res = await request(app)
+        .get('/api/patitas/wallet/token')
+        .set(testUserHeaders(role, shelter.id));
+
+      expect(res.status).toBe(200);
+      expect(res.body.token).toBeTruthy();
+      expect(res.body.code).toMatch(/^[A-Z2-9]{6}$/);
+      expect(res.body.balance).toBe(50);
+    }
+
+    // Un rol no-protectora sigue bloqueado.
+    const forbidden = await request(app).get('/api/patitas/wallet/token').set(testUserHeaders('store'));
+    expect([401, 403]).toContain(forbidden.status);
   });
 });

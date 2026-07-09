@@ -56,9 +56,18 @@ export async function getMyCode() {
 }
 
 // El partner identifica a un cliente por su QR/código.
+export type EligibleCoupon = {
+  _id: string;
+  title?: string;
+  discount?: string;
+  bonusPatitas: number;
+  targetAnimalCode: string | null;
+};
+
 export async function identifyUser(payload: { userToken?: string; code?: string }) {
   const { data } = await client.post('/api/patitas/identify', payload);
-  return data as { userId: string; name?: string; email?: string; role?: string };
+  // coupons: los elegibles de ESTE cliente en este establecimiento.
+  return data as { userId: string; name?: string; email?: string; role?: string; coupons?: EligibleCoupon[] };
 }
 
 export async function getWalletToken() {
@@ -111,4 +120,40 @@ export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
 export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[] }) {
   const { data } = await client.post('/api/patitas/sales', payload);
   return data as { ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number; balance?: number; autoDonated?: boolean };
+}
+
+// Clave API del TPV del partner (integración de caja).
+export async function getPosKeyStatus() {
+  const { data } = await client.get('/api/partners/me/pos-key');
+  return data as { configured: boolean; prefix: string | null };
+}
+
+export async function rotatePosKey() {
+  const { data } = await client.post('/api/partners/me/pos-key');
+  return data as { key: string; prefix: string };
+}
+
+// Claves del TPV con etiqueta y revocación individual (varias cajas) + modo test.
+export type PosKey = {
+  id: string;
+  label: string;
+  mode: 'live' | 'test';
+  prefix: string | null;
+  lastUsedAt: string | null;
+  createdAt: string | null;
+};
+
+export async function listPosKeys() {
+  const { data } = await client.get('/api/partners/me/pos-keys');
+  return data as { keys: PosKey[] };
+}
+
+export async function createPosKey(payload: { label?: string; mode?: 'live' | 'test' }) {
+  const { data } = await client.post('/api/partners/me/pos-keys', payload);
+  return data as PosKey & { key: string };
+}
+
+export async function revokePosKey(keyId: string) {
+  const { data } = await client.delete(`/api/partners/me/pos-keys/${keyId}`);
+  return data as { ok: boolean };
 }

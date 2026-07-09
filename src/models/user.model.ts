@@ -110,6 +110,33 @@ const userSchema = new Schema(
     // select:false para que nunca viaje en respuestas por defecto (el directorio
     // público /api/vets hace select de profile.vet, no de este campo).
     calendarFeedToken: { type: String, select: false, index: true },
+    // Clave API del TPV del partner (integración de caja): solo se guarda el hash
+    // sha256; el prefijo sirve para mostrar qué clave está activa sin exponerla.
+    // [LEGADO] Clave única original; las nuevas van en posApiKeys (varias cajas).
+    posApiKeyHash: { type: String, select: false, index: true },
+    posApiKeyPrefix: { type: String, select: false },
+    // Última llamada autenticada del TPV: diagnóstico ("¿está llamando tu caja?")
+    // y detección de claves muertas.
+    posApiKeyLastUsedAt: { type: Date, select: false },
+    // Claves API del TPV con etiqueta y revocación individual ("Caja 1", "Caja 2"):
+    // si una caja se compromete se revoca solo esa. mode:'test' = sandbox (valida y
+    // simula la venta sin persistir nada ni consumir cupones).
+    posApiKeys: {
+      type: [
+        new Schema(
+          {
+            label: { type: String, trim: true, maxlength: 60, default: 'TPV' },
+            mode: { type: String, enum: ['live', 'test'], default: 'live' },
+            hash: { type: String, required: true },
+            prefix: { type: String, required: true },
+            lastUsedAt: { type: Date },
+            createdAt: { type: Date, default: Date.now },
+          },
+        ),
+      ],
+      select: false,
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
@@ -202,5 +229,7 @@ userSchema.add({ tenantPro: { type: tenantProSchema, default: () => ({}) } });
 userSchema.add({ profile: { type: profileSchema, default: () => ({}) } });
 
 userSchema.index({ 'tenantPro.status': 1, 'tenantPro.maxRent': -1 });
+// Lookup del posAuth: resolver el partner desde el hash de la clave del TPV.
+userSchema.index({ 'posApiKeys.hash': 1 }, { sparse: true });
 
 export const User = model('User', userSchema);

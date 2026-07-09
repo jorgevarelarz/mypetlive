@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { ClientSession } from 'mongoose';
 import { getJwtSecret } from '../config/jwt';
 import { User } from '../models/user.model';
 import { PatitaTxn } from '../models/patitaTxn.model';
@@ -72,8 +73,10 @@ export function verifyUserToken(token: string): { userId: string } | null {
 }
 
 // Acredita Patitas a un usuario/protectora. Devuelve el nuevo saldo.
-export async function creditPatitas(userId: string, amount: number): Promise<number> {
-  const updated = await User.findByIdAndUpdate(userId, { $inc: { patitas: amount } }, { new: true }).select('patitas');
+export async function creditPatitas(userId: string, amount: number, session?: ClientSession): Promise<number> {
+  const updated = await User.findByIdAndUpdate(userId, { $inc: { patitas: amount } }, { new: true })
+    .select('patitas')
+    .session(session ?? null);
   return updated?.patitas ?? 0;
 }
 
@@ -83,17 +86,22 @@ export async function transferPatitas(
   fromId: string,
   toId: string,
   amount: number,
+  session?: ClientSession,
 ): Promise<{ fromBalance: number; toBalance: number } | null> {
   const debited = await User.findOneAndUpdate(
     { _id: fromId, patitas: { $gte: amount } },
     { $inc: { patitas: -amount } },
     { new: true },
-  ).select('patitas');
+  )
+    .select('patitas')
+    .session(session ?? null);
   if (!debited) return null;
-  const credited = await User.findByIdAndUpdate(toId, { $inc: { patitas: amount } }, { new: true }).select('patitas');
+  const credited = await User.findByIdAndUpdate(toId, { $inc: { patitas: amount } }, { new: true })
+    .select('patitas')
+    .session(session ?? null);
   if (!credited) {
     // Revertir si el destino no existe (caso muy raro).
-    await User.findByIdAndUpdate(fromId, { $inc: { patitas: amount } });
+    await User.findByIdAndUpdate(fromId, { $inc: { patitas: amount } }).session(session ?? null);
     return null;
   }
   return { fromBalance: debited.patitas ?? 0, toBalance: credited.patitas ?? 0 };
@@ -121,18 +129,18 @@ export type EarnResult = {
  * auto-donación activa, reenvía inmediatamente esas Patitas a su protectora elegida
  * (txn `donate`). Helper compartido por la generación vía cupón y vía visita a tienda.
  */
-export async function earnForUser(input: EarnInput): Promise<EarnResult> {
+export async function earnForUser(input: EarnInput, session?: ClientSession): Promise<EarnResult> {
   const { userId, amount, source, partnerId, couponId, animalId, concept } = input;
-  const balance = await creditPatitas(userId, amount);
-  await PatitaTxn.create({ type: 'earn', userId, amount, source, partnerId, couponId, animalId, concept });
+  const balance = await creditPatitas(userId, amount, session);
+  await PatitaTxn.create([{ type: 'earn', userId, amount, source, partnerId, couponId, animalId, concept }], { session });
 
-  const user = await User.findById(userId).select('profile.autoDonate').lean();
+  const user = await User.findById(userId).select('profile.autoDonate').session(session ?? null).lean();
   const auto = (user as any)?.profile?.autoDonate;
   if (auto?.enabled && auto?.shelterId) {
     const shelterId = String(auto.shelterId);
-    const moved = await transferPatitas(userId, shelterId, amount);
+    const moved = await transferPatitas(userId, shelterId, amount, session);
     if (moved) {
-      await PatitaTxn.create({ type: 'donate', userId, shelterId, amount, concept: 'Auto-donación' });
+      await PatitaTxn.create([{ type: 'donate', userId, shelterId, amount, concept: 'Auto-donación' }], { session });
       return { earned: amount, balance: moved.fromBalance, autoDonated: true, shelterId };
     }
   }

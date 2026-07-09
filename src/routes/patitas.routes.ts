@@ -19,10 +19,15 @@ import {
   registerSale,
   listMySales,
 } from '../controllers/patitas.controller';
+import { getPosKeyStatus, rotatePosKey, listPosKeys, createPosKey, revokePosKey } from '../controllers/pos.controller';
+import { getShelterPublicProfile } from '../controllers/shelter.controller';
 
 const router = Router();
 
 router.get('/protectoras', asyncHandler(listProtectoras));
+
+// Perfil público de presentación de una protectora (sin auth): info + contadores.
+router.get('/protectoras/:id/profile', asyncHandler(getShelterPublicProfile));
 
 // Saldo de protectora (dashboard).
 router.get(
@@ -48,6 +53,16 @@ router.post('/patitas/earn/visit', ...assertRole('store', 'vet', 'admin'), async
 // Venta del partner: importe + ticket → comisión de plataforma + Patitas proporcionales.
 router.post('/patitas/sales', ...assertRole('store', 'vet', 'admin'), asyncHandler(registerSale));
 router.get('/patitas/sales/mine', ...assertRole('store', 'vet', 'admin'), asyncHandler(listMySales));
+
+// Clave API del TPV del partner (integración de caja): estado y generación/rotación.
+// [LEGADO] Clave única; las nuevas integraciones usan /partners/me/pos-keys.
+router.get('/partners/me/pos-key', ...assertRole('store', 'vet'), asyncHandler(getPosKeyStatus));
+router.post('/partners/me/pos-key', ...assertRole('store', 'vet'), asyncHandler(rotatePosKey));
+
+// Claves del TPV con etiqueta y revocación individual (varias cajas) + modo test.
+router.get('/partners/me/pos-keys', ...assertRole('store', 'vet'), asyncHandler(listPosKeys));
+router.post('/partners/me/pos-keys', ...assertRole('store', 'vet'), asyncHandler(createPosKey));
+router.delete('/partners/me/pos-keys/:keyId', ...assertRole('store', 'vet'), asyncHandler(revokePosKey));
 
 // Protectora: token + código de su wallet para el QR de canje.
 router.get('/patitas/wallet/token', ...assertRole('landlord', 'protectora'), asyncHandler(getWalletToken));

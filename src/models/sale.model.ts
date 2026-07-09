@@ -27,11 +27,37 @@ const saleSchema = new Schema(
     // Liquidación del extracto: pending → invoiced → paid.
     settlementStatus: { type: String, enum: ['pending', 'invoiced', 'paid'], default: 'pending', index: true },
     invoiceRef: { type: String },
+    // Clave de idempotencia del TPV (id del ticket en la caja): los reintentos de
+    // red no duplican la venta. Única por partner solo cuando está presente.
+    externalRef: { type: String, trim: true, maxlength: 120 },
+    // Cupones consumidos en esta venta (auditoría + respuesta idéntica en los
+    // reintentos idempotentes: el TPV puede reimprimir el ticket real).
+    appliedCoupons: {
+      type: [
+        new Schema(
+          {
+            couponId: { type: Schema.Types.ObjectId, ref: 'Coupon', required: true },
+            title: { type: String },
+            discount: { type: String },
+            bonusPatitas: { type: Number, default: 0 },
+            targetAnimalCode: { type: String },
+          },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
+    // Patitas extra por cupones (separado de patitasEarned, lo proporcional al importe).
+    couponPatitas: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true },
 );
 
 saleSchema.index({ partnerId: 1, createdAt: -1 });
 saleSchema.index({ userId: 1, createdAt: -1 });
+saleSchema.index(
+  { partnerId: 1, externalRef: 1 },
+  { unique: true, partialFilterExpression: { externalRef: { $type: 'string' } } },
+);
 
 export const Sale = model('Sale', saleSchema);

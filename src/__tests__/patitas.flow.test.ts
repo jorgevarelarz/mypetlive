@@ -7,6 +7,7 @@ let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Coupon: any;
+let Verification: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -19,6 +20,7 @@ beforeAll(async () => {
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
   Coupon = (await import('../models/coupon.model')).Coupon;
+  Verification = (await import('../models/verification.model')).Verification;
 });
 
 afterAll(async () => {
@@ -43,6 +45,12 @@ beforeEach(async () => {
     { _id: shelterId, name: 'Protectora Lugo', email: 'shelter@test.com', passwordHash: 'x', role: 'landlord' },
     { _id: storeId, name: 'Tienda Mascotas', email: 'store@test.com', passwordHash: 'x', role: 'store' },
   ]);
+  // Recibir donaciones exige protectora verificada como entidad de protección.
+  await Verification.create({
+    userId: shelterId,
+    status: 'verified',
+    verificationLevel: 'animal_protection_entity',
+  });
 });
 
 async function balance(id: string): Promise<number> {

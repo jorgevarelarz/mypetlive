@@ -3,8 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Camera, CheckCircle2, X, UserCheck, Ticket, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, type RedeemPreview, type SaleItemInput } from '../../api/patitas';
-import { listCoupons, applyCouponToCustomer, type Coupon } from '../../api/coupons';
+import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, type EligibleCoupon, type PosKey, type RedeemPreview, type SaleItemInput } from '../../api/patitas';
+import { listCoupons, applyCouponToCustomer } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
@@ -55,12 +55,171 @@ function PartnerPayout() {
   );
 }
 
+// Conexión del TPV del partner: claves API (una por caja, con etiqueta y
+// revocación individual; modo test = sandbox sin efectos) para que su sistema
+// de caja exporte las ventas y aplique cupones al escanear al cliente.
+function PosIntegration() {
+  const [keys, setKeys] = useState<PosKey[] | null>(null);
+  const [newKey, setNewKey] = useState<{ key: string; label: string } | null>(null);
+  const [label, setLabel] = useState('');
+  const [testMode, setTestMode] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const reload = () => listPosKeys().then(r => setKeys(r.keys)).catch(() => {});
+  useEffect(() => { reload(); }, []);
+
+  // Wizard "en 3 pasos": estado derivado de las claves. El semáforo del paso 3
+  // se pone verde solo cuando la caja hace su primera llamada con la clave test.
+  const testKey = keys?.find(k => k.mode === 'test');
+  const tested = !!testKey?.lastUsedAt;
+  const hasLive = !!keys?.some(k => k.mode === 'live');
+  useEffect(() => {
+    if (!testKey || tested) return;
+    const t = setInterval(reload, 10000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testKey?.id, tested]);
+
+  const create = async (payload: { label?: string; mode?: 'live' | 'test' }) => {
+    setBusy(true);
+    try {
+      const r = await createPosKey(payload);
+      setNewKey({ key: r.key, label: r.label });
+      setLabel('');
+      setTestMode(false);
+      reload();
+    } catch {
+      toast.error('No se pudo generar la clave');
+    } finally { setBusy(false); }
+  };
+
+  const generate = () => create({ label: label.trim() || undefined, mode: testMode ? 'test' : 'live' });
+
+  const guideUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://mypetlive.es'}/developers/tpv`;
+  const mailto = () => {
+    const subject = encodeURIComponent('Conectar nuestro TPV con MyPetLive');
+    const body = encodeURIComponent(
+      `Hola,\n\nQueremos conectar nuestra caja con MyPetLive (registra ventas y aplica cupones al escanear al cliente).\n\n` +
+      `Guía técnica (2 llamadas REST): ${guideUrl}\n\n` +
+      (newKey ? `Clave de pruebas (sandbox, sin efectos reales):\n${newKey.key}\n\n` : `La clave de pruebas os la paso por un canal seguro.\n\n`) +
+      `Gracias`,
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const revoke = async (k: PosKey) => {
+    if (!window.confirm(`¿Revocar la clave "${k.label}"? La caja que la use dejará de funcionar al momento.`)) return;
+    try {
+      await revokePosKey(k.id);
+      toast.success('Clave revocada');
+      reload();
+    } catch { toast.error('No se pudo revocar la clave'); }
+  };
+
+  const copyKey = async () => {
+    if (!newKey) return;
+    try { await navigator.clipboard.writeText(newKey.key); toast.success('Clave copiada'); }
+    catch { window.prompt('Copia la clave:', newKey.key); }
+  };
+
+  return (
+    <div style={card}>
+      <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Conectar tu TPV</h3>
+      <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>
+        Opcional: si tu sistema de caja puede integrarse, las ventas se registran solas. Si no,
+        usa el <strong>Modo Caja</strong> del menú — no necesitas nada más. Tú no tienes que hacer
+        nada técnico: reenvía la guía a tu proveedor de TPV y él se encarga.
+      </p>
+
+      {/* Conexión guiada en 3 pasos: clave de pruebas → enviar guía → semáforo. */}
+      <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: MPL.bg, borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontWeight: 800, fontSize: 13.5, color: testKey ? MPL.oliveDark : MPL.ink }}>
+            {testKey ? '✓' : '1.'} Crea la clave de pruebas
+          </span>
+          {!testKey && (
+            <button type="button" onClick={() => create({ label: 'Integración (pruebas)', mode: 'test' })} disabled={busy || !keys} style={{ marginLeft: 'auto', background: MPL.teal, color: '#fff', border: 0, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              {busy ? '…' : 'Crear clave de pruebas'}
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: MPL.bg, borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontWeight: 800, fontSize: 13.5 }}>2. Envía la guía a tu proveedor de TPV</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a href={guideUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 800, color: MPL.tealDark, alignSelf: 'center' }}>Ver guía</a>
+            <button type="button" onClick={mailto} style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer', color: MPL.ink }}>
+              Enviar por email
+            </button>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: tested ? '#eef7ee' : MPL.bg, borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontWeight: 800, fontSize: 13.5, color: tested ? MPL.oliveDark : MPL.ink }}>
+            {tested ? '✓ ¡Tu caja ya está llamando!' : '3. Esperando la primera llamada de tu caja…'}
+          </span>
+          {!tested && testKey && <span style={{ fontSize: 12.5, color: MPL.faint }}>(se comprueba solo cada pocos segundos)</span>}
+          {tested && !hasLive && (
+            <button type="button" onClick={() => create({ label: 'Caja 1', mode: 'live' })} disabled={busy} style={{ marginLeft: 'auto', background: MPL.coral, color: '#fff', border: 0, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              Activar: crear la clave real
+            </button>
+          )}
+        </div>
+      </div>
+      {newKey && (
+        <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
+          <div style={{ background: MPL.gold100, color: MPL.goldDark, borderRadius: 12, padding: 12, fontSize: 13, fontWeight: 700 }}>
+            Clave "{newKey.label}" creada. Guárdala ahora: por seguridad no se volverá a mostrar.
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <code style={{ fontFamily: MPL_FONT_MONO, fontSize: 13, background: MPL.bg, borderRadius: 10, padding: '10px 12px', wordBreak: 'break-all' }}>{newKey.key}</code>
+            <button type="button" onClick={copyKey} style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 11, padding: '10px 16px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>Copiar</button>
+            <button type="button" onClick={() => setNewKey(null)} style={{ background: '#fff', color: MPL.ink, border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '10px 16px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>Hecho</button>
+          </div>
+        </div>
+      )}
+      {!!keys?.length && (
+        <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+          {keys.map(k => (
+            <div key={k.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: MPL.bg, borderRadius: 12, padding: '10px 12px' }}>
+              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{k.label}</span>
+              {k.mode === 'test' && (
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: MPL.goldDark, background: MPL.gold100, borderRadius: 8, padding: '2px 8px' }}>PRUEBAS</span>
+              )}
+              <code style={{ fontFamily: MPL_FONT_MONO, fontSize: 12.5, color: MPL.muted }}>{k.prefix}…</code>
+              <span style={{ fontSize: 12.5, color: MPL.muted, marginLeft: 'auto' }}>
+                {k.lastUsedAt ? `Última llamada: ${new Date(k.lastUsedAt).toLocaleString()}` : 'Sin llamadas aún'}
+              </span>
+              <button type="button" onClick={() => revoke(k)} style={{ background: '#fff', color: '#b3261e', border: `1.5px solid ${MPL.border}`, borderRadius: 10, padding: '6px 12px', font: 'inherit', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>Revocar</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          value={label}
+          onChange={e => setLabel(e.target.value)}
+          placeholder="Etiqueta (p. ej. Caja 1)"
+          maxLength={60}
+          style={{ border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '10px 12px', font: 'inherit', fontSize: 13.5 }}
+        />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: MPL.muted, fontWeight: 700, cursor: 'pointer' }}>
+          <input type="checkbox" checked={testMode} onChange={e => setTestMode(e.target.checked)} />
+          Clave de pruebas
+        </label>
+        <button type="button" onClick={generate} disabled={busy || !keys} style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+          {busy ? '…' : 'Nueva clave del TPV'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
-function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void }) {
+// Exportado: es también el corazón del Modo Caja (/caja), el alta sin TPV.
+export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [customer, setCustomer] = useState<{ userId: string; name?: string } | null>(null);
+  const [customer, setCustomer] = useState<{ userId: string; name?: string; coupons?: EligibleCoupon[] } | null>(null);
   // Venta con ticket: importe + líneas opcionales (producto/cantidad/precio).
   const [saleAmount, setSaleAmount] = useState('');
   const [saleItems, setSaleItems] = useState<Array<{ name: string; qty: string; priceEur: string }>>([]);
@@ -72,7 +231,7 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
     setBusy(true);
     try {
       const u = await identifyUser(ref);
-      setCustomer({ userId: u.userId, name: u.name });
+      setCustomer({ userId: u.userId, name: u.name, coupons: u.coupons });
     } catch (e: any) {
       toast.error(e?.response?.data?.error === 'invalid_user_code' ? 'Código de cliente no válido o caducado' : 'No se pudo identificar al cliente');
     } finally { setBusy(false); }
@@ -90,7 +249,7 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
     } finally { setBusy(false); }
   };
 
-  const applyCoupon = async (coupon: Coupon) => {
+  const applyCoupon = async (coupon: { _id: string; targetAnimalCode?: string | null; bonusPatitas?: number | null; title?: string; copy?: string; discount?: string }) => {
     if (!customer) return;
     setBusy(true);
     try {
@@ -200,23 +359,37 @@ function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void })
           </button>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 8 }}>O aplicar uno de tus cupones</div>
-            {myCoupons.length === 0 ? (
-              <div style={{ color: MPL.faint, fontSize: 13 }}>No tienes cupones activos.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {myCoupons.map(c => (
-                  <button key={c._id} type="button" onClick={() => applyCoupon(c)} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '11px 14px', font: 'inherit', cursor: 'pointer' }}>
-                    <Ticket size={18} color={MPL.coralDark} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
-                      <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
+            {/* Si identify trajo los cupones elegibles de ESTE cliente (targeting incluido),
+                se enseñan esos; si no, todos los activos del partner (comportamiento anterior). */}
+            {(() => {
+              const applicable: Array<{ _id: string; title?: string; copy?: string; discount?: string; bonusPatitas?: number | null; targetAnimalCode?: string | null }> =
+                customer.coupons ?? myCoupons;
+              return (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 8 }}>
+                    {customer.coupons ? 'Cupones de este cliente en tu establecimiento' : 'O aplicar uno de tus cupones'}
+                  </div>
+                  {applicable.length === 0 ? (
+                    <div style={{ color: MPL.faint, fontSize: 13 }}>
+                      {customer.coupons ? 'Este cliente no tiene cupones aplicables aquí.' : 'No tienes cupones activos.'}
                     </div>
-                    <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
-                  </button>
-                ))}
-              </div>
-            )}
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {applicable.map(c => (
+                        <button key={c._id} type="button" onClick={() => applyCoupon(c)} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '11px 14px', font: 'inherit', cursor: 'pointer' }}>
+                          <Ticket size={18} color={MPL.coralDark} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
+                            <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
+                          </div>
+                          <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -280,6 +453,8 @@ export default function PatitasPartnerPanel() {
       <PartnerPayout />
 
       <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} />
+
+      <PosIntegration />
 
       <div style={card}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Cobrar con Patitas</h3>

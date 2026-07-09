@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { QrCode, RefreshCw } from 'lucide-react';
@@ -25,6 +26,9 @@ export default function PatitasShelterPanel() {
       const w = await getWalletToken();
       setWallet({ token: w.token, code: w.code });
       qc.invalidateQueries({ queryKey: ['patitas-me'] });
+    } catch {
+      // Sin esto el fallo era invisible: el botón volvía a su estado sin QR ni aviso.
+      toast.error('No se pudo generar el QR de canje. Vuelve a intentarlo.');
     } finally {
       setLoadingWallet(false);
     }

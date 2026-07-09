@@ -18,11 +18,10 @@ import {
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
-import { PartnerIdentification } from '../models/partnerIdentification.model';
-
-// Comisión de plataforma por defecto (%) sobre ventas de partners y Patitas por € de compra.
-const DEFAULT_SALE_COMMISSION_PCT = Number(process.env.PLATFORM_SALE_COMMISSION_PCT || 5);
-const PATITAS_PER_EUR = Number(process.env.PATITAS_PER_EUR || 1);
+import { UserCode } from '../models/userCode.model';
+import { recordSale, recordIdentification } from '../utils/sales';
+import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
+import { canReceiveDonations } from '../utils/shelterVerification';
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
 
@@ -54,8 +53,9 @@ export async function listProtectoras(_req: Request, res: Response) {
     .select('name')
     .sort({ name: 1 })
     .lean();
+  const verified = await Promise.all(items.map(async item => (await canReceiveDonations(String(item._id))) ? item : null));
   return res.json({
-    items: items.map(item => ({ id: String(item._id), name: item.name || 'Protectora sin nombre' })),
+    items: verified.filter(Boolean).map((item: any) => ({ id: String(item._id), name: item.name || 'Protectora sin nombre' })),
   });
 }
 
@@ -154,6 +154,7 @@ export async function donatePatitas(req: Request, res: Response) {
 
   const shelter = await User.findOne({ _id: target, role: { $in: ['landlord', 'protectora'] } }).select('name');
   if (!shelter) return res.status(404).json({ error: 'protectora_not_found' });
+  if (!(await canReceiveDonations(target))) return res.status(403).json({ error: 'shelter_verification_required' });
 
   const moved = await transferPatitas(me, target, n);
   if (!moved) return res.status(400).json({ error: 'insufficient_patitas' });
@@ -163,28 +164,49 @@ export async function donatePatitas(req: Request, res: Response) {
 
 // --- Identidad del usuario para ganar Patitas (QR que muestra el cliente) ---
 const USER_CODE_TTL_MS = 10 * 60 * 1000;
-const userCodeStore = new Map<string, { userId: string; expiresAt: number }>();
 
 // El usuario obtiene su token + código de identidad para mostrarlo en la tienda.
+// El código se persiste en Mongo (TTL): sobrevive reinicios y varias instancias.
 export async function getMyCode(req: Request, res: Response) {
   const me = actorId(req);
   if (!me) return res.status(401).json({ error: 'unauthorized' });
   const token = signUserToken(me);
-  const code = shortCode();
-  userCodeStore.set(code, { userId: me, expiresAt: Date.now() + USER_CODE_TTL_MS });
+  const expiresAt = new Date(Date.now() + USER_CODE_TTL_MS);
+  let code = shortCode();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await UserCode.create({ code, userId: me, expiresAt });
+      break;
+    } catch (err: any) {
+      // Colisión del código (índice único): probar con otro.
+      if (err?.code === 11000 && attempt < 2) { code = shortCode(); continue; }
+      throw err;
+    }
+  }
   res.json({ token, code });
 }
 
-function resolveUserFromBody(body: any): string | null {
+// Resuelve el usuario desde el QR (userToken), el código corto o el userId directo.
+// Exportada: el TPV (pos.controller) usa la misma resolución, pero con
+// allowUserId:false — la API de caja exige prueba de presencia (QR o código),
+// nunca un userId arbitrario (evita minar usuarios y ventas sin cliente).
+export async function resolveUserFromBody(
+  body: any,
+  opts: { allowUserId?: boolean } = {},
+): Promise<string | null> {
+  const { allowUserId = true } = opts;
   if (body?.userToken) {
     const decoded = verifyUserToken(String(body.userToken));
     if (decoded) return decoded.userId;
   }
   if (body?.code) {
-    const entry = userCodeStore.get(String(body.code).trim().toUpperCase());
-    if (entry && entry.expiresAt > Date.now()) return entry.userId;
+    const entry = await UserCode.findOne({
+      code: String(body.code).trim().toUpperCase(),
+      expiresAt: { $gt: new Date() },
+    }).lean();
+    if (entry) return String(entry.userId);
   }
-  if (body?.userId && objectIdRegex.test(String(body.userId))) return String(body.userId);
+  if (allowUserId && body?.userId && objectIdRegex.test(String(body.userId))) return String(body.userId);
   return null;
 }
 
@@ -192,14 +214,23 @@ function resolveUserFromBody(body: any): string | null {
 export async function identifyUser(req: Request, res: Response) {
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  const userId = resolveUserFromBody(req.body || {});
+  const userId = await resolveUserFromBody(req.body || {});
   if (!userId) return res.status(400).json({ error: 'invalid_user_code' });
   const user = await User.findById(userId).select('name email role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   // Persistir la identificación: si no acaba enlazada a una venta, es una
   // venta probablemente no declarada (informe de fugas de comisión).
-  await PartnerIdentification.create({ partnerId: actorId(req), userId: String(user._id) });
-  res.json({ userId: String(user._id), name: user.name, email: user.email, role: user.role });
+  await recordIdentification(actorId(req), String(user._id));
+  // Cupones elegibles de ESTE cliente en este establecimiento: la caja los ve
+  // nada más identificar (mismo dato que da el TPV en /api/pos/identify).
+  const coupons = await eligibleCoupons(actorId(req), String(user._id));
+  res.json({
+    userId: String(user._id),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    coupons: coupons.map(serializeCoupon),
+  });
 }
 
 // POST /api/patitas/sales — el partner registra una venta con el código del cliente:
@@ -210,7 +241,7 @@ export async function registerSale(req: Request, res: Response) {
   const partnerId = actorId(req);
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
 
-  const target = resolveUserFromBody(req.body || {});
+  const target = await resolveUserFromBody(req.body || {});
   if (!target) return res.status(400).json({ error: 'invalid_user' });
   const user = await User.findById(target).select('role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -220,44 +251,12 @@ export async function registerSale(req: Request, res: Response) {
     return res.status(400).json({ error: 'invalid_amount' });
   }
 
-  const rawItems = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
-  const items = rawItems
-    .map((i: any) => ({
-      name: String(i?.name || '').trim().slice(0, 120),
-      qty: Number.isFinite(Number(i?.qty)) && Number(i.qty) > 0 ? Number(i.qty) : 1,
-      priceEur: Number.isFinite(Number(i?.priceEur)) && Number(i.priceEur) >= 0 ? Number(i.priceEur) : undefined,
-    }))
-    .filter((i: any) => i.name);
-
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
-  const partnerType = partnerDoc?.role === 'vet' ? 'vet' : 'store';
-  const commissionPct = partnerDoc?.profile?.commissionPct ?? DEFAULT_SALE_COMMISSION_PCT;
-  const commissionEur = Math.round(amountEur * commissionPct) / 100; // redondeo a céntimos
-  const patitas = Math.floor(amountEur * PATITAS_PER_EUR);
-
-  const sale = await Sale.create({
-    partnerId, partnerType, userId: target, amountEur, items,
-    commissionPct, commissionEur, patitasEarned: patitas,
-  });
-
-  // Enlazar la identificación previa más reciente aún sin venta.
-  await PartnerIdentification.findOneAndUpdate(
-    { partnerId, userId: target, saleId: null },
-    { saleId: sale._id },
-    { sort: { createdAt: -1 } },
-  );
-
-  const partnerName = partnerDoc?.profile?.orgName || partnerDoc?.name || 'partner';
-  const earn = patitas > 0
-    ? await earnForUser({
-        userId: target, amount: patitas, source: 'purchase', partnerId,
-        concept: `Compra de ${amountEur.toFixed(2)} € en ${partnerName}`,
-      })
-    : null;
+  const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);
 
   res.status(201).json({
-    ok: true, saleId: sale._id, commissionPct, commissionEur, patitasEarned: patitas,
-    ...(earn ? { balance: earn.balance, autoDonated: earn.autoDonated } : {}),
+    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur, patitasEarned: r.patitasEarned,
+    ...(r.earn ? { balance: r.earn.balance, autoDonated: r.earn.autoDonated } : {}),
   });
 }
 
@@ -281,7 +280,7 @@ export async function earnVisit(req: Request, res: Response) {
   const partnerId = actorId(req);
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  const target = resolveUserFromBody(req.body || {});
+  const target = await resolveUserFromBody(req.body || {});
   if (!target) return res.status(400).json({ error: 'invalid_user' });
 
   const user = await User.findById(target).select('role');
@@ -308,7 +307,9 @@ export async function earnVisit(req: Request, res: Response) {
 export async function getWalletToken(req: Request, res: Response) {
   const me = actorId(req);
   const user: any = (req as any).user;
-  if (user?.role !== 'landlord') return res.status(403).json({ error: 'only_shelters' });
+  // Protectoras reales usan role 'protectora'; 'landlord' es el rol legado de
+  // RentalApp que las protectoras antiguas aún conservan.
+  if (!['landlord', 'protectora'].includes(user?.role)) return res.status(403).json({ error: 'only_shelters' });
   const shelter = await User.findById(me).select('patitas');
   const token = signWalletToken(me);
   const code = shortCode();
@@ -439,4 +440,3 @@ export async function addPatitas(req: Request, res: Response) {
   await PatitaTxn.create({ type: 'donate', shelterId: id, amount: Math.round(amount), source: 'manual', concept: 'Ajuste manual (admin)' });
   return res.json({ patitas: updated.patitas || 0, protectoraId: updated.id });
 }
-
