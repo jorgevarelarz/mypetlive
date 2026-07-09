@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import { User } from '../models/user.model';
+import { Verification } from '../models/verification.model';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -35,6 +36,7 @@ const adopterHeaders = { 'x-user-id': adopterId, 'x-user-role': 'tenant', 'x-use
 
 describe('Flujo completo de adopción (MyPetLive)', () => {
   it('protectora crea animal, publica, adoptante solicita y la protectora aprueba', async () => {
+    await Verification.create({ userId: shelterId, status: 'verified', verificationLevel: 'animal_protection_entity' });
     // 1) Crear animal: arranca en borrador
     const create = await request(app)
       .post('/api/animals')
@@ -108,6 +110,22 @@ describe('Flujo completo de adopción (MyPetLive)', () => {
       .send({ animalId: create.body._id })
       .expect(400);
   });
+
+  it('no deja publicar animales a una protectora sin verificar', async () => {
+    const unverifiedShelterId = new mongoose.Types.ObjectId().toHexString();
+    const headers = { 'x-user-id': unverifiedShelterId, 'x-user-role': 'landlord', 'x-user-verified': 'false' };
+    const create = await request(app)
+      .post('/api/animals')
+      .set(headers)
+      .send({ shelter: unverifiedShelterId, name: 'Bimba', species: 'gato', sex: 'female', age: '1 año', size: 'small' })
+      .expect(201);
+
+    await request(app)
+      .patch(`/api/animals/${create.body._id}/status`)
+      .set(headers)
+      .send({ status: 'publicado' })
+      .expect(403);
+  });
 });
 
 const otherAdopterId = new mongoose.Types.ObjectId().toHexString();
@@ -115,6 +133,11 @@ const otherAdopterHeaders = { 'x-user-id': otherAdopterId, 'x-user-role': 'tenan
 
 describe('Cancelación de la solicitud por el adoptante', () => {
   async function setupApplication() {
+    await Verification.updateOne(
+      { userId: shelterId },
+      { $set: { status: 'verified', verificationLevel: 'animal_protection_entity' } },
+      { upsert: true },
+    );
     const create = await request(app)
       .post('/api/animals')
       .set(protectoraHeaders)

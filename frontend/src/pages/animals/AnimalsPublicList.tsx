@@ -115,17 +115,18 @@ export default function AnimalsPublicList() {
   const items = data?.items || [];
   const total = data?.total || 0;
   const pages = Math.max(1, Math.ceil(total / limit));
+  // Cada filtro activo lleva su clave: el chip tiene X y la X quita ESE filtro.
   const activeFilters = [
-    q && `Busqueda: ${q}`,
-    species && speciesLabel(species),
-    size && sizeLabel(size),
-    sex && (sex === 'female' ? 'Hembra' : 'Macho'),
-    city,
-    ageGroup && ageOptions.find(option => option.value === ageGroup)?.label,
-    goodWithChildren && 'Convive con niños',
-    goodWithDogs && 'Convive con perros',
-    goodWithCats && 'Convive con gatos',
-  ].filter(Boolean);
+    q && { key: 'q', label: `Búsqueda: ${q}` },
+    species && { key: 'species', label: speciesLabel(species) },
+    size && { key: 'size', label: sizeLabel(size) },
+    sex && { key: 'sex', label: sex === 'female' ? 'Hembra' : 'Macho' },
+    city && { key: 'city', label: city },
+    ageGroup && { key: 'ageGroup', label: ageOptions.find(option => option.value === ageGroup)?.label || ageGroup },
+    goodWithChildren && { key: 'goodWithChildren', label: 'Convive con niños' },
+    goodWithDogs && { key: 'goodWithDogs', label: 'Convive con perros' },
+    goodWithCats && { key: 'goodWithCats', label: 'Convive con gatos' },
+  ].filter(Boolean) as Array<{ key: string; label: string }>;
 
   const alertFilters: AnimalAlertFilters = {
     q,
@@ -344,10 +345,17 @@ export default function AnimalsPublicList() {
               <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
                 <span style={{ fontSize: 13, color: MPL.faint, fontWeight: 700 }}>Activos:</span>
                 {activeFilters.map(filter => (
-                  <span key={String(filter)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: MPL.teal100, color: MPL.tealDark, fontSize: 13, fontWeight: 700, padding: '6px 13px', borderRadius: 999 }}>
-                    {filter}
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => setFilter(filter.key, '')}
+                    aria-label={`Quitar filtro ${filter.label}`}
+                    title="Quitar filtro"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: MPL.teal100, color: MPL.tealDark, fontSize: 13, fontWeight: 700, padding: '6px 13px', borderRadius: 999, border: 0, font: 'inherit', cursor: 'pointer' }}
+                  >
+                    {filter.label}
                     <X size={13} />
-                  </span>
+                  </button>
                 ))}
                 {isFetching && <span style={{ fontSize: 13, color: MPL.faint }}>Actualizando...</span>}
                 <button type="button" onClick={saveAlert} disabled={alertMutation.isPending} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, border: `1.5px solid ${MPL.teal}`, background: '#fff', color: MPL.teal, borderRadius: 12, padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
@@ -362,8 +370,26 @@ export default function AnimalsPublicList() {
             ) : (data as any)?.error ? (
               <ErrorCard message={(data as any)?.error || 'No se pudo cargar el listado'} />
             ) : items.length === 0 ? (
-              <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 28, color: MPL.muted }}>
-                No encontramos animales con esos filtros.
+              <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 32, textAlign: 'center' }}>
+                <div style={{ fontSize: 38, marginBottom: 8 }}>🐾</div>
+                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, marginBottom: 6 }}>
+                  No encontramos compañeros con esos filtros
+                </div>
+                <p style={{ color: MPL.muted, fontSize: 14, margin: '0 0 18px' }}>
+                  Prueba a quitar algún filtro, o te avisamos cuando llegue uno que encaje.
+                </p>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  {activeFilters.length > 0 && (
+                    <>
+                      <button type="button" onClick={clearFilters} style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+                        Quitar filtros
+                      </button>
+                      <button type="button" onClick={saveAlert} disabled={alertMutation.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#fff', color: MPL.teal, border: `1.5px solid ${MPL.teal}`, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+                        <Bell size={15} /> {alertMutation.isPending ? 'Guardando…' : 'Avisadme cuando llegue'}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ) : (
               <>
@@ -421,11 +447,15 @@ export default function AnimalsPublicList() {
                   <button type="button" onClick={() => setFilterPage(Math.max(1, page - 1))} disabled={page <= 1} aria-label="Página anterior" style={{ width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? .5 : 1 }}>
                     <ChevronLeft size={17} />
                   </button>
-                  {Array.from({ length: Math.min(3, pages) }, (_, i) => i + 1).map(n => (
-                    <button key={n} type="button" onClick={() => setFilterPage(n)} style={{ width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
+                  {/* Ventana alrededor de la página actual (antes solo se veían la 1-3). */}
+                  {Array.from({ length: Math.min(3, pages) }, (_, i) => Math.max(1, Math.min(page - 1, pages - 2)) + i).map(n => (
+                    <button key={n} type="button" onClick={() => setFilterPage(n)} aria-current={page === n ? 'page' : undefined} style={{ width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
                       {n}
                     </button>
                   ))}
+                  {pages > 3 && (
+                    <span style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, padding: '0 4px' }}>de {pages}</span>
+                  )}
                   <button type="button" onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages} aria-label="Página siguiente" style={{ width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? .5 : 1 }}>
                     <ChevronRight size={17} />
                   </button>

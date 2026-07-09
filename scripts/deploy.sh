@@ -23,7 +23,8 @@ deploy_api() {
   ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api"
   echo "==> Backend: health check"
   sleep 5
-  ssh "$HOST" "curl -sf -o /dev/null -w 'health interno: %{http_code}\n' http://127.0.0.1:3000/health"
+  # /health/ready devuelve 503 si la API arrancó pero no conecta a Mongo
+  ssh "$HOST" "curl -sf -o /dev/null -w 'health interno: %{http_code}\n' http://127.0.0.1:3000/health/ready"
 }
 
 deploy_web() {

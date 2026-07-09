@@ -22,6 +22,7 @@ import AdminSettings from "./pages/admin/Settings";
 import AdminAnimalsPage from "./pages/admin/AdminAnimalsPage";
 import AdminAdoptionsPage from "./pages/admin/AdminAdoptionsPage";
 import CouponsAdminPage from "./pages/admin/CouponsAdminPage";
+import AdminVerificationsPage from "./pages/admin/AdminVerificationsPage";
 import RedirectHome from "./pages/RedirectHome";
 import AuthLayout from "./layout/AuthLayout";
 import AdminHome from "./pages/admin/AdminHome";
@@ -34,10 +35,13 @@ import ProtectoraDashboard from "./pages/protectora/ProtectoraDashboard";
 import AnimalsPage from "./pages/landlord/AnimalsPage";
 import AdoptionsPage from "./pages/landlord/AdoptionsPage";
 import QuestionnairePage from "./pages/landlord/QuestionnairePage";
+import ShelterVerificationPage from "./pages/protectora/ShelterVerificationPage";
 import DonationsPage from "./pages/Donations";
 import Home from "./pages/home/Home";
 import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
+import CashierPage from "./pages/partners/CashierPage";
+import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
 import Favorites from "./pages/Favorites";
@@ -80,8 +84,12 @@ export default function AppRoutes() {
               <Route path="/landlord/animals" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AnimalsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/landlord/adoptions" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><AdoptionsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/landlord/questionnaire" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><QuestionnairePage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/landlord/verificacion" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><ShelterVerificationPage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+              <Route path="/caja" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><CashierPage /></RoleGuard></ProtectedRoute>} />
+              {/* Guía pública para proveedores de TPV (sin cuenta). */}
+              <Route path="/developers/tpv" element={<TpvGuidePage />} />
 
               <Route path="/citas" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><AppointmentsPage /></RoleGuard></ProtectedRoute>} />
 
@@ -90,6 +98,7 @@ export default function AppRoutes() {
               <Route path="/admin/animals" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminAnimalsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/adoptions" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminAdoptionsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/coupons" element={<ProtectedRoute><RoleGuard roles={["admin"]}><CouponsAdminPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/admin/verifications" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminVerificationsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/reports" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminReports /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/settings" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettings /></RoleGuard></ProtectedRoute>} />
 

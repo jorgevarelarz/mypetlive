@@ -7,6 +7,7 @@ import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesVariants } from '../utils/species';
+import { canPublishAnimals } from '../utils/shelterVerification';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
@@ -50,6 +51,9 @@ export async function create(req: Request, res: Response) {
     const u: any = (req as any).user;
     if (u?._id || u?.id) b.shelter = String(u._id || u.id);
   }
+  if (b.status === 'publicado' && !(await canPublishAnimals((req as any).user, String(b.shelter || '')))) {
+    return res.status(403).json({ error: 'shelter_verification_required' });
+  }
   const doc = await Animal.create({ ...b, isPersonalPet: false, createdByRole: 'protectora' });
   await logAnimalEvent({
     animalId: String(doc._id), code: doc.code, type: 'created',
@@ -76,6 +80,10 @@ export async function update(req: Request, res: Response) {
   // Proteger el campo shelter/owner frente a cambios arbitrarios
   delete (payload as any).shelter;
   delete (payload as any).ownerId;
+
+  if (current.status !== 'publicado' && payload.status === 'publicado' && !(await canPublishAnimals(user, String(current.shelter)))) {
+    return res.status(403).json({ error: 'shelter_verification_required' });
+  }
 
   const updated = await Animal.findByIdAndUpdate(id, payload, { new: true });
   if (current.status !== 'publicado' && updated?.status === 'publicado') {
@@ -330,6 +338,9 @@ export async function updateStatus(req: Request, res: Response) {
   const user: any = (req as any).user;
   const isOwner = user?.role === 'admin' || String(animal.shelter) === String(user?._id || user?.id);
   if (!isOwner) return res.status(403).json({ error: 'forbidden' });
+  if (animal.status !== 'publicado' && status === 'publicado' && !(await canPublishAnimals(user, String(animal.shelter)))) {
+    return res.status(403).json({ error: 'shelter_verification_required' });
+  }
   const previousStatus = animal.status;
   animal.status = status as any;
   await animal.save();

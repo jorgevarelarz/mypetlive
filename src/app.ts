@@ -38,12 +38,16 @@ import serviceOffersRoutes from './routes/serviceOffers.routes';
 import adminRoutes from './routes/admin.routes';
 import adminEarningsRoutes from './routes/admin.earnings.routes';
 import adminSalesRoutes from './routes/admin.sales.routes';
+import posRoutes from './routes/pos.routes';
+import { posAuth } from './middleware/posAuth';
+import asyncHandlerApp from './utils/asyncHandler';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
 import applicationRoutes from './routes/application.routes';
 import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
 import adoptionRoutes from './routes/adoption.routes';
 import donationsRoutes from './routes/donations.routes';
+import pushRoutes from './routes/push.routes';
 import patitasRoutes from './routes/patitas.routes';
 import couponRoutes from './routes/coupon.routes';
 import offersRoutes from './routes/offers.routes';
@@ -130,7 +134,11 @@ if (compressionFn) {
 }
 app.use(metricsMiddleware);
 
-app.use(morgan('dev'));
+// Log HTTP legible solo en desarrollo: en producción ya está pino (logger) con
+// request-id y métricas; morgan ahí duplicaba cada línea y metía colores ANSI.
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
 
 app.use('/api', stripeWebhookRoutes);
 
@@ -149,6 +157,8 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-admin', 'x-user-id'],
     exposedHeaders: ['Content-Disposition'],
     credentials: true,
+    // El navegador cachea el preflight OPTIONS 24h: una petición menos por llamada.
+    maxAge: 86400,
   }),
 );
 
@@ -169,8 +179,9 @@ app.use(
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Proteger contra HTTP Parameter Pollution en query; no tocar body JSON para evitar falsos positivos
 app.use(hpp({ checkBody: false, checkQuery: true }));
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve uploaded files (fotos de animales, etc.): inmutables en la práctica,
+// así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
 
 const tenantProLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -193,9 +204,25 @@ const paymentsLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// TPV: por IP. Generoso para una caja real (2/s sostenidos), pero frena el
+// bombardeo de ventas falsas si una clave se filtra.
+const posLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.get('/health', (_req, res) =>
   res.json({ ok: true, env: process.env.NODE_ENV, mongo: { state: mongoose.connection.readyState } }),
 );
+// Readiness: 200 solo si la BD está conectada (readyState 1). /health es liveness
+// (el proceso responde); este es el que deben usar deploy y monitorización para
+// detectar una API viva pero sin base de datos.
+app.get('/health/ready', (_req, res) => {
+  const mongoOk = mongoose.connection.readyState === 1;
+  res.status(mongoOk ? 200 : 503).json({ ok: mongoOk, mongo: { state: mongoose.connection.readyState } });
+});
 // Alias: /api/health redirige al endpoint canónico /health (evita romper clientes antiguos)
 app.get('/api/health', (_req, res) => res.redirect(301, '/health'));
 app.get('/metrics', metricsHandler);
@@ -226,12 +253,15 @@ app.use(seoRoutes);
 app.use('/api/animals', animalRoutes);
 app.use('/api/adoptions', adoptionRoutes);
 app.use('/api', donationsRoutes);
+app.use('/api', pushRoutes);
 app.use('/api', patitasRoutes);
 app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);
 app.use('/api', vetAppointmentRoutes);
 app.use('/api', vetOffersRoutes);
 app.use('/api/purchases', purchaseRoutes);
+// API del TPV del partner (X-Api-Key, sin sesión): exporta ventas y aplica cupones.
+app.use('/api/pos', posLimiter, asyncHandlerApp(posAuth), posRoutes);
 
 app.use(
   '/api/admin/coupons',

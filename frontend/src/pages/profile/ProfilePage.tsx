@@ -13,6 +13,7 @@ import PatitasPartnerPanel from '../../components/patitas/PatitasPartnerPanel';
 import VetHealthPanel from '../../components/vet/VetHealthPanel';
 import VetOffersPanel from '../../components/vet/VetOffersPanel';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
+import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
 
 const roleLabel: Record<string, string> = {
   tenant: 'Adoptante',
@@ -115,6 +116,84 @@ function initForm(user: any): FormState {
       emergency24h: Boolean(p.vet?.emergency24h),
     },
   };
+}
+
+// ---- Notificaciones push ---------------------------------------------------
+function PushPanel() {
+  const support = useMemo(() => pushSupport(), []);
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (support === 'ok') getPushEnabled().then(setEnabled).catch(() => {});
+  }, [support]);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disablePush();
+        setEnabled(false);
+        toast.success('Notificaciones desactivadas');
+      } else {
+        await enablePush();
+        setEnabled(true);
+        toast.success('Notificaciones activadas');
+      }
+    } catch (e: any) {
+      toast.error(e?.message === 'permission_denied'
+        ? 'Permiso denegado. Actívalo en los ajustes del navegador.'
+        : 'No se pudieron activar las notificaciones');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    setBusy(true);
+    try {
+      await sendTestPush();
+      toast.success('Notificación de prueba enviada');
+    } catch {
+      toast.error('No se pudo enviar la prueba');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Notificaciones 🔔">
+      {support === 'needs-install' ? (
+        <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
+          Para recibir notificaciones en tu iPhone, primero instala MyPetLive: abre esta web en Safari,
+          toca <strong>Compartir</strong> y elige <strong>“Añadir a pantalla de inicio”</strong>. Luego
+          abre la app desde el icono y vuelve aquí.
+        </p>
+      ) : support === 'unsupported' ? (
+        <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
+          Este navegador no soporta notificaciones push.
+        </p>
+      ) : (
+        <>
+          <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
+            Recibe un aviso en este dispositivo cuando te llegue un mensaje nuevo.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" onClick={toggle} disabled={busy}
+              style={{ background: enabled ? '#fff' : MPL.teal, color: enabled ? MPL.ink : '#fff', border: enabled ? `1.5px solid ${MPL.border}` : 0, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: busy ? .7 : 1 }}>
+              {busy ? 'Un momento…' : enabled ? 'Desactivar' : 'Activar notificaciones'}
+            </button>
+            {enabled && (
+              <button type="button" onClick={test} disabled={busy}
+                style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink, opacity: busy ? .7 : 1 }}>
+                Enviar prueba
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
 }
 
 // ---- Sección de cobro de donaciones (solo protectora) ----------------------
@@ -297,13 +376,13 @@ export default function ProfilePage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 24, padding: 24 }}>
+    <div style={{ display: 'grid', gap: 24, padding: 'clamp(14px, 4vw, 24px)' }}>
       <header>
         <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, fontWeight: 800, margin: 0 }}>Perfil y cuenta</h1>
         <p style={{ color: MPL.muted, margin: '6px 0 0' }}>Completa tu información para operar en MyPetLive.</p>
       </header>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 16, alignItems: 'start' }}>
+      <section className="profile-grid">
         <div style={{ display: 'grid', gap: 16 }}>
           {/* Foto + identidad */}
           <Card title={isOrg ? 'Identidad' : 'Datos personales'}>
@@ -335,7 +414,7 @@ export default function ProfilePage() {
             )}
 
             {isPerson && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field-duo">
                 <Field label="Nombre"><input value={form.firstName} onChange={e => set('firstName', e.target.value)} style={inputStyle} /></Field>
                 <Field label="Apellidos"><input value={form.lastName} onChange={e => set('lastName', e.target.value)} style={inputStyle} /></Field>
               </div>
@@ -352,7 +431,7 @@ export default function ProfilePage() {
             </Field>
 
             {isPerson && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field-duo">
                 <Field label="Edad">
                   <input type="number" min={0} max={120} value={form.age} onChange={e => set('age', e.target.value)} style={inputStyle} />
                 </Field>
@@ -385,11 +464,11 @@ export default function ProfilePage() {
             <Field label="Calle y número">
               <input value={form.address.street} onChange={e => setAddr('street', e.target.value)} style={inputStyle} />
             </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field-duo">
               <Field label="Ciudad"><input value={form.address.city} onChange={e => setAddr('city', e.target.value)} style={inputStyle} /></Field>
               <Field label="Código postal"><input value={form.address.postalCode} onChange={e => setAddr('postalCode', e.target.value)} style={inputStyle} /></Field>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field-duo">
               <Field label="Provincia / región"><input value={form.address.region} onChange={e => setAddr('region', e.target.value)} style={inputStyle} /></Field>
               <Field label="País"><input value={form.address.country} onChange={e => setAddr('country', e.target.value)} style={inputStyle} /></Field>
             </div>
@@ -440,7 +519,7 @@ export default function ProfilePage() {
                   const update = (patch: Partial<typeof item>) =>
                     set('vet', { ...form.vet, serviceCatalog: form.vet.serviceCatalog.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
                   return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 36px', gap: 8, alignItems: 'center' }}>
+                    <div key={i} className="vet-svc-row">
                       <input value={item.name} onChange={e => update({ name: e.target.value })} maxLength={80} style={inputStyle} placeholder="Ej. Consulta general" />
                       <input
                         type="number" min={0} step="0.5" value={item.priceEur}
@@ -476,6 +555,8 @@ export default function ProfilePage() {
               </label>
             </Card>
           )}
+
+          <PushPanel />
 
           {/* Cobro de donaciones (protectora) */}
           {role === 'landlord' && <DonationPayout />}

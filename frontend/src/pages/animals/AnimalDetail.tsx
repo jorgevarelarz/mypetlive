@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Heart, Home, MapPin, RefreshCw, ScrollText, Share2, ShieldCheck } from 'lucide-react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, Heart, Home, MapPin, RefreshCw, ScrollText, Share2, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAnimal } from '../../api/animals';
-import { createAdoption } from '../../api/adoptions';
+import { ADOPTION_STATUS_LABEL, createAdoption, listMyAdoptions, type AdoptionStatus } from '../../api/adoptions';
 import { getQuestionnaireByProtectora } from '../../api/questionnaire';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
@@ -42,11 +42,23 @@ export default function AnimalDetail() {
   const { openAuth } = useAuthModal();
   const favorites = useAnimalFavorites();
   const nav = useNavigate();
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const qc = useQueryClient();
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['animal', id],
     queryFn: () => getAnimal(id || ''),
     enabled: !!id,
   });
+
+  // Si el usuario ya solicitó a este compañero, el CTA cambia a "ver mi solicitud"
+  // (el backend deduplica, pero sin esto el botón parecía no haber hecho nada).
+  const myAdoptionsQ = useQuery({ queryKey: ['my-adoptions'], queryFn: listMyAdoptions, enabled: !!user });
+  const existingRequest = useMemo(() => {
+    const items = myAdoptionsQ.data?.items || [];
+    return items.find((it: any) => {
+      const animalRef = String(it.animal?._id || it.animal?.id || it.animalId || '');
+      return animalRef === String(id) && !['rechazada', 'cancelada'].includes(it.status);
+    });
+  }, [myAdoptionsQ.data?.items, id]);
 
   usePageMeta({
     title: data?.name ? `${data.name} en adopción · MyPetLive` : undefined,
@@ -120,6 +132,7 @@ export default function AnimalDetail() {
       toast.success(res.status === 'pending' ? 'Solicitud enviada' : 'Solicitud creada');
       setQuestionnaireOpen(false);
       setQuestionAnswers({});
+      qc.invalidateQueries({ queryKey: ['my-adoptions'] });
       nav('/adoptions/mine');
     },
     onError: (e: any) => {
@@ -156,8 +169,28 @@ export default function AnimalDetail() {
     adoptionMutation.mutate(payload);
   };
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, minHeight: '100vh', padding: 32, color: MPL.muted }}>Cargando ficha...</div>;
+  }
+  // Ficha inexistente o error de red: antes se quedaba en "Cargando ficha..." para siempre.
+  if (isError || !data) {
+    return (
+      <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, minHeight: '100vh' }}>
+        <PublicHeader />
+        <div style={{ maxWidth: 560, margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 44, marginBottom: 10 }}>🐾</div>
+          <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, fontWeight: 800, margin: '0 0 8px', color: MPL.ink }}>
+            No encontramos esta ficha
+          </h1>
+          <p style={{ color: MPL.muted, margin: '0 0 20px' }}>
+            Puede que este compañero ya haya encontrado hogar o que el enlace no sea correcto.
+          </p>
+          <Link to="/animals" style={{ display: 'inline-block', background: MPL.teal, color: '#fff', borderRadius: 13, padding: '13px 20px', fontWeight: 800, textDecoration: 'none' }}>
+            Ver compañeros en adopción
+          </Link>
+        </div>
+      </div>
+    );
   }
   if (data.isPersonalPet) return <Navigate to="/pet" replace />;
 
@@ -304,11 +337,19 @@ export default function AnimalDetail() {
                   ¿Encaja contigo?
                 </div>
                 <p style={{ color: 'rgba(255,255,255,.86)', lineHeight: 1.5, margin: '0 0 20px' }}>
-                  Solicita la adopción y la protectora revisará tu candidatura.
+                  {existingRequest
+                    ? `Ya has solicitado su adopción (${ADOPTION_STATUS_LABEL[existingRequest.status as AdoptionStatus] || existingRequest.status}).`
+                    : 'Solicita la adopción y la protectora revisará tu candidatura.'}
                 </p>
-                <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ width: '100%', background: canAdopt ? MPL.coral : 'rgba(255,255,255,.25)', color: '#fff', border: 0, borderRadius: 14, padding: '14px 18px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed' }}>
-                  {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
-                </button>
+                {existingRequest ? (
+                  <Link to={`/adoptions/${existingRequest._id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', boxSizing: 'border-box', background: '#fff', color: MPL.tealDark, border: 0, borderRadius: 14, padding: '14px 18px', fontWeight: 800, textDecoration: 'none' }}>
+                    <ClipboardCheck size={18} /> Ver mi solicitud
+                  </Link>
+                ) : (
+                  <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ width: '100%', background: canAdopt ? MPL.coral : 'rgba(255,255,255,.25)', color: '#fff', border: 0, borderRadius: 14, padding: '14px 18px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed' }}>
+                    {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+                  </button>
+                )}
               </div>
             </section>
 
@@ -323,9 +364,15 @@ export default function AnimalDetail() {
       </main>
 
       <div className="detail-mobile-cta">
-        <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
-          {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
-        </button>
+        {existingRequest ? (
+          <Link to={`/adoptions/${existingRequest._id}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: MPL.teal, color: '#fff', borderRadius: 14, padding: '15px 16px', fontWeight: 800, textDecoration: 'none' }}>
+            <ClipboardCheck size={18} /> Ver mi solicitud
+          </Link>
+        ) : (
+          <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
+            {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+          </button>
+        )}
         <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
           <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />
         </button>
@@ -336,7 +383,7 @@ export default function AnimalDetail() {
 
       {questionnaireOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(31,55,40,.42)', padding: 16 }}>
-          <div style={{ width: '100%', maxWidth: 560, background: '#fff', borderRadius: 22, padding: 24, border: `1px solid ${MPL.border}`, boxShadow: '0 24px 70px -36px rgba(31,55,40,.65)' }}>
+          <div style={{ width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto', background: '#fff', borderRadius: 22, padding: 24, border: `1px solid ${MPL.border}`, boxShadow: '0 24px 70px -36px rgba(31,55,40,.65)' }}>
             <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: '0 0 6px' }}>Cuestionario de adopción</h3>
             <p style={{ color: MPL.muted, margin: '0 0 18px' }}>Responde estas preguntas para continuar con la solicitud.</p>
             <div style={{ display: 'grid', gap: 13 }}>

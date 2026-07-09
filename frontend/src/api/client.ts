@@ -49,6 +49,18 @@ api?.interceptors?.response?.use?.(
     try {
       const url = err?.config?.url || '';
       if (!/\/api\/auth\//.test(url)) {
+        // Sesión caducada (JWT de 7 días): sin esto cada llamada devolvía 401 en
+        // silencio y la UI parecía rota (p. ej. el QR de canje "no salía").
+        // Solo si HAY usuario guardado: al anónimo de páginas públicas no se le toca.
+        const hasSession = typeof window !== 'undefined' && !!localStorage.getItem('user');
+        if (err?.response?.status === 401 && hasSession) {
+          localStorage.removeItem('user');
+          require('react-hot-toast').toast.error('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+          if (!window.location.pathname.startsWith('/login')) {
+            setTimeout(() => window.location.assign('/login'), 600);
+          }
+          return Promise.reject(err);
+        }
         const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Error de red';
         // Lazy require to avoid circular deps
         require('react-hot-toast').toast.error(msg);

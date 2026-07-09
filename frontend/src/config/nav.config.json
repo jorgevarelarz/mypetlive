@@ -12,13 +12,16 @@
     { "label": "Citas vet", "path": "/citas", "to": "/citas" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
   ],
-  "tenant": [],
+  "tenant": [
+
+  ],
   "landlord": [
     { "label": "Inicio", "path": "/landlord" },
     { "label": "Mis animales", "path": "/landlord/animals" },
     { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
     { "label": "Citas veterinarias", "path": "/citas" },
+    { "label": "Verificación", "path": "/landlord/verificacion" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "pro": [
@@ -29,6 +32,7 @@
     { "label": "Usuarios", "path": "/admin/users" },
     { "label": "Animales", "path": "/admin/animals" },
     { "label": "Adopciones", "path": "/admin/adoptions" },
+    { "label": "Verificaciones", "path": "/admin/verifications" },
     { "label": "Cupones", "path": "/admin/coupons" },
     { "label": "Reportes", "path": "/admin/reports" },
     { "label": "Ajustes", "path": "/admin/settings" },
@@ -36,11 +40,13 @@
   ],
   "store": [
     { "label": "Inicio", "path": "/partner" },
+    { "label": "Caja", "path": "/caja" },
     { "label": "Validar cupones", "path": "/coupons" },
     { "label": "Patitas pendientes", "path": "/partner" }
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
+    { "label": "Caja", "path": "/caja" },
     { "label": "Agenda de citas", "path": "/citas" },
     { "label": "Validar cupones", "path": "/coupons" },
     { "label": "Patitas pendientes", "path": "/partner" },

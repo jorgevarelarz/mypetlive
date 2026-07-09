@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   listAdoptionsForMyAnimals,
@@ -21,6 +22,17 @@ const NEXT_ACTIONS: Record<string, AdoptionShelterStatus[]> = {
   cancelada: [],
 };
 
+// Los botones son acciones, no estados: "Rechazar", no "Rechazada".
+const ACTION_LABEL: Record<AdoptionShelterStatus, string> = {
+  en_revision: 'Pasar a revisión',
+  info_adicional: 'Pedir información',
+  cita_propuesta: 'Proponer cita',
+  preaprobada: 'Preaprobar',
+  aprobada: 'Aprobar adopción',
+  rechazada: 'Rechazar',
+  cancelada: 'Cancelar proceso',
+};
+
 const STATUS_TONE: Record<string, string> = {
   aprobada: '#2F855A',
   rechazada: '#C53030',
@@ -28,19 +40,34 @@ const STATUS_TONE: Record<string, string> = {
   preaprobada: '#2B6CB0',
 };
 
+const OPEN_STATES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada'];
+
+const FILTERS = [
+  { key: 'abiertas', label: 'Abiertas' },
+  { key: 'todas', label: 'Todas' },
+  { key: 'aprobadas', label: 'Aprobadas' },
+  { key: 'cerradas', label: 'Rechazadas / canceladas' },
+] as const;
+type FilterKey = (typeof FILTERS)[number]['key'];
+
 export default function AdoptionsPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['adoptions-for-my-animals'],
     queryFn: () => listAdoptionsForMyAnimals({ page: 1, limit: 100 }),
   });
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterKey>('abiertas');
 
-  const onTransition = async (id: string, status: AdoptionShelterStatus) => {
+  const onTransition = async (id: string, status: AdoptionShelterStatus, animalName?: string) => {
     let note: string | undefined;
     if (status === 'info_adicional' || status === 'rechazada') {
       note = window.prompt(
         status === 'rechazada' ? 'Motivo del rechazo (opcional):' : '¿Qué información necesitas del adoptante?',
       ) || undefined;
+    }
+    // Aprobar cierra el proceso (y descarta al resto de candidatos): confirmación explícita.
+    if (status === 'aprobada' && !window.confirm(`¿Aprobar la adopción de ${animalName || 'este animal'}? Esta acción cierra el proceso.`)) {
+      return;
     }
     setBusyId(id);
     try {
@@ -54,7 +81,20 @@ export default function AdoptionsPage() {
     }
   };
 
-  const items = data?.items || [];
+  const allItems = useMemo(() => data?.items || [], [data?.items]);
+  const counts = useMemo(() => ({
+    abiertas: allItems.filter((it: any) => OPEN_STATES.includes(it.status)).length,
+    todas: allItems.length,
+    aprobadas: allItems.filter((it: any) => it.status === 'aprobada').length,
+    cerradas: allItems.filter((it: any) => ['rechazada', 'cancelada'].includes(it.status)).length,
+  }), [allItems]);
+  const items = useMemo(() => {
+    if (filter === 'todas') return allItems;
+    if (filter === 'aprobadas') return allItems.filter((it: any) => it.status === 'aprobada');
+    if (filter === 'cerradas') return allItems.filter((it: any) => ['rechazada', 'cancelada'].includes(it.status));
+    return allItems.filter((it: any) => OPEN_STATES.includes(it.status));
+  }, [allItems, filter]);
+
   return (
     <div className="p-4 grid gap-4">
       <div>
@@ -63,10 +103,31 @@ export default function AdoptionsPage() {
           Gestiona cada solicitud por estados: revisión, información adicional, cita, preaprobación y aprobación final.
         </p>
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map(f => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className="px-3 py-1.5 rounded-full border text-sm font-semibold"
+            style={filter === f.key
+              ? { background: '#1F6F6F', color: '#fff', borderColor: '#1F6F6F' }
+              : { background: '#fff', color: '#3F4A3C', borderColor: '#E7E1D5' }}
+          >
+            {f.label} ({counts[f.key]})
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div>Cargando…</div>
       ) : items.length === 0 ? (
-        <div className="text-gray-600">No hay solicitudes.</div>
+        <div className="text-gray-600">
+          {filter === 'abiertas' && counts.todas > 0
+            ? 'No tienes solicitudes abiertas ahora mismo. Mira "Todas" para ver el histórico.'
+            : 'No hay solicitudes.'}
+        </div>
       ) : (
         <div className="grid gap-3">
           {items.map((it: any) => {
@@ -79,9 +140,12 @@ export default function AdoptionsPage() {
                 style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}
               >
                 <div className="grid gap-2 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-lg">{it.animal?.name || 'Animal'}</span>
                     {it.animal?.code && <span className="text-xs text-gray-500">#{it.animal.code}</span>}
+                    <Link to={`/adoptions/${id}`} className="text-xs font-semibold" style={{ color: '#1F6F6F' }}>
+                      Ver detalle →
+                    </Link>
                   </div>
                   <div className="text-sm text-gray-600">
                     {it.adopter?.name || 'Adoptante'}
@@ -124,9 +188,9 @@ export default function AdoptionsPage() {
                             ? { color: '#C53030', borderColor: '#FEB2B2' }
                             : { borderColor: '#E7E1D5' }
                         }
-                        onClick={() => onTransition(id, action)}
+                        onClick={() => onTransition(id, action, it.animal?.name)}
                       >
-                        {ADOPTION_STATUS_LABEL[action]}
+                        {ACTION_LABEL[action]}
                       </button>
                     ))
                   )}

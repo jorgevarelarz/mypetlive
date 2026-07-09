@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import {
   AnimalMood,
@@ -62,7 +62,6 @@ export default function AnimalsPage() {
   const [editingImagesFor, setEditingImagesFor] = useState<any | null>(null);
   const [editingImagesList, setEditingImagesList] = useState<string[]>([]);
   const shelterId = useMemo(() => String(user?._id || ''), [user?._id]);
-  const queryClient = useQueryClient();
 
   const { data: patitasData, isLoading: patitasLoading } = useQuery({
     queryKey: ['patitas-balance', shelterId || 'protectora'],

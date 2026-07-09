@@ -5,6 +5,7 @@ import { getAdoption, setAdoptionStatus, cancelAdoption, ADOPTION_STATUS_LABEL, 
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
+import ChatPanel from '../../components/chat/ChatPanel';
 
 const MANAGE_ACTIONS: AdoptionShelterStatus[] = ['en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada'];
 
@@ -218,6 +219,18 @@ export default function AdoptionDetail() {
           </div>
         </section>
       )}
+
+      <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+        <div>
+          <h2 className="text-lg font-semibold">
+            {canManage ? 'Chat con la persona adoptante' : 'Chat con la protectora'}
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
+            Resuelve dudas sobre esta solicitud sin salir de MyPetLive.
+          </p>
+        </div>
+        <ChatPanel kind="adoption" refId={String(id)} title="" />
+      </section>
 
       {canManage && (
         <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
