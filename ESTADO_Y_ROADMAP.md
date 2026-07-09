@@ -162,9 +162,9 @@ está **congelado/oculto**, no borrado.
 
 ## 5.9 Hecho el 9 jul 2026
 - [x] Trabajo del 7-8 jul commiteado en 8 commits temáticos y pusheado a `mypetlive` (`main` y `rentalapp1.2`): verificación de protectoras (gatea donaciones), API TPV de partner (claves API, idempotencia, docs), notificaciones push web (VAPID), proyectos Capacitor Android/iOS + iconos/PWA, mejoras del chat de adopción, hardening del API (`/health/ready`, caché uploads/CORS, morgan solo en dev).
-- [x] **Móvil:** botón "Menú" sustituido por hamburguesa + drawer lateral con los mismos iconos que el menú web (NavRow), e icono QR en el header que abre el código Patitas del usuario (QR + código manual + regenerar). Gotcha: los overlays `position:fixed` deben ir fuera del `<header>` (su `backdrop-blur` crea un containing block). **Pendiente de deploy (deploy.sh web).**
+- [x] **Móvil:** botón "Menú" sustituido por hamburguesa + drawer lateral con los mismos iconos que el menú web (NavRow), e icono QR en el header que abre el código Patitas del usuario (QR + código manual + regenerar). Gotcha: los overlays `position:fixed` deben ir fuera del `<header>` (su `backdrop-blur` crea un containing block). **Desplegado (deploy.sh all, smoke en verde).**
 - [x] Auditoría de la `sk_live_` expuesta: NO está en el historial de git, ni en `.env` local, ni en el VPS (solo `sk_test_`). La exposición fue fuera del código; sigue pendiente rotarla en el dashboard de Stripe.
-- [ ] **GOTCHA detectado:** el compose del VPS no monta volumen para `/app/uploads` → cuando haya subidas reales de fotos se perderán al recrear el contenedor (hoy vacío: las imágenes demo son URLs de Unsplash). Añadir volumen antes de aceptar subidas.
+- [x] **Volumen de uploads arreglado (9 jul):** el compose no montaba `/app/uploads` y las fotos subidas se perderían al recrear el contenedor. Añadido `./uploads:/app/uploads` (repo + VPS, backup del compose anterior en `docker-compose.deploy.yml.bak-2026-07-09`), montaje verificado con docker inspect. De paso el compose del repo se sincronizó con el del VPS (VAPID + Stripe/Patitas).
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
