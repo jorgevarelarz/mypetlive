@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
     "@headlessui/react": "^2.2.8",
     "@hookform/resolvers": "3.3.4",
     "@reduxjs/toolkit": "^2.9.0",
@@ -39,6 +43,7 @@
     "start": "react-scripts start",
     "dev": "react-scripts start",
     "build": "react-scripts build",
+    "build:app": "REACT_APP_API_URL=https://mypetlive.es react-scripts build && npx cap sync",
     "preview": "react-scripts start",
     "test": "react-scripts test",
     "lint": "echo 'Linting with ESLint (CRA defaults)'",
