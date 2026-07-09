@@ -6,6 +6,7 @@ import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import { Donation } from '../models/donation.model';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
+import { canReceiveDonations } from '../utils/shelterVerification';
 
 const r = Router();
 
@@ -29,6 +30,7 @@ r.post(
       if (animal?.shelter) shelterId = String(animal.shelter);
     }
     if (!shelterId) return res.status(400).json({ error: 'shelter_required' });
+    if (!(await canReceiveDonations(String(shelterId)))) return res.status(403).json({ error: 'shelter_verification_required' });
 
     const shelter = await User.findById(shelterId).select('stripeAccountId role').lean();
     if (!shelter || !shelter.stripeAccountId) return res.status(409).json({ error: 'shelter_payouts_not_ready' });

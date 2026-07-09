@@ -102,7 +102,7 @@ export default function ProtectoraDashboard() {
       </header>
 
       <section className="shelter-stats">
-        <StatCard icon={<PawMark size={18} />} value={animalsQ.isLoading ? '...' : animals.length} label="animales publicados" note={`${published} visibles`} tone={MPL.teal} />
+        <StatCard icon={<PawMark size={18} />} value={animalsQ.isLoading ? '...' : animals.length} label="animales en total" note={`${published} publicados`} tone={MPL.teal} />
         <StatCard icon={<Inbox size={18} />} value={adoptionsQ.isLoading ? '...' : openAdoptions} label="solicitudes en proceso" note={`${adoptions.length} total`} tone={MPL.gold} />
         <StatCard icon={<CheckCircle2 size={18} />} value={animalsQ.isLoading ? '...' : adopted} label="adopciones cerradas" note="histórico" tone={MPL.olive} />
         <StatCard icon={<PawMark size={18} />} value={patitasQ.isLoading ? '...' : (patitasQ.data?.patitas ?? 0)} label="Patitas disponibles" note="impacto" dark />
@@ -111,14 +111,9 @@ export default function ProtectoraDashboard() {
       <section style={{ marginTop: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 14 }}>
           <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, fontWeight: 800, margin: 0 }}>Solicitudes de adopción</h2>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link to="/landlord/adoptions" style={{ background: '#fff', border: `1px solid ${MPL.border}`, fontSize: 13, fontWeight: 800, color: MPL.muted, padding: '8px 14px', borderRadius: 10, textDecoration: 'none' }}>
-              Ver lista
-            </Link>
-            <span style={{ background: '#fff', border: `1px solid ${MPL.border}`, fontSize: 13, fontWeight: 800, color: MPL.muted, padding: '8px 14px', borderRadius: 10 }}>
-              Kanban
-            </span>
-          </div>
+          <Link to="/landlord/adoptions" style={{ background: '#fff', border: `1px solid ${MPL.border}`, fontSize: 13, fontWeight: 800, color: MPL.muted, padding: '8px 14px', borderRadius: 10, textDecoration: 'none' }}>
+            Gestionar todas →
+          </Link>
         </div>
 
         <div style={{ background: '#EAE6DC', borderRadius: 18, padding: 12 }}>
@@ -154,6 +149,11 @@ export default function ProtectoraDashboard() {
                           </div>
                         </Link>
                       ))}
+                      {cards.length > 4 && (
+                        <Link to="/landlord/adoptions" style={{ textAlign: 'center', fontSize: 12.5, fontWeight: 800, color: MPL.tealDark, textDecoration: 'none', padding: '6px 0' }}>
+                          +{cards.length - 4} más →
+                        </Link>
+                      )}
                       {cards.length === 0 && (
                         <div style={{ background: 'rgba(255,255,255,.55)', border: `1px dashed ${MPL.border}`, borderRadius: 14, padding: 14, color: MPL.faint, fontSize: 13 }}>
                           Sin solicitudes.

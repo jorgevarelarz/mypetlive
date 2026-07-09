@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { User } from '../models/user.model';
+import { Verification } from '../models/verification.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -75,6 +76,19 @@ export const register = async (req: Request, res: Response) => {
     // Save new user with hashed password
     const user = new User({ name: rawName, email: rawEmail, passwordHash, role: normalizedRole });
     await user.save();
+    if (normalizedRole === 'landlord') {
+      await Verification.findOneAndUpdate(
+        { userId: String(user._id) },
+        {
+          $setOnInsert: {
+            status: 'pending',
+            verificationLevel: 'none',
+            legalName: rawName,
+          },
+        },
+        { upsert: true },
+      );
+    }
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       token,
