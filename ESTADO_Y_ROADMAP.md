@@ -151,13 +151,20 @@ está **congelado/oculto**, no borrado.
 - [x] Email a la protectora al recibir una solicitud nueva (los demás emails de adopción ya existían).
 - [x] **BUGFIX alertas de búsqueda:** el filtro de especie de la alerta (`gato`) nunca casaba con la especie canonizada del animal (`cat`) → las alertas no notificaban ni contaban coincidencias. Arreglado con `speciesVariants` en `matchesAlert` y `buildFilter`. Tests en `adoption.emails.test.ts`.
 - [x] `scripts/deploy.sh` (api|web|all) con validación de `.env.production` y smoke final.
-- [x] Backup diario de Mongo en el VPS (cron 03:30, rotación 7 días, `/opt/mypetlive/backups`) verificado restaurable. **Pendiente: copia off-site.**
+- [x] Backup diario de Mongo en el VPS (cron 03:30, rotación 7 días, `/opt/mypetlive/backups`) verificado restaurable.
+- [x] **Copia off-site** (9 jul 2026): LaunchAgent `es.mypetlive.offsite-backup` en el Mac de Jorge (10:30 diario, o al despertar) ejecuta `~/Scripts/mypetlive-offsite-backup.sh` → rsync del VPS a `~/Backups/mypetlive/archives` (retención 30 días, sin `--delete` para sobrevivir a un borrado en el VPS, verifica gzip del último archivo; log en `offsite.log`).
 - [x] Uptime check cada 5 min con alerta email vía Brevo al caer/recuperarse (`/opt/mypetlive/scripts/uptime-check.sh`).
 
 ## 5.8 Hecho el 3 jul 2026
 - [x] **Ventas de partner con comisión (fase 1):** el partner registra la venta al pasar el código del cliente (importe + líneas del ticket para ofertas personalizadas futuras). Modelo `Sale` (snapshot de % comisión, `PLATFORM_SALE_COMMISSION_PCT` default 5%, override por partner en `profile.commissionPct`), Patitas proporcionales al importe (`PATITAS_PER_EUR`, default 1/€, source `purchase`). Identificaciones persistidas (`PartnerIdentification`) → informe de fugas `/api/admin/sales/leaks` (identificación sin venta = venta no declarada), `/api/admin/sales` y `/by-user` con totales, `/api/patitas/sales/mine` para el partner. UI en PatitasPartnerPanel. Tests en `sales.test.ts`. Pendiente fase 2: extracto mensual de liquidación (settlementStatus ya en el modelo) y ofertas segmentadas por items comprados.
 - [x] **Similares al rechazar (P1 gap analysis):** el email de rechazo al adoptante incluye hasta 3 animales publicados parecidos (misma especie; prioriza tamaño y ciudad) con enlace a su ficha, vía `findSimilarAnimals` en `adoption.controller`. Test en `adoption.emails.test.ts`.
 - [x] **Conectar calendario del vet (feed iCal):** cada vet tiene una URL secreta `.ics` (`/api/vets/calendar/:token.ics`, token con `select:false`) que suscribe desde Google/Apple/Outlook con el botón "Conectar calendario" de su panel de citas. Estados TENTATIVE/CONFIRMED/CANCELLED para que el proveedor sincronice cambios y cancelaciones; enlace regenerable (invalida el anterior). Tests en `vetCalendarFeed.test.ts`. Nota: las suites legacy de RentalApp (`tests/`) fallan de antes, no por esto.
+
+## 5.9 Hecho el 9 jul 2026
+- [x] Trabajo del 7-8 jul commiteado en 8 commits temáticos y pusheado a `mypetlive` (`main` y `rentalapp1.2`): verificación de protectoras (gatea donaciones), API TPV de partner (claves API, idempotencia, docs), notificaciones push web (VAPID), proyectos Capacitor Android/iOS + iconos/PWA, mejoras del chat de adopción, hardening del API (`/health/ready`, caché uploads/CORS, morgan solo en dev).
+- [x] **Móvil:** botón "Menú" sustituido por hamburguesa + drawer lateral con los mismos iconos que el menú web (NavRow), e icono QR en el header que abre el código Patitas del usuario (QR + código manual + regenerar). Gotcha: los overlays `position:fixed` deben ir fuera del `<header>` (su `backdrop-blur` crea un containing block). **Pendiente de deploy (deploy.sh web).**
+- [x] Auditoría de la `sk_live_` expuesta: NO está en el historial de git, ni en `.env` local, ni en el VPS (solo `sk_test_`). La exposición fue fuera del código; sigue pendiente rotarla en el dashboard de Stripe.
+- [ ] **GOTCHA detectado:** el compose del VPS no monta volumen para `/app/uploads` → cuando haya subidas reales de fotos se perderán al recrear el contenedor (hoy vacío: las imágenes demo son URLs de Unsplash). Añadir volumen antes de aceptar subidas.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
