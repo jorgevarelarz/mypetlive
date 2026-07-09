@@ -1,0 +1,11 @@
+{
+  "appId": "es.mypetlive.app",
+  "appName": "MyPetLive",
+  "webDir": "build",
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
