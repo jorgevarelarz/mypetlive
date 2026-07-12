@@ -253,7 +253,7 @@ app.use(seoRoutes);
 app.use('/api/animals', animalRoutes);
 app.use('/api/adoptions', adoptionRoutes);
 app.use('/api', donationsRoutes);
-app.use('/api', pushRoutes);
+app.use('/api', authenticate, pushRoutes);
 app.use('/api', patitasRoutes);
 app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);

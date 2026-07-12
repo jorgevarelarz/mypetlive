@@ -44,7 +44,9 @@ describe('Password reset flow', () => {
     const res = await request(app).post('/api/auth/request-reset').send({ email: user.email });
     expect(res.status).toBe(200);
 
-    const updated = await User.findById(user._id);
+    // resetToken/resetTokenExp son select:false (no viajan por defecto): hay que
+    // pedirlos explícitamente para comprobar que se persistieron.
+    const updated = await User.findById(user._id).select('+resetToken +resetTokenExp');
     expect(updated?.resetToken).toBeDefined();
     expect(updated?.resetTokenExp).toBeInstanceOf(Date);
     expect(updated!.resetTokenExp!.getTime()).toBeGreaterThan(Date.now());

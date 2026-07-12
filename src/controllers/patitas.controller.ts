@@ -214,7 +214,10 @@ export async function resolveUserFromBody(
 export async function identifyUser(req: Request, res: Response) {
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  const userId = await resolveUserFromBody(req.body || {});
+  // allowUserId:false — exige QR (userToken) o código corto que prueben la
+  // presencia del cliente. Sin esto, un partner (rol auto-registrable) podría
+  // pasar un userId arbitrario y minar el email/nombre de cualquier usuario.
+  const userId = await resolveUserFromBody(req.body || {}, { allowUserId: false });
   if (!userId) return res.status(400).json({ error: 'invalid_user_code' });
   const user = await User.findById(userId).select('name email role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -241,6 +244,8 @@ export async function registerSale(req: Request, res: Response) {
   const partnerId = actorId(req);
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
 
+  // Acepta el userId que la caja obtuvo al identificar (QR/código) al cliente
+  // presente; no devuelve PII, solo confirma la venta y suma Patitas.
   const target = await resolveUserFromBody(req.body || {});
   if (!target) return res.status(400).json({ error: 'invalid_user' });
   const user = await User.findById(target).select('role');
@@ -280,6 +285,7 @@ export async function earnVisit(req: Request, res: Response) {
   const partnerId = actorId(req);
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
+  // Acepta el userId que la caja obtuvo al identificar al cliente presente.
   const target = await resolveUserFromBody(req.body || {});
   if (!target) return res.status(400).json({ error: 'invalid_user' });
 
