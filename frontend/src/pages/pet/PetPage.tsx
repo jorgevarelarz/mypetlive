@@ -15,6 +15,7 @@ import { offersForAnimal } from '../../api/offers';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
+import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 
 const MOOD_OPTIONS: Array<{ value: '' | AnimalMood; label: string }> = [
@@ -375,6 +376,13 @@ export default function PetPage() {
           </div>
         )}
       </div>
+
+      {currentPetEntry?.type === 'adopted' && (
+        <WelcomeChecklist
+          animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+          petName={featuredAnimal.name}
+        />
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>

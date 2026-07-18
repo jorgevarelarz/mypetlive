@@ -6,6 +6,7 @@ import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
 import { logAnimalEvent } from '../utils/animalEvents';
+import { activateWelcomePlan } from '../utils/welcomePlan';
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -265,11 +266,17 @@ export async function setStatus(req: Request, res: Response) {
 
   try {
     const adopter = await User.findById(app.adopterId);
-    if (adopter?.email) {
-      const subject = status === 'aprobada' ? '¡Tu adopción ha sido aprobada!' : 'Estado de tu solicitud de adopción';
-      let msg = status === 'aprobada'
-        ? `¡Enhorabuena! La protectora ha aprobado tu adopción para ${animal.name}.`
-        : `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
+    if (status === 'aprobada') {
+      // Plan de bienvenida post-adopción: checklist + email con guía y ofertas.
+      await activateWelcomePlan({
+        animal,
+        adopterId: String(app.adopterId),
+        adoptionId: String(app._id),
+        adopterEmail: adopter?.email,
+      });
+    } else if (adopter?.email) {
+      const subject = 'Estado de tu solicitud de adopción';
+      let msg = `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
       // Al rechazar, sugerimos animales parecidos para que el adoptante siga buscando.
       if (status === 'rechazada') {
         const similars = await findSimilarAnimals(animal);

@@ -166,6 +166,9 @@ está **congelado/oculto**, no borrado.
 - [x] Auditoría de la `sk_live_` expuesta: NO está en el historial de git, ni en `.env` local, ni en el VPS (solo `sk_test_`). La exposición fue fuera del código; sigue pendiente rotarla en el dashboard de Stripe.
 - [x] **Volumen de uploads arreglado (9 jul):** el compose no montaba `/app/uploads` y las fotos subidas se perderían al recrear el contenedor. Añadido `./uploads:/app/uploads` (repo + VPS, backup del compose anterior en `docker-compose.deploy.yml.bak-2026-07-09`), montaje verificado con docker inspect. De paso el compose del repo se sincronizó con el del VPS (VAPID + Stripe/Patitas).
 
+## 5.10 Hecho el 18 jul 2026
+- [x] **Plan de bienvenida post-adopción (P1 gap analysis):** al aprobar una adopción se crea un `WelcomePlan` (checklist de 5 primeros pasos, un plan por mascota+dueño, idempotente) y el adoptante recibe email brandeado con la guía y hasta 3 ofertas de bienvenida segmentadas (reutiliza `matchOffersForAnimal`). Endpoints `GET/POST /api/welcome/:animalId[/tasks/:key]` (dueño o admin). En PetPage, card con barra de progreso y checklist marcable solo para mascotas adoptadas. Tests en `welcome.plan.test.ts`. Pendiente: recordatorios programados (cuando exista el cron de recordatorios de citas).
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
