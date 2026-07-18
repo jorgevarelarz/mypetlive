@@ -107,9 +107,12 @@ describe('Ventas de partner con comisión', () => {
   });
 
   it('informe de fugas: identificación sin venta cuenta como no declarada', async () => {
-    // Dos clientes identificados, solo uno acaba en venta.
-    await request(app).post('/api/patitas/identify').set(storeH).send({ userId: clientId }).expect(200);
-    await request(app).post('/api/patitas/identify').set(storeH).send({ userId: client2Id }).expect(200);
+    // Dos clientes identificados con su código de presencia (QR/código), solo
+    // uno acaba en venta. identify ya no acepta un userId arbitrario.
+    const code1 = (await request(app).get('/api/patitas/my-code').set(clientH).expect(200)).body.code;
+    const code2 = (await request(app).get('/api/patitas/my-code').set({ 'x-user-id': client2Id, 'x-user-role': 'tenant', 'x-user-verified': 'true' }).expect(200)).body.code;
+    await request(app).post('/api/patitas/identify').set(storeH).send({ code: code1 }).expect(200);
+    await request(app).post('/api/patitas/identify').set(storeH).send({ code: code2 }).expect(200);
     await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 25 }).expect(201);
 
     const leaks = await request(app).get('/api/admin/sales/leaks').set(adminH).expect(200);

@@ -103,9 +103,11 @@ const userSchema = new Schema(
     termsVersionAccepted: { type: String },
     privacyVersionAccepted: { type: String },
     patitas: { type: Number, default: 0 },
-    // Password reset support
-    resetToken: { type: String },
-    resetTokenExp: { type: Date },
+    // Password reset support. select:false: el token de reseteo es una
+    // credencial temporal de toma de control de cuenta y nunca debe viajar
+    // en respuestas por defecto (p. ej. el listado de usuarios).
+    resetToken: { type: String, select: false },
+    resetTokenExp: { type: Date, select: false },
     // Feed iCal de la agenda del vet: token-capability de la URL de suscripción (.ics).
     // select:false para que nunca viaje en respuestas por defecto (el directorio
     // público /api/vets hace select de profile.vet, no de este campo).
