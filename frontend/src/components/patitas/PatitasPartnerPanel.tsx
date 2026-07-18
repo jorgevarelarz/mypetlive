@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, type EligibleCoupon, type PosKey, type RedeemPreview, type SaleItemInput } from '../../api/patitas';
 import { listCoupons, applyCouponToCustomer } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
+import { getPartnerMetrics } from '../../api/metrics';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
 
@@ -18,6 +19,49 @@ const input: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, border
 type WalletRef = { walletToken?: string; code?: string };
 
 // Tarjeta de onboarding Stripe del partner.
+function Metric({ value, label, note }: { value: React.ReactNode; label: string; note?: string }) {
+  return (
+    <div style={{ border: `1px solid ${MPL.border}`, borderRadius: 14, padding: '14px 16px' }}>
+      <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 13, color: MPL.muted, marginTop: 4 }}>{label}</div>
+      {note && <div style={{ fontSize: 12, color: MPL.oliveDark, fontWeight: 700, marginTop: 2 }}>{note}</div>}
+    </div>
+  );
+}
+
+// Retorno visible del partner: lo que le aporta estar en MyPetLive (P2 gap analysis).
+function PartnerMetrics() {
+  const metricsQ = useQuery({ queryKey: ['partner-metrics'], queryFn: getPartnerMetrics, staleTime: 60_000 });
+  const m = metricsQ.data;
+  return (
+    <div style={card}>
+      <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Tu actividad en MyPetLive</h3>
+      <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Clientes, cupones y ventas generados a través de la plataforma.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+        <Metric
+          value={metricsQ.isLoading ? '...' : m?.clientes.unicos ?? 0}
+          label="clientes únicos"
+        />
+        <Metric
+          value={metricsQ.isLoading ? '...' : m?.cupones.usados ?? 0}
+          label="cupones usados"
+          note={`${m?.cupones.usadosEsteMes ?? 0} este mes · ${m?.cupones.total ?? 0} creados`}
+        />
+        <Metric
+          value={metricsQ.isLoading ? '...' : `${m?.ventas.totalEur ?? 0} €`}
+          label={`ventas (${m?.ventas.numero ?? 0})`}
+          note={`${m?.ventas.esteMesEur ?? 0} € este mes`}
+        />
+        <Metric
+          value={metricsQ.isLoading ? '...' : m?.patitas.recibidas ?? 0}
+          label="Patitas cobradas"
+          note={`${m?.patitas.valorEur ?? 0} € recibidos`}
+        />
+      </div>
+    </div>
+  );
+}
+
 function PartnerPayout() {
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -450,6 +494,8 @@ export default function PatitasPartnerPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      <PartnerMetrics />
+
       <PartnerPayout />
 
       <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} />

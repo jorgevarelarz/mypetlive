@@ -45,9 +45,11 @@ protectoras y partners, KPIs internos).
 ### P2 — Capa de datos (KPIs "desde el primer día" según el dossier)
 4. **Finanzas/impacto de la protectora**: donaciones recibidas, Patitas, adopciones
    del mes, conversión solicitud→adopción, tiempo medio de proceso + exportación.
-   Los datos ya existen (`AnimalEvent`, `PatitaTxn`, adopciones); falta agregarlos.
+   ✔ hecho (18 jul 2026): `/api/protectoras/me/metrics` (+`?format=csv`) y sección
+   "Finanzas e impacto" en el dashboard de la protectora.
 5. **Métricas del partner**: usos de cupón, clientes generados, Patitas recibidas.
-   Sin retorno visible, el partner no pagará suscripción (riesgo señalado en dossier).
+   ✔ hecho (18 jul 2026): `/api/partners/me/metrics` y card "Tu actividad en
+   MyPetLive" en el panel del partner (cupones, clientes únicos, ventas €, Patitas).
 6. **KPIs internos de plataforma** (panel admin): solicitudes, adopciones, cupones
    usados, GMV, tasa de conversión. Base para decidir cuándo activar cada línea de
    ingreso del modelo.

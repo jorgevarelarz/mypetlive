@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { searchAnimals } from '../../api/animals';
 import { ADOPTION_STATUS_LABEL, listAdoptionsForMyAnimals } from '../../api/adoptions';
 import { getPatitasBalance } from '../../api/patitas';
+import { getShelterMetrics, downloadShelterMetricsCsv } from '../../api/metrics';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 
 const OPEN_ADOPTION_STATES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada'];
@@ -65,6 +66,12 @@ export default function ProtectoraDashboard() {
     queryFn: () => getPatitasBalance(shelterId),
     enabled: !!shelterId,
     staleTime: 30_000,
+  });
+  const metricsQ = useQuery({
+    queryKey: ['shelter-metrics', shelterId],
+    queryFn: getShelterMetrics,
+    enabled: !!shelterId,
+    staleTime: 60_000,
   });
 
   const animals = useMemo(() => animalsQ.data?.items || [], [animalsQ.data?.items]);
@@ -165,6 +172,49 @@ export default function ProtectoraDashboard() {
               })}
             </div>
           )}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+          <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, fontWeight: 800, margin: 0 }}>Finanzas e impacto</h2>
+          <button
+            type="button"
+            onClick={() => downloadShelterMetricsCsv().catch(() => {})}
+            style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '8px 16px', fontSize: 13.5, fontWeight: 800, color: MPL.tealDark, cursor: 'pointer' }}
+          >
+            ⬇ Exportar CSV
+          </button>
+        </div>
+        <div className="shelter-stats">
+          <StatCard
+            icon={<HeartHandshake size={18} />}
+            value={metricsQ.isLoading ? '...' : `${metricsQ.data?.donaciones.totalEur ?? 0} €`}
+            label="donaciones recibidas"
+            note={`${metricsQ.data?.donaciones.esteMesEur ?? 0} € este mes`}
+            tone={MPL.coral}
+          />
+          <StatCard
+            icon={<PawMark size={18} />}
+            value={metricsQ.isLoading ? '...' : metricsQ.data?.patitas.recibidas ?? 0}
+            label="Patitas recibidas"
+            note={`${metricsQ.data?.patitas.canjeadas ?? 0} canjeadas`}
+            tone={MPL.teal}
+          />
+          <StatCard
+            icon={<CheckCircle2 size={18} />}
+            value={metricsQ.isLoading ? '...' : metricsQ.data?.adopciones.esteMes ?? 0}
+            label="adopciones este mes"
+            note={metricsQ.data?.adopciones.conversionPct != null ? `${metricsQ.data.adopciones.conversionPct}% conversión` : 'sin cerradas aún'}
+            tone={MPL.olive}
+          />
+          <StatCard
+            icon={<Inbox size={18} />}
+            value={metricsQ.isLoading ? '...' : metricsQ.data?.adopciones.diasMediosProceso ?? '—'}
+            label="días medios de proceso"
+            note={`${metricsQ.data?.adopciones.solicitudesTotales ?? 0} solicitudes en total`}
+            tone={MPL.gold}
+          />
         </div>
       </section>
 
