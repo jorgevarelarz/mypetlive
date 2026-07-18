@@ -34,6 +34,8 @@ const vetAppointmentSchema = new Schema(
     patitasCost: { type: Number, default: 0, min: 0 },
     patitasPaid: { type: Boolean, default: false },
     patitasCode: { type: String }, // código del PatitaTxn de canje generado
+    // Recordatorio 24h antes enviado (jobs/reminders); evita reenvíos.
+    reminder24SentAt: { type: Date },
     payoutStatus: { type: String, enum: ['none', 'pending_payout', 'paid'], default: 'none' },
   },
   { timestamps: true },

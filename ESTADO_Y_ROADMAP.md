@@ -120,7 +120,7 @@ está **congelado/oculto**, no borrado.
 
 ### 5.3 Mejoras de citas veterinarias
 - [x] Vincular la cita a mascotas propias (selector limitado a mascotas del dueño / animales de la protectora).
-- [ ] Recordatorios automáticos previos a la cita.
+- [x] Recordatorios automáticos previos a la cita (18 jul 2026): `jobs/reminders.ts`, pasada cada 15 min desde el arranque, email a dueño y vet 24h antes (confirmadas/reprogramadas), idempotente vía `reminder24SentAt`.
 - [ ] Vista semanal/horaria del calendario.
 - [ ] Reprogramar desde el propio calendario (hoy se hace en el panel de lista).
 - [x] Precio en Patitas sugerido por servicio: se deriva automáticamente del precio € del catálogo del vet al elegir servicio (2 jul 2026); la protectora puede ajustarlo.
@@ -167,7 +167,8 @@ está **congelado/oculto**, no borrado.
 - [x] **Volumen de uploads arreglado (9 jul):** el compose no montaba `/app/uploads` y las fotos subidas se perderían al recrear el contenedor. Añadido `./uploads:/app/uploads` (repo + VPS, backup del compose anterior en `docker-compose.deploy.yml.bak-2026-07-09`), montaje verificado con docker inspect. De paso el compose del repo se sincronizó con el del VPS (VAPID + Stripe/Patitas).
 
 ## 5.10 Hecho el 18 jul 2026
-- [x] **Plan de bienvenida post-adopción (P1 gap analysis):** al aprobar una adopción se crea un `WelcomePlan` (checklist de 5 primeros pasos, un plan por mascota+dueño, idempotente) y el adoptante recibe email brandeado con la guía y hasta 3 ofertas de bienvenida segmentadas (reutiliza `matchOffersForAnimal`). Endpoints `GET/POST /api/welcome/:animalId[/tasks/:key]` (dueño o admin). En PetPage, card con barra de progreso y checklist marcable solo para mascotas adoptadas. Tests en `welcome.plan.test.ts`. Pendiente: recordatorios programados (cuando exista el cron de recordatorios de citas).
+- [x] **Plan de bienvenida post-adopción (P1 gap analysis):** al aprobar una adopción se crea un `WelcomePlan` (checklist de 5 primeros pasos, un plan por mascota+dueño, idempotente) y el adoptante recibe email brandeado con la guía y hasta 3 ofertas de bienvenida segmentadas (reutiliza `matchOffersForAnimal`). Endpoints `GET/POST /api/welcome/:animalId[/tasks/:key]` (dueño o admin). En PetPage, card con barra de progreso y checklist marcable solo para mascotas adoptadas. Tests en `welcome.plan.test.ts`.
+- [x] **Recordatorios programados (cron in-process):** `jobs/reminders.ts` con pasada cada 15 min (patrón `setInterval` del arranque, gateado a `NODE_ENV !== 'test'`): (a) recordatorio de cita veterinaria 24h antes a dueño y vet, idempotente con `reminder24SentAt` en la cita; (b) empujón único del plan de bienvenida a los 3 días si quedan pasos sin marcar (`reminderSentAt` en el plan; los completos se marcan sin email). Tests en `reminders.test.ts`.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).

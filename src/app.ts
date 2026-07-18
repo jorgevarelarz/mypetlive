@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import path from 'path';
 
 import { purgeOldTenantProDocs } from './jobs/tenantProRetention';
+import { startReminderJobs } from './jobs/reminders';
 import logger from './utils/logger';
 
 import stripeWebhookRoutes from './routes/stripe.webhook';
@@ -317,6 +318,7 @@ if (mongoUrl) {
         void ensureAnimalCodes().catch(err => logger.warn({ err }, 'No se pudieron asignar códigos a todos los animales'));
         server = app.listen(PORT, () => logger.info(`Servidor en http://localhost:${PORT}`));
         setInterval(() => purgeOldTenantProDocs().catch(() => {}), 6 * 60 * 60 * 1000);
+        startReminderJobs();
       }
     })
     .catch(err => logger.error({ err }, 'Error al conectar a MongoDB'));

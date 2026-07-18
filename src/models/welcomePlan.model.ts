@@ -55,6 +55,7 @@ export interface IWelcomePlan extends Document {
   adoptionId?: Types.ObjectId;
   activatedAt: Date;
   tasks: IWelcomeTaskState[];
+  reminderSentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +75,8 @@ const schema = new Schema<IWelcomePlan>(
     adoptionId: { type: Schema.Types.ObjectId, ref: 'Adoption' },
     activatedAt: { type: Date, default: () => new Date() },
     tasks: { type: [taskStateSchema], default: [] },
+    // Empujón único a los N días si quedan pasos pendientes (jobs/reminders).
+    reminderSentAt: { type: Date },
   },
   { timestamps: true },
 );

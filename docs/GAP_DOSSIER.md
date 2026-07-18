@@ -36,8 +36,9 @@ protectoras y partners, KPIs internos).
 2. **Plan de bienvenida post-adopción** (paso 11 del flujo): al aprobar una adopción,
    activar guía de bienvenida + cupones de bienvenida segmentados + recordatorios.
    ✔ hecho (18 jul 2026): checklist persistente (`WelcomePlan`) + email brandeado con
-   guía y ofertas segmentadas al aprobar; card marcable en PetPage. Quedan los
-   recordatorios programados (dependen del cron de citas, aún pendiente).
+   guía y ofertas segmentadas al aprobar; card marcable en PetPage. Recordatorios
+   incluidos (18 jul 2026): empujón a los 3 días con los pasos pendientes, y de
+   paso recordatorio de cita veterinaria 24h antes (`jobs/reminders.ts`).
 3. **Recomendación de animales similares** al rechazar/cancelar una solicitud
    ("si una mascota no encaja, recomendar similares").
 
