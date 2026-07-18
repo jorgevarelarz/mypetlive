@@ -28,7 +28,7 @@ function serializeOffer(c: any) {
 // `speciesVariants`/`speciesMatches` (utils/species) casan ambos vocabularios.
 // Casa las ofertas (cupones) con el perfil de un animal: especie/edad/tamaño/ciudad,
 // o dirigidas exactamente a su código. Excluye cupones sin ningún targeting.
-async function matchOffersForAnimal(animal: any) {
+export async function matchOffersForAnimal(animal: any) {
   const now = new Date();
   const code = animal.code;
   const expiryOr = [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }];
