@@ -209,7 +209,7 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 - Estado: **INTEGRADA** en `rentalapp1.2` mediante `8be2fa9` (rama de origen
   `mypetlive/security/harden-auth`, commit `0495656`). Integración asumida por Codex tras el
-  relevo de Claude; pendiente de despliegue y verificación final en producción.
+  relevo de Claude; **desplegada y verificada en producción** desde `2950c6f`.
 - El registro público solo crea adoptantes (`tenant`) y rechaza expresamente los roles
   `protectora/landlord`, `vet`, `store`, `pro` y `admin`; se eliminó también el atajo de
   roles privilegiados en tests. Las fixtures antiguas crean esos roles directamente en BD.
@@ -238,7 +238,8 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 - Estado: **INTEGRADA** en `rentalapp1.2` mediante `5d223d1` (rama de origen
   `mypetlive/security/runtime-dependencies`, commit `70c2adc`). Integración asumida por
-  Codex tras el relevo de Claude; pendiente de despliegue y verificación final.
+  Codex tras el relevo de Claude; **desplegada y verificada en producción** desde
+  `2950c6f`.
 - Actualizadas dependencias directas de ejecución con corrección disponible: AWS SDK S3 y
   Secrets Manager, Express 4, Express Validator 7, Mongoose 7, Morgan, Nodemailer 9, Axios,
   React Router 7 y PostCSS. Se conservaron los majors de Express y Mongoose para reducir el
@@ -259,11 +260,20 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 - Jorge comunica el 22 jul 2026 que Claude se retira del cierre y que **Codex asume desde
   este punto revisión, integración, despliegue y documentación**.
-- Base integrada local: `rentalapp1.2` en `5d223d1`; auditoría runtime final: 29 avisos
-  (0 críticos, 13 altos, 7 moderados y 9 bajos), todos pendientes de la migración de CRA.
-- El VPS está sano y ya ejecuta `APP_ENV=production`; antes del siguiente despliegue se
-  guardará una copia recuperable del backend y del docroot web, y se vinculará producción al
-  commit desplegado.
+- Base integrada y publicada: `mypetlive/rentalapp1.2` en `2950c6f`; auditoría runtime
+  final: 29 avisos (0 críticos, 13 altos, 7 moderados y 9 bajos), pendientes de la migración
+  de CRA. Multer 1 queda identificado como el siguiente bloque de dependencias de seguridad.
+- **Despliegue completado** en el VPS desde el worktree limpio del commit
+  `2950c6f6049d093fed16756e0df34e4334d41962`. El backend usa la imagen nueva
+  `sha256:2666eda33eb5...`; `/opt/mypetlive/DEPLOYED_COMMIT` fija la versión desplegada.
+- Reversión preparada en
+  `/opt/mypetlive/deploy-backups/2026-07-22-pre-2950c6f/` (API y docroot web) y en la imagen
+  Docker `mypetlive-api:rollback-2950c6f`. La copia diaria de Mongo del 22 jul sigue
+  presente y no se modificó la base de datos.
+- Verificación en vivo: web, `/health` y `/api/animals` responden HTTP 200;
+  `APP_ENV=production`; CSP, HSTS, `nosniff` y protección de frames presentes. En Chrome
+  cargan portada, adopciones, registro y login sin errores de consola; el registro exige 12
+  caracteres y no ofrece alta directa de protectoras.
 
 ### Registro de coordinación — Claude
 
@@ -273,12 +283,13 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   `src/routes/patitas.routes.ts`, `frontend/src/api/{patitas,settlements}.ts`,
   `frontend/src/pages/admin/{AdminSettlementsPage,AdminHome}.tsx`,
   `frontend/src/AppRoutes.tsx`, `PatitasPartnerPanel.tsx`.
-- **F0 (hallazgo crítico de Codex)**: `INTEGRADA` en `rentalapp1.2` (rama `security/f0-produccion`). OJO: en el deploy hay que añadir a mano `APP_ENV: production` al compose del VPS.
+- **F0 (hallazgo crítico de Codex)**: `INTEGRADA Y DESPLEGADA` en `rentalapp1.2` (rama
+  `security/f0-produccion`). El VPS ya ejecuta `APP_ENV=production`.
   Verificado en el VPS: prod corre `NODE_ENV=development` + `ALLOW_UNVERIFIED=true`, con
   `/api/verification/dev/verify` abierto (cualquier cuenta podía autoverificarse y p. ej.
   publicar animales). Fix: `APP_ENV=production` como señal explícita (`utils/env.ts`,
   `isProduction()`), aplicada en `requireVerified` y `dev/verify`; compose del repo
-  actualizado (falta replicar a mano en el compose del VPS + deploy, eso lo lanza Jorge).
+  actualizado y replicado en el compose del VPS.
   El auto-registro de roles vet/store y el resto de hallazgos de Codex (deps, headers,
   legal/SEO) quedan PENDIENTES de decisión de Jorge — no se tocan sin asignación aquí.
 - **F5 ofertas por items**: `INTEGRADA` en `rentalapp1.2` (rama `feat/ofertas-por-items`).
