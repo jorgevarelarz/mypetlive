@@ -8,18 +8,21 @@ let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Animal: any;
 let Coupon: any;
+let AnimalEvent: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
   process.env.MONGO_URL = mongo.getUri();
   process.env.NODE_ENV = 'test';
   process.env.ALLOW_UNVERIFIED = 'true';
+  process.env.FRONTEND_URL = 'https://mypetlive.es';
   delete process.env.STRIPE_SECRET_KEY; // asegura el camino gateado
   const mod = await import('../app');
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
   Animal = (await import('../models/animal.model')).Animal;
   Coupon = (await import('../models/coupon.model')).Coupon;
+  AnimalEvent = (await import('../models/animalEvent.model')).AnimalEvent;
 });
 
 afterAll(async () => {
@@ -81,6 +84,33 @@ describe('Pasaporte del animal', () => {
     expect(res.body.provenance).toEqual({ shelterName: 'Protectora Lugo', city: 'Lugo' });
   });
 
+  it('devuelve 404 para un código inexistente o un animal todavía no publicado', async () => {
+    await request(app).get('/api/animals/passport/NOEXISTE-999').expect(404);
+
+    const draft = await createAnimal({ name: 'Borrador', status: 'borrador' });
+    await request(app).get(`/api/animals/passport/${draft.code}`).expect(404);
+  });
+
+  it('no filtra nombre, email ni ids de la familia adoptante', async () => {
+    const animal = await createAnimal({ name: 'Nora', status: 'adoptado' });
+    await Animal.updateOne({ _id: animal._id }, { ownerId: adopterId });
+    await AnimalEvent.create({
+      animalId: animal._id,
+      code: animal.code,
+      type: 'adopted',
+      shelterId,
+      toOwnerId: adopterId,
+      toOwnerType: 'tenant',
+    });
+
+    const res = await request(app).get(`/api/animals/passport/${animal.code}`).expect(200);
+    const payload = JSON.stringify(res.body);
+    expect(payload).not.toContain('Ana');
+    expect(payload).not.toContain('ana@test.com');
+    expect(payload).not.toContain(adopterId);
+    expect(res.body.ownerId).toBeUndefined();
+  });
+
   it('unifica el vocabulario de especie en el alta (gato→cat, perro→dog)', async () => {
     const gato = await createAnimal({ name: 'Luna', species: 'gato' });
     const perro = await createAnimal({ name: 'Toby', species: 'perro' });
@@ -108,6 +138,78 @@ describe('Pasaporte del animal', () => {
     const titles = res.body.items.map((o: any) => o.title);
     expect(titles).toContain('Pienso perros -10%');
     expect(titles).not.toContain('Arena gatos');
+  });
+
+  it('casa ofertas por especie, edad, tamaño, ciudad y código exacto', async () => {
+    const animal = await createAnimal({
+      name: 'Trufa',
+      species: 'gato',
+      ageGroup: 'adult',
+      size: 'medium',
+      city: 'A Coruña',
+    });
+    const base = { partnerId: storeId, partnerType: 'store', discount: '10%', active: true };
+
+    await Coupon.create([
+      { ...base, copy: 'Por especie', targetSpecies: ['cat'] },
+      { ...base, copy: 'Por edad', targetAgeGroup: ['adult'] },
+      { ...base, copy: 'Por tamaño', targetSize: ['medium'] },
+      { ...base, copy: 'Por ciudad', targetCity: 'a coruña' },
+      {
+        ...base,
+        copy: 'Por código exacto',
+        targetAnimalCode: animal.code,
+        targetSpecies: ['dog'],
+        targetAgeGroup: ['puppy'],
+        targetSize: ['large'],
+        targetCity: 'Sevilla',
+      },
+      {
+        ...base,
+        copy: 'Combinación compatible',
+        targetSpecies: ['cat'],
+        targetAgeGroup: ['adult'],
+        targetSize: ['medium'],
+        targetCity: 'A CORUÑA',
+      },
+    ]);
+
+    const res = await request(app).get(`/api/offers/for-animal/${animal.code}`).expect(200);
+    const titles = res.body.items.map((offer: any) => offer.title);
+    expect(titles).toEqual(expect.arrayContaining([
+      'Por especie',
+      'Por edad',
+      'Por tamaño',
+      'Por ciudad',
+      'Por código exacto',
+      'Combinación compatible',
+    ]));
+    expect(res.body.items).toHaveLength(6);
+    expect(res.body.items[0]).toMatchObject({ title: 'Por código exacto', exact: true });
+  });
+
+  it('excluye ofertas caducadas, inactivas y combinaciones parcialmente incompatibles', async () => {
+    const animal = await createAnimal({
+      name: 'Leo',
+      species: 'perro',
+      ageGroup: 'young',
+      size: 'small',
+      city: 'Madrid',
+    });
+    const base = { partnerId: storeId, partnerType: 'store', discount: '5%' };
+
+    await Coupon.create([
+      { ...base, copy: 'Caducada', active: true, targetSpecies: ['dog'], expiresAt: new Date(Date.now() - 60_000) },
+      { ...base, copy: 'Inactiva', active: false, targetSpecies: ['dog'] },
+      { ...base, copy: 'Edad incorrecta', active: true, targetSpecies: ['dog'], targetAgeGroup: ['senior'] },
+      { ...base, copy: 'Tamaño incorrecto', active: true, targetSpecies: ['dog'], targetSize: ['large'] },
+      { ...base, copy: 'Ciudad incorrecta', active: true, targetSpecies: ['dog'], targetCity: 'Málaga' },
+      { ...base, copy: 'Sin segmentación', active: true },
+      { ...base, copy: 'Válida', active: true, targetSpecies: ['dog'], targetAgeGroup: ['young'], targetSize: ['small'], targetCity: 'Madrid' },
+    ]);
+
+    const res = await request(app).get(`/api/offers/for-animal/${animal.code}`).expect(200);
+    expect(res.body.items.map((offer: any) => offer.title)).toEqual(['Válida']);
   });
 
   it('placement patrocinado gateado: sin Stripe queda pendiente y no se activa', async () => {
@@ -148,6 +250,65 @@ describe('Pasaporte del animal', () => {
     // Sin duplicados: exactamente 1 entrada clínica por registro (no se repite el AnimalEvent).
     const clinical = pass.body.timeline.filter((t: any) => t.type === 'vet' || t.type === 'health');
     expect(clinical).toHaveLength(2);
+  });
+
+  it('ordena el linaje created/published/adopted/vet/health cronológicamente', async () => {
+    const animal = await createAnimal({ name: 'Duna' });
+    const createdEvent = await AnimalEvent.findOne({ animalId: animal._id, type: 'created' }).lean();
+    const createdAt = new Date(createdEvent.createdAt).getTime();
+    const dates = Array.from({ length: 5 }, (_, index) => new Date(createdAt + index * 60_000));
+
+    await AnimalEvent.create([
+      { animalId: animal._id, code: animal.code, type: 'published', shelterId, createdAt: dates[1] },
+      {
+        animalId: animal._id,
+        code: animal.code,
+        type: 'adopted',
+        shelterId,
+        toOwnerId: adopterId,
+        toOwnerType: 'tenant',
+        createdAt: dates[2],
+      },
+    ]);
+    await Animal.updateOne(
+      { _id: animal._id },
+      {
+        ownerId: adopterId,
+        status: 'adoptado',
+        vetHistory: [{ date: dates[3], note: 'Revisión anual' }],
+        healthHistory: [{ date: dates[4], type: 'vaccine', notes: 'Rabia' }],
+      },
+    );
+
+    const res = await request(app).get(`/api/animals/passport/${animal.code}`).expect(200);
+    expect(res.body.timeline.map((event: any) => event.type)).toEqual([
+      'created',
+      'published',
+      'adopted',
+      'vet',
+      'health',
+    ]);
+    expect(res.body.timeline.map((event: any) => new Date(event.at).toISOString())).toEqual(
+      dates.map(date => date.toISOString()),
+    );
+  });
+
+  it('genera la tarjeta Open Graph del QR del pasaporte', async () => {
+    const animal = await createAnimal({
+      name: 'Luna & Sol',
+      description: 'Compañera tranquila',
+      images: ['https://cdn.example.test/luna.jpg'],
+    });
+
+    const res = await request(app).get(`/og/p/${animal.code}`).expect(200);
+    expect(res.headers['content-type']).toMatch(/^text\/html/);
+    expect(res.text).toContain(`<link rel="canonical" href="https://mypetlive.es/p/${animal.code}">`);
+    expect(res.text).toContain('<meta property="og:type" content="website">');
+    expect(res.text).toContain(`<meta property="og:title" content="Luna &amp; Sol · Pasaporte MyPetLive (${animal.code})">`);
+    expect(res.text).toContain('<meta property="og:description" content="Compañera tranquila">');
+    expect(res.text).toContain('<meta property="og:image" content="https://cdn.example.test/luna.jpg">');
+    expect(res.text).toContain(`<meta property="og:url" content="https://mypetlive.es/p/${animal.code}">`);
+    expect(res.text).toContain('<meta name="twitter:card" content="summary_large_image">');
   });
 
   it('registro clínico exige nota y rechaza a no-veterinarios', async () => {
