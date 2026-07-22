@@ -230,7 +230,7 @@ export async function addHealthRecord(req: Request, res: Response) {
 export async function getPassport(req: Request, res: Response) {
   const normalized = String(req.params.code || '').trim().toUpperCase();
   if (!normalized) return res.status(400).json({ error: 'invalid_code' });
-  const animal: any = await Animal.findOne({ code: normalized }).lean();
+  const animal: any = await Animal.findOne({ code: normalized, status: { $ne: 'borrador' } }).lean();
   if (!animal) return res.status(404).json({ error: 'not_found' });
 
   const shelter: any = animal.shelter ? await User.findById(animal.shelter).select('name profile.address.city').lean() : null;
