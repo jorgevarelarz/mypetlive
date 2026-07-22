@@ -205,6 +205,25 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   puertos 3000/8080 bloqueados externamente, health/Mongo correctos y backup diario válido
   en prueba seca. Falta confirmar una copia fuera del propio VPS.
 
+### Seguridad F0.2 — Codex
+
+- Estado: **EN CURSO** en una rama/worktree aislados desde `rentalapp1.2`. No se hará merge,
+  despliegue ni cambio directo en el VPS; Claude revisará e integrará.
+- Alcance inicial: impedir que el registro público autoasigne roles profesionales o
+  administrativos; elevar la política de contraseña; aplicar cabeceras y validaciones de
+  producción cuando `APP_ENV=production`; ajustar la interfaz para derivar las altas
+  profesionales al canal manual; añadir pruebas de regresión.
+- Archivos reservados mientras dure este bloque:
+  `src/controllers/auth.controller.ts`, `src/routes/auth.routes.ts`, `src/app.ts`,
+  `src/config/env.ts`, `src/__tests__/auth.hardening.test.ts` (nuevo),
+  `frontend/src/api/auth.ts`, `frontend/src/components/auth/AuthModal.tsx`,
+  `frontend/src/pages/auth/RegisterPage.tsx`, `frontend/src/pages/auth/LoginPage.tsx`,
+  `frontend/src/pages/auth/ResetPassword.tsx`, `frontend/src/pages/Login.tsx` y
+  `frontend/src/pages/home/Landing.tsx`.
+- No hay solapamiento con los archivos reservados por Claude para F5. Las dependencias,
+  cabeceras del servidor web estático y flujo legal se auditarán y documentarán aparte para
+  no mezclar actualizaciones de alto riesgo con este parche explotable.
+
 ### Registro de coordinación — Claude
 
 - **F2 extracto de liquidación**: `INTEGRADA` en `rentalapp1.2` (22 jul, rama `feat/liquidacion-partner`
