@@ -4,6 +4,7 @@ import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import { User } from '../models/user.model';
 import { Contract } from '../models/contract.model';
+import bcrypt from 'bcryptjs';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -28,17 +29,27 @@ describe('Security: Contract Access (IDOR)', () => {
   let contractId = '';
 
   it('should create two users and a contract for user A', async () => {
-    // Create User A (landlord)
+    // Privileged roles are test fixtures, never created through public registration.
+    const userA = await User.create({
+      name: 'User A',
+      email: 'usera@example.com',
+      passwordHash: await bcrypt.hash('password', 10),
+      role: 'landlord',
+    });
     const resA = await request(app)
-      .post('/api/auth/register')
-      .send({ name: 'User A', email: 'usera@example.com', password: 'password', role: 'landlord' });
+      .post('/api/auth/login')
+      .send({ email: 'usera@example.com', password: 'password' });
     tokenUserA = resA.body.token;
-    const userA = await User.findOne({ email: 'usera@example.com' });
 
-    // Create User B (tenant)
+    await User.create({
+      name: 'User B',
+      email: 'userb@example.com',
+      passwordHash: await bcrypt.hash('password', 10),
+      role: 'tenant',
+    });
     const resB = await request(app)
-      .post('/api/auth/register')
-      .send({ name: 'User B', email: 'userb@example.com', password: 'password', role: 'tenant' });
+      .post('/api/auth/login')
+      .send({ email: 'userb@example.com', password: 'password' });
     tokenUserB = resB.body.token;
 
     // User A creates a property

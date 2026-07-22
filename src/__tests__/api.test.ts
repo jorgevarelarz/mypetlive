@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import { User } from '../models/user.model';
+import bcrypt from 'bcryptjs';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -53,11 +54,17 @@ afterAll(async () => {
 
 describe('API basic flow', () => {
   let token = '';
-  it('registers a user', async () => {
+  it('prepares a privileged fixture without using public registration', async () => {
+    await User.create({
+      name: 'Test',
+      email: 'test@example.com',
+      passwordHash: await bcrypt.hash('password', 10),
+      role: 'landlord',
+    });
     const res = await request(app)
-      .post('/api/auth/register')
-      .send({ name: 'Test', email: 'test@example.com', password: 'password', role: 'landlord' });
-    expect(res.status).toBe(201);
+      .post('/api/auth/login')
+      .send({ email: 'test@example.com', password: 'password' });
+    expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
     token = res.body.token;
   });
