@@ -20,6 +20,7 @@ type CouponForm = {
   targetAgeGroup: string[];
   targetSize: string[];
   targetCity: string;
+  targetItems: string;
   sponsored: boolean;
 };
 
@@ -33,6 +34,7 @@ const INITIAL_FORM: CouponForm = {
   targetAgeGroup: [],
   targetSize: [],
   targetCity: '',
+  targetItems: '',
   sponsored: false,
 };
 
@@ -137,6 +139,7 @@ export default function CouponsAdminPage() {
       targetAgeGroup: coupon.targetAgeGroup || [],
       targetSize: coupon.targetSize || [],
       targetCity: coupon.targetCity || '',
+      targetItems: (coupon.targetItems || []).join(', '),
       sponsored: Boolean(coupon.sponsored),
     });
     setModalOpen(true);
@@ -157,6 +160,7 @@ export default function CouponsAdminPage() {
         targetAgeGroup: form.targetAgeGroup,
         targetSize: form.targetSize,
         targetCity: form.targetCity.trim() || null,
+        targetItems: form.targetItems.split(',').map(v => v.trim()).filter(Boolean),
         sponsored: form.sponsored,
       };
       if (editing) {
@@ -232,6 +236,7 @@ export default function CouponsAdminPage() {
                       ...(coupon.targetAgeGroup || []),
                       ...(coupon.targetSize || []),
                       ...(coupon.targetCity ? [coupon.targetCity] : []),
+                      ...((coupon.targetItems || []).length ? [`compró: ${(coupon.targetItems || []).join('/')}`] : []),
                     ];
                     return segments.length ? (
                       <p className="text-xs" style={{ color: '#6A7B4F' }}>Segmenta: {segments.join(' · ')}</p>
@@ -376,6 +381,19 @@ export default function CouponsAdminPage() {
                       onChange={e => setForm(prev => ({ ...prev, targetCity: e.target.value }))}
                       placeholder="Ej. Lugo"
                     />
+                  </label>
+                  <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+                    Items comprados (opcional, palabras clave separadas por comas)
+                    <input
+                      className="border rounded px-3 py-2"
+                      style={{ borderColor: '#D9D2C4', background: '#FFFEFB' }}
+                      value={form.targetItems}
+                      onChange={e => setForm(prev => ({ ...prev, targetItems: e.target.value }))}
+                      placeholder="Ej. pienso, arena, antiparasitario"
+                    />
+                    <span className="text-xs" style={{ color: '#7A8273' }}>
+                      La oferta solo se muestra a clientes cuyo ticket incluyó alguno de estos items. No aparece en el pasaporte público.
+                    </span>
                   </label>
                   <label className="flex items-center gap-2 text-sm" style={{ color: '#3F4A3C' }}>
                     <input

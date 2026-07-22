@@ -18,6 +18,9 @@ const couponSchema = new Schema(
     targetAgeGroup: { type: [String], default: [] }, // puppy|young|adult|senior
     targetSize: { type: [String], default: [] }, // small|medium|large
     targetCity: { type: String, trim: true },
+    // Segmentación por items comprados (palabras clave contra Sale.items.name).
+    // Privada por diseño: nunca se evalúa en superficies públicas (pasaporte).
+    targetItems: { type: [String], default: [] },
     sponsored: { type: Boolean, default: false, index: true }, // placement de pago (destacado)
     // Estado del placement patrocinado pagado por el partner. 'active' lo activa
     // el webhook de Stripe; 'none' permite también activación manual por admin (RSC).
