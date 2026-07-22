@@ -136,7 +136,8 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
 
 ### Actualización de ejecución F4 — Codex
 
-- Estado: **LISTA PARA REVISIÓN** en `mypetlive/test/pasaporte`.
+- Estado: **INTEGRADA** por Claude en `rentalapp1.2` (`fbd10cc`). Rama de entrega:
+  `mypetlive/test/pasaporte`.
 - Tests ampliados en `src/__tests__/animal.passport.test.ts`: visibilidad y
   privacidad del pasaporte, segmentación de ofertas, orden completo del timeline y meta tags
   Open Graph de `/og/p/:code`.
@@ -151,19 +152,28 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
   también fuera del alcance de F4. No se han modificado.
 - Archivos F4 liberados; Claude puede revisar/mergear la rama.
 
-### Relectura de Claude e inicio F1 — Codex
+### Relectura de Claude y ejecución F1 — Codex
 
-- F2 está terminada en `6c1eec6`; Claude también ha terminado el endurecimiento F0 en
-  `ce1eb84` y está trabajando en F3 sobre `feat/kpis-admin`.
-- Los cambios F3 en curso se limitan a métricas/admin y no colisionan con F1.
-- F1 pasa a **EN CURSO** en un worktree independiente, rama
-  `feat/calendario-semanal` desde la base actual `rentalapp1.2`.
-- Archivos reservados por Codex durante F1:
+- Relectura final: Claude ya ha integrado F2, F0, F3 y F4; `rentalapp1.2` queda en
+  `084e3d4`. Ninguna de esas integraciones colisiona con los dos archivos de F1.
+- F1 queda **LISTA PARA REVISIÓN** en `mypetlive/feat/calendario-semanal`, commit
+  `a73c8f5`.
+- Implementado toggle mes/semana; rejilla semanal por horas (08:00–20:00 por defecto,
+  ampliación automática si hay citas fuera del horario), navegación semanal y citas con los
+  mismos colores/estados. El veterinario abre una cita activa y elige nueva fecha/hora.
+- La página reutiliza `updateVetAppointmentStatus` con estado `rescheduled`: no se ha creado
+  ni modificado ningún endpoint y se conserva el email best-effort del backend. Para
+  adoptante/protectora no se entrega callback de mutación y ambas vistas son solo lectura.
+- Archivos modificados y ya liberados:
   `frontend/src/components/vet/AppointmentsCalendar.tsx` y
-  `frontend/src/pages/vet/AppointmentsPage.tsx`. Se intentará no modificar
-  `VetAppointmentsPanel.tsx` ni `frontend/src/api/vetAppointments.ts`: la mutación existente
-  se reutilizará desde la página si su contrato ya cubre fecha/hora y email.
-- Se mantienen fuera de alcance el modelo `VetAppointment`, iCal, catálogo, F2, F3 y F0.
+  `frontend/src/pages/vet/AppointmentsPage.tsx`. No se tocaron
+  `VetAppointmentsPanel.tsx`, `frontend/src/api/vetAppointments.ts`, modelo, iCal ni
+  catálogo.
+- Impacto GitNexus: **MEDIUM**, un único flujo UI afectado (`AppointmentsCalendar → Fmt`).
+  Verificación: build de producción correcto (solo warnings previos de sourcemaps),
+  `vet.appointments.test.ts` **13/13 en verde** y prueba visual/interactiva en Chrome con
+  fixtures de los cinco estados. La prueba visual detectó y corrigió que la semana abría a
+  medianoche mostrando demasiadas horas vacías.
 
 ### Hallazgos de la revisión inicial de Codex
 
@@ -211,6 +221,10 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   actualizado (falta replicar a mano en el compose del VPS + deploy, eso lo lanza Jorge).
   El auto-registro de roles vet/store y el resto de hallazgos de Codex (deps, headers,
   legal/SEO) quedan PENDIENTES de decisión de Jorge — no se tocan sin asignación aquí.
+- **F5 ofertas por items**: `EN CURSO` (Claude, rama `feat/ofertas-por-items`). Reservados:
+  `src/models/coupon.model.ts`, `src/utils/coupons.ts`, `src/controllers/offers.controller.ts`,
+  `src/controllers/coupon.admin.controller.ts`, `src/utils/purchases.ts` (nuevo),
+  `frontend/src/pages/admin/CouponsAdminPage.tsx`, test `offers.byItems.test.ts`.
 - **F3 KPIs admin**: `INTEGRADA` en `rentalapp1.2` (rama `feat/kpis-admin`). Tocado: `src/controllers/metrics.controller.ts`
   (o `admin.metrics` nuevo), `src/routes/admin.routes.ts` o montaje en `app.ts`,
   `frontend/src/pages/admin/` (card/página KPIs), tests `admin.metrics.test.ts`.
