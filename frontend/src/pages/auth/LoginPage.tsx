@@ -71,13 +71,11 @@ export default function LoginPage() {
         <p style={{ fontWeight: 600 }}>¿Eres protectora, veterinario o tienda?</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>Hablemos y te activamos como profesional.</p>
         <a
-          href="https://wa.me/XXXXXXXXXX"
-          target="_blank"
-          rel="noreferrer"
+          href="mailto:soporte@mypetlive.es?subject=Alta%20profesional%20MyPetLive"
           className="text-sm"
           style={{ textDecoration: 'underline', textUnderlineOffset: 4 }}
         >
-          Escríbenos por WhatsApp
+          Solicita el alta profesional
         </a>
       </div>
     </>

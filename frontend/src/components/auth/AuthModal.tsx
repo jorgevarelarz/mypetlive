@@ -21,7 +21,6 @@ export default function AuthModal() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'adoptante' | 'protectora'>('adoptante');
   const [busy, setBusy] = useState(false);
 
   if (!open) return null;
@@ -46,7 +45,7 @@ export default function AuthModal() {
     try {
       if (mode === 'register') {
         if (!name.trim()) throw new Error('Indica tu nombre');
-        await apiRegister(name.trim(), email.trim(), password, role);
+        await apiRegister(name.trim(), email.trim(), password);
         await login(email.trim(), password);
         toast.success('¡Cuenta creada! Bienvenido/a 🐾');
       } else {
@@ -111,17 +110,12 @@ export default function AuthModal() {
                 Nombre
                 <input className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={name} onChange={e => setName(e.target.value)} required />
               </label>
-              <div className="grid gap-1 text-sm">
-                <span>Quiero…</span>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setRole('adoptante')} className="flex-1 py-2 rounded border text-sm" style={role === 'adoptante' ? { borderColor: palette.accent, background: '#F1F3E8' } : { borderColor: palette.border }}>
-                    Adoptar 🐾
-                  </button>
-                  <button type="button" onClick={() => setRole('protectora')} className="flex-1 py-2 rounded border text-sm" style={role === 'protectora' ? { borderColor: palette.accent, background: '#F1F3E8' } : { borderColor: palette.border }}>
-                    Soy protectora 🏠
-                  </button>
-                </div>
-              </div>
+              <p className="text-sm rounded-lg px-3 py-2" style={{ background: '#F8F5EE', color: '#6D745F' }}>
+                Este registro es para adoptantes. ¿Eres protectora, veterinario o tienda?{' '}
+                <a href="mailto:soporte@mypetlive.es?subject=Alta%20profesional%20MyPetLive" className="underline">
+                  Solicita el alta profesional
+                </a>.
+              </p>
             </>
           )}
           <label className="grid gap-1 text-sm">
@@ -130,8 +124,9 @@ export default function AuthModal() {
           </label>
           <label className="grid gap-1 text-sm">
             Contraseña
-            <input type="password" className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
+            <input type="password" className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : undefined} maxLength={72} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
           </label>
+          {mode === 'register' && <p className="text-xs" style={{ color: '#7A8273' }}>Usa entre 12 y 72 caracteres.</p>}
           <button
             type="submit"
             disabled={busy}

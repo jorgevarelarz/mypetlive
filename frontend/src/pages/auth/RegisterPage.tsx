@@ -38,7 +38,7 @@ export default function RegisterPage() {
     <>
       <h1 className="auth-title">Crea tu cuenta</h1>
       <p className="auth-subtitle">Únete a la comunidad de adoptantes y lleva el cuidado de tus mascotas al día.</p>
-      <form className="auth-form" onSubmit={submit} noValidate>
+      <form className="auth-form" onSubmit={submit}>
         <label className="auth-label" htmlFor="name">
           Nombre
           <input id="name" required className="auth-input" value={name} onChange={e=>setName(e.target.value)} />
@@ -49,8 +49,9 @@ export default function RegisterPage() {
         </label>
         <label className="auth-label" htmlFor="password">
           Contraseña
-          <input id="password" type="password" required className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
+          <input id="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
         </label>
+        <p className="text-sm" style={{ color: '#7A8273', marginTop: -8 }}>Usa entre 12 y 72 caracteres.</p>
         {err && <p className="auth-error" style={{ color: '#b91c1c' }}>{err}</p>}
         <button type="submit" className="auth-button" disabled={loading}>
           {loading ? 'Creando…' : 'Crear cuenta'}
@@ -63,13 +64,11 @@ export default function RegisterPage() {
         <p style={{ fontWeight: 600 }}>¿Eres protectora, veterinario o tienda?</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>Hablemos y te activamos como profesional.</p>
         <a
-          href="https://wa.me/XXXXXXXXXX"
-          target="_blank"
-          rel="noreferrer"
+          href="mailto:soporte@mypetlive.es?subject=Alta%20profesional%20MyPetLive"
           className="text-sm"
           style={{ textDecoration: 'underline', textUnderlineOffset: 4 }}
         >
-          Escríbenos por WhatsApp
+          Solicita el alta profesional
         </a>
       </div>
     </>

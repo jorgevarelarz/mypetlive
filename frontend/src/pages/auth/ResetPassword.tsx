@@ -74,11 +74,14 @@ const ResetPassword: React.FC = () => {
           id="password"
           type="password"
           required
-          minLength={6}
+          minLength={12}
+          maxLength={72}
+          autoComplete="new-password"
           value={password}
           onChange={event => setPassword(event.target.value)}
           style={inputStyle}
         />
+        <p style={{ margin: '8px 0 0', fontSize: 13, color: '#666' }}>Usa entre 12 y 72 caracteres.</p>
         <button type="submit" style={buttonStyle} disabled={loading}>
           {loading ? "Guardando..." : "Cambiar contraseña"}
         </button>

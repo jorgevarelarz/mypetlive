@@ -51,7 +51,8 @@ const Login: React.FC = () => {
               <Input label="Nombre" placeholder="Tu nombre" value={name} onChange={e => setName(e.target.value)} required />
             )}
             <Input label="Correo" type="email" placeholder="correo@dominio.com" value={email} onChange={e => setEmail(e.target.value)} required />
-            <Input label="Contraseña" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+            <Input label="Contraseña" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={isRegister ? 12 : undefined} maxLength={72} autoComplete={isRegister ? 'new-password' : 'current-password'} />
+            {isRegister && <small style={{ color: 'var(--text-muted, #666)' }}>Usa entre 12 y 72 caracteres.</small>}
             <Button type="submit">{isRegister ? 'Registrar' : 'Entrar'}</Button>
             <p style={{ textAlign: 'center' }}>
               {isRegister ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}{' '}

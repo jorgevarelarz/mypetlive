@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { User } from '../models/user.model';
-import { Verification } from '../models/verification.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -41,7 +40,8 @@ function buildResetLink(token: string) {
 /**
  * Register a new user.
  *
- * Expects: name, email, password and role in the request body.
+ * Expects: name, email and password in the request body. Public registration
+ * always creates an adoptante (tenant); professional roles are activated manually.
  */
 export const register = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
@@ -52,43 +52,29 @@ export const register = async (req: Request, res: Response) => {
     if (!rawName || !rawEmail || !password) {
       throw badRequest('missing_fields');
     }
-    // Roles a los que un usuario puede auto-registrarse (plataforma de mascotas).
-    // landlord/pro/admin quedan excluidos: no son auto-asignables.
-    // Alias: protectora->landlord, adoptante->tenant (ver role.middleware.normalizeRole).
-    const selfRegisterRoles: Record<string, string> = {
-      tenant: 'tenant',
-      adoptante: 'tenant',
-      protectora: 'landlord',
-      vet: 'vet',
-      store: 'store',
-    };
-    // En tests se permite además fijar roles privilegiados para preparar fixtures.
-    const testOnlyRoles = ['landlord', 'pro', 'admin'];
-    let normalizedRole: string = 'tenant';
-    const requested = typeof req.body?.role === 'string' ? req.body.role.toLowerCase() : '';
-    if (requested in selfRegisterRoles) {
-      normalizedRole = selfRegisterRoles[requested];
-    } else if (process.env.NODE_ENV === 'test' && testOnlyRoles.includes(requested)) {
-      normalizedRole = requested;
+    const roleWasProvided = req.body?.role !== undefined && req.body?.role !== null;
+    const requestedRole = typeof req.body?.role === 'string'
+      ? req.body.role.trim().toLowerCase()
+      : '';
+    const adoptanteRoles = new Set(['tenant', 'adoptante']);
+    const protectedRoles = new Set(['protectora', 'landlord', 'vet', 'store', 'pro', 'admin']);
+
+    if (requestedRole && protectedRoles.has(requestedRole)) {
+      throw new AppError('El alta profesional requiere activación manual', {
+        status: 403,
+        code: 'professional_onboarding_required',
+      });
     }
+    if (roleWasProvided && !adoptanteRoles.has(requestedRole)) {
+      throw new AppError('Rol de registro no válido', { status: 400, code: 'invalid_role' });
+    }
+
+    const normalizedRole = 'tenant';
     // Generate the password hash
     const passwordHash = await bcrypt.hash(password, 10);
     // Save new user with hashed password
     const user = new User({ name: rawName, email: rawEmail, passwordHash, role: normalizedRole });
     await user.save();
-    if (normalizedRole === 'landlord') {
-      await Verification.findOneAndUpdate(
-        { userId: String(user._id) },
-        {
-          $setOnInsert: {
-            status: 'pending',
-            verificationLevel: 'none',
-            legalName: rawName,
-          },
-        },
-        { upsert: true },
-      );
-    }
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       token,

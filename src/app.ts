@@ -8,6 +8,7 @@ import path from 'path';
 import { purgeOldTenantProDocs } from './jobs/tenantProRetention';
 import { startReminderJobs } from './jobs/reminders';
 import logger from './utils/logger';
+import { isProduction } from './utils/env';
 
 import stripeWebhookRoutes from './routes/stripe.webhook';
 
@@ -74,7 +75,7 @@ if (!globalAny.__rentalAppProcessHandlers) {
 
   process.on('uncaughtException', (error) => {
     logger.fatal({ err: error }, 'Uncaught exception detected');
-    if (process.env.NODE_ENV === 'production') {
+    if (isProduction()) {
       process.exit(1);
     }
   });
@@ -103,7 +104,7 @@ app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy:
-      process.env.NODE_ENV === 'production'
+      isProduction()
         ? {
             useDefaults: true,
             directives: {
@@ -121,7 +122,7 @@ app.use(
             },
           }
         : false,
-    hsts: process.env.NODE_ENV === 'production' ? undefined : false,
+    hsts: isProduction() ? undefined : false,
   }),
 );
 
@@ -139,7 +140,7 @@ app.use(metricsMiddleware);
 
 // Log HTTP legible solo en desarrollo: en producción ya está pino (logger) con
 // request-id y métricas; morgan ahí duplicaba cada línea y metía colores ANSI.
-if (process.env.NODE_ENV !== 'production') {
+if (!isProduction()) {
   app.use(morgan('dev'));
 }
 
@@ -147,7 +148,7 @@ app.use('/api', stripeWebhookRoutes);
 
 const allowedOrigins = (
   process.env.CORS_ORIGIN ||
-  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000,http://localhost:3001')
+  (isProduction() ? '' : 'http://localhost:3000,http://localhost:3001')
 )
   .split(',')
   .map(s => s.trim())

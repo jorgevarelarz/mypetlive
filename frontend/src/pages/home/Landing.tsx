@@ -102,7 +102,7 @@ export default function Landing() {
               <p style={{ fontSize: 19, lineHeight: 1.55, color: C.muted, margin: '0 0 32px', maxWidth: 480 }}>Adopción responsable, simple y transparente. Conectamos protectoras y familias, y acompañamos cada paso después de adoptar.</p>
               <div className="lp-actions" style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
                 <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
-                <button className="lp-cta" onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })} style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14, cursor: 'pointer' }}>Soy protectora</button>
+                <a className="lp-cta" href="mailto:soporte@mypetlive.es?subject=Alta%20de%20protectora%20en%20MyPetLive" style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14 }}>Soy protectora</a>
               </div>
               <div className="lp-stats" style={{ display: 'flex', gap: 32 }}>
                 <div><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{data?.total ?? '—'}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>animales</div></div>
@@ -257,7 +257,7 @@ export default function Landing() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 14 }}>Protectoras</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'rgba(230,224,210,.7)' }}>
-                  <button onClick={() => openAuth({ mode: 'register' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: 'rgba(230,224,210,.7)', textAlign: 'left', padding: 0 }}>Panel</button>
+                  <button onClick={() => openAuth({ mode: 'login', message: 'Accede con la cuenta profesional activada por MyPetLive.' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: 'rgba(230,224,210,.7)', textAlign: 'left', padding: 0 }}>Panel</button>
                   <Link to="/donate">Donaciones</Link>
                 </div>
               </div>
