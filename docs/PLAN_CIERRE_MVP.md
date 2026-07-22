@@ -263,9 +263,10 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 - Base integrada y publicada: `mypetlive/rentalapp1.2` en `2950c6f`; auditoría runtime
   final: 29 avisos (0 críticos, 13 altos, 7 moderados y 9 bajos), pendientes de la migración
   de CRA. Multer 1 queda identificado como el siguiente bloque de dependencias de seguridad.
-- **Despliegue completado** en el VPS desde el worktree limpio del commit
-  `2950c6f6049d093fed16756e0df34e4334d41962`. El backend usa la imagen nueva
-  `sha256:2666eda33eb5...`; `/opt/mypetlive/DEPLOYED_COMMIT` fija la versión desplegada.
+- **Despliegue completado** en el VPS: backend desde el worktree limpio de `2950c6f` y
+  estáticos endurecidos desde `995f2e2`. El backend usa la imagen nueva
+  `sha256:2666eda33eb5...`; `/opt/mypetlive/DEPLOYED_COMMIT` fija `995f2e2` como versión
+  desplegada.
 - Reversión preparada en
   `/opt/mypetlive/deploy-backups/2026-07-22-pre-2950c6f/` (API y docroot web) y en la imagen
   Docker `mypetlive-api:rollback-2950c6f`. La copia diaria de Mongo del 22 jul sigue
@@ -277,13 +278,18 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 ### Seguridad F0.4 — estáticos HTTP (Codex)
 
-- Estado: **EN CURSO** en `security/static-http-hardening`, desde `rentalapp1.2` (`d132213`).
+- Estado: **INTEGRADA Y DESPLEGADA** en `rentalapp1.2`, commit `995f2e2` (rama
+  `security/static-http-hardening`).
 - Hallazgo confirmado tras F0.2/F0.3: Apache sirve la portada y el bundle sin HSTS/CSP,
   cabeceras defensivas, compresión ni política de caché; Helmet sólo protege la API.
-- Archivo reservado: `frontend/public/.htaccess`. Alcance: cabeceras equivalentes a la API,
-  desactivar listado, compresión de texto y caché larga sólo para artefactos versionados.
-- Se validará la configuración en Apache, el build y las rutas reales en Chrome antes de
-  integrar y desplegar; existe copia completa del docroot para reversión.
+- Añadido `frontend/public/.htaccess`: desactiva listados, elimina `X-Powered-By`, aplica
+  HSTS/CSP/`nosniff`/protección de frames/referrer/permisos, comprime texto con gzip y separa
+  HTML sin caché de JS/CSS versionados con caché inmutable de un año.
+- Verificación: prueba aislada en el Apache real y build CRA correctos; en producción la
+  portada y el bundle responden HTTP 200 con las cabeceras, compresión y caché esperadas;
+  `/health` y `/api/animals` siguen en 200.
+- Reversión web preparada en
+  `/opt/mypetlive/deploy-backups/2026-07-22-pre-995f2e2/web-docroot.tar.gz`.
 
 ### Registro de coordinación — Claude
 
