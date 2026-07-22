@@ -240,10 +240,9 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   actualizado (falta replicar a mano en el compose del VPS + deploy, eso lo lanza Jorge).
   El auto-registro de roles vet/store y el resto de hallazgos de Codex (deps, headers,
   legal/SEO) quedan PENDIENTES de decisión de Jorge — no se tocan sin asignación aquí.
-- **F5 ofertas por items**: `EN CURSO` (Claude, rama `feat/ofertas-por-items`). Reservados:
-  `src/models/coupon.model.ts`, `src/utils/coupons.ts`, `src/controllers/offers.controller.ts`,
-  `src/controllers/coupon.admin.controller.ts`, `src/utils/purchases.ts` (nuevo),
-  `frontend/src/pages/admin/CouponsAdminPage.tsx`, test `offers.byItems.test.ts`.
+- **F5 ofertas por items**: `INTEGRADA` en `rentalapp1.2` (rama `feat/ofertas-por-items`).
+  Archivos liberados. Coupon.targetItems casado contra Sale.items (caja: solo historial en
+  ese partner; for-me: todo el historial; pasaporte público: nunca).
 - **F3 KPIs admin**: `INTEGRADA` en `rentalapp1.2` (rama `feat/kpis-admin`). Tocado: `src/controllers/metrics.controller.ts`
   (o `admin.metrics` nuevo), `src/routes/admin.routes.ts` o montaje en `app.ts`,
   `frontend/src/pages/admin/` (card/página KPIs), tests `admin.metrics.test.ts`.

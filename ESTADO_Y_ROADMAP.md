@@ -193,6 +193,11 @@ está **congelado/oculto**, no borrado.
   por rol, animales, solicitudes con conversión y días medios, cupones, GMV ventas+donaciones
   con comisión, Patitas. Sección "KPIs de plataforma" en `/admin/reports` con agregados exactos
   del servidor. Tests en `admin.metrics.test.ts`.
+- [x] **Ofertas segmentadas por items comprados (F5):** cierra comisiones fase 2.
+  `Coupon.targetItems` (palabras clave, form admin) casadas contra `Sale.items.name`
+  (`utils/purchases.ts`, matching sin acentos y por subcadena). En la caja del partner solo
+  cuenta el historial del cliente en ese partner; en `/api/offers/for-me` todo su historial
+  (con `matchedItems`); el pasaporte público nunca las evalúa. Tests `offers.byItems.test.ts`.
 - [x] **Tests ampliados del pasaporte (F4, Codex):** privacidad (nunca datos del dueño),
   matching de ofertas por todos los criterios, timeline y OG. Destapó y arregló un bug real:
   el pasaporte público devolvía 200 para animales en `borrador` (ahora 404). Cierra el
