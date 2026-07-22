@@ -172,6 +172,17 @@ está **congelado/oculto**, no borrado.
 
 - [x] **Métricas P2 del gap analysis (protectora y partner):** `GET /api/protectoras/me/metrics` (adopciones mes/total, conversión solicitud→adopción sobre cerradas, días medios de proceso, donaciones €, Patitas recibidas/canjeadas; `?format=csv` con BOM para Excel) y `GET /api/partners/me/metrics` (cupones usados, clientes únicos vía identificaciones∪ventas∪cupones, Patitas cobradas con su €, ventas y comisión mes/total). Controller `metrics.controller.ts`, rutas en `patitas.routes.ts`. UI: sección "Finanzas e impacto" con export CSV en ProtectoraDashboard y card "Tu actividad en MyPetLive" en PatitasPartnerPanel. Tests en `metrics.test.ts`.
 
+## 5.11 Hecho el 22 jul 2026
+- [x] **Extracto mensual de liquidación del partner (comisiones fase 2, 1ª mitad):** el extracto
+  se deriva de `Sale` agrupada por mes natural UTC (sin modelo nuevo; estado en
+  `Sale.settlementStatus` pending→invoiced→paid, helpers en `utils/settlement.ts`).
+  Partner: `GET /api/patitas/sales/statements[?format=csv]` + card "Extracto de liquidación"
+  en PatitasPartnerPanel. Admin: `GET /api/admin/sales/settlements?period=YYYY-MM[&format=csv]`
+  y `POST /api/admin/sales/settlements/:partnerId/:period` (action invoice|pay, idempotente,
+  con invoiceRef) + página `/admin/settlements` (selector de mes, facturar/marcar pagado, CSV).
+  Tests en `settlements.test.ts` (10). Queda la 2ª mitad: ofertas segmentadas por items (F5 del
+  `docs/PLAN_CIERRE_MVP.md`).
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.

@@ -122,6 +122,35 @@ export async function registerSale(payload: { userId: string; amountEur: number;
   return data as { ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number; balance?: number; autoDonated?: boolean };
 }
 
+// Extracto mensual de liquidación de comisiones del partner.
+export type PartnerStatement = {
+  period: string; // YYYY-MM
+  sales: number;
+  amountEur: number;
+  commissionEur: number;
+  status: 'pending' | 'invoiced' | 'paid';
+  breakdown: { pending: number; invoiced: number; paid: number };
+  invoiceRef: string | null;
+};
+
+export async function listMyStatements() {
+  const { data } = await client.get('/api/patitas/sales/statements');
+  return (data.items || []) as PartnerStatement[];
+}
+
+// Descarga el CSV con la sesión autenticada y dispara el guardado en el navegador.
+export async function downloadMyStatementsCsv() {
+  const { data } = await client.get('/api/patitas/sales/statements?format=csv', { responseType: 'blob' });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'extracto-liquidacion.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Clave API del TPV del partner (integración de caja).
 export async function getPosKeyStatus() {
   const { data } = await client.get('/api/partners/me/pos-key');

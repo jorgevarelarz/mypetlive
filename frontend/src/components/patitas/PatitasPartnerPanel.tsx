@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Camera, CheckCircle2, X, UserCheck, Ticket, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, type EligibleCoupon, type PosKey, type RedeemPreview, type SaleItemInput } from '../../api/patitas';
+import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, listMyStatements, downloadMyStatementsCsv, type EligibleCoupon, type PosKey, type RedeemPreview, type SaleItemInput, type PartnerStatement } from '../../api/patitas';
 import { listCoupons, applyCouponToCustomer } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
 import { getPartnerMetrics } from '../../api/metrics';
@@ -58,6 +58,80 @@ function PartnerMetrics() {
           note={`${m?.patitas.valorEur ?? 0} € recibidos`}
         />
       </div>
+    </div>
+  );
+}
+
+// Extracto mensual de liquidación: qué comisión debe el partner cada mes y en qué
+// estado está (pendiente → facturado → pagado). El estado lo avanza el admin.
+const STATEMENT_STATUS: Record<PartnerStatement['status'], { label: string; bg: string; color: string }> = {
+  pending: { label: 'Pendiente', bg: MPL.gold100, color: MPL.goldDark },
+  invoiced: { label: 'Facturado', bg: '#eef3fb', color: '#31589e' },
+  paid: { label: 'Pagado', bg: MPL.olive100, color: MPL.oliveDark },
+};
+
+function PartnerStatements() {
+  const statementsQ = useQuery({ queryKey: ['partner-statements'], queryFn: listMyStatements, staleTime: 60_000 });
+  const items = statementsQ.data || [];
+  const monthName = (period: string) => {
+    const [y, m] = period.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  };
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Extracto de liquidación</h3>
+          <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Comisión de plataforma de tus ventas, mes a mes.</p>
+        </div>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => downloadMyStatementsCsv().catch(() => toast.error('No se pudo descargar el CSV'))}
+            style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '9px 14px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}
+          >
+            Descargar CSV
+          </button>
+        )}
+      </div>
+      {statementsQ.isLoading ? (
+        <div style={{ color: MPL.faint }}>Cargando…</div>
+      ) : items.length === 0 ? (
+        <div style={{ color: MPL.faint, fontSize: 14 }}>Todavía no hay ventas registradas: cuando registres la primera, aquí verás tu extracto mensual.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: MPL.muted, fontSize: 12.5 }}>
+                <th style={{ padding: '8px 10px' }}>Mes</th>
+                <th style={{ padding: '8px 10px' }}>Ventas</th>
+                <th style={{ padding: '8px 10px' }}>Base</th>
+                <th style={{ padding: '8px 10px' }}>Comisión</th>
+                <th style={{ padding: '8px 10px' }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(st => {
+                const badge = STATEMENT_STATUS[st.status];
+                return (
+                  <tr key={st.period} style={{ borderTop: `1px solid ${MPL.border}` }}>
+                    <td style={{ padding: '10px', fontWeight: 700, textTransform: 'capitalize' }}>{monthName(st.period)}</td>
+                    <td style={{ padding: '10px' }}>{st.sales}</td>
+                    <td style={{ padding: '10px' }}>{st.amountEur.toFixed(2)} €</td>
+                    <td style={{ padding: '10px', fontWeight: 800 }}>{st.commissionEur.toFixed(2)} €</td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{ background: badge.bg, color: badge.color, borderRadius: 999, padding: '4px 12px', fontSize: 12.5, fontWeight: 800 }}>
+                        {badge.label}
+                      </span>
+                      {st.invoiceRef && <span style={{ color: MPL.faint, fontSize: 12, marginLeft: 8 }}>{st.invoiceRef}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -495,6 +569,8 @@ export default function PatitasPartnerPanel() {
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <PartnerMetrics />
+
+      <PartnerStatements />
 
       <PartnerPayout />
 

@@ -18,6 +18,7 @@ import {
   identifyUser,
   registerSale,
   listMySales,
+  listMyStatements,
 } from '../controllers/patitas.controller';
 import { getPosKeyStatus, rotatePosKey, listPosKeys, createPosKey, revokePosKey } from '../controllers/pos.controller';
 import { getShelterPublicProfile } from '../controllers/shelter.controller';
@@ -54,6 +55,8 @@ router.post('/patitas/earn/visit', ...assertRole('store', 'vet', 'admin'), async
 // Venta del partner: importe + ticket → comisión de plataforma + Patitas proporcionales.
 router.post('/patitas/sales', ...assertRole('store', 'vet', 'admin'), asyncHandler(registerSale));
 router.get('/patitas/sales/mine', ...assertRole('store', 'vet', 'admin'), asyncHandler(listMySales));
+// Extracto mensual de liquidación de comisiones del partner (json o csv).
+router.get('/patitas/sales/statements', ...assertRole('store', 'vet', 'admin'), asyncHandler(listMyStatements));
 
 // Métricas: retorno visible para protectora y partner (P2 gap analysis).
 router.get('/protectoras/me/metrics', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(shelterMetrics));

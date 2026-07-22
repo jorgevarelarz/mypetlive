@@ -23,6 +23,7 @@ import AdminAnimalsPage from "./pages/admin/AdminAnimalsPage";
 import AdminAdoptionsPage from "./pages/admin/AdminAdoptionsPage";
 import CouponsAdminPage from "./pages/admin/CouponsAdminPage";
 import AdminVerificationsPage from "./pages/admin/AdminVerificationsPage";
+import AdminSettlementsPage from "./pages/admin/AdminSettlementsPage";
 import RedirectHome from "./pages/RedirectHome";
 import AuthLayout from "./layout/AuthLayout";
 import AdminHome from "./pages/admin/AdminHome";
@@ -99,6 +100,7 @@ export default function AppRoutes() {
               <Route path="/admin/adoptions" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminAdoptionsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/coupons" element={<ProtectedRoute><RoleGuard roles={["admin"]}><CouponsAdminPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/verifications" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminVerificationsPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/admin/settlements" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettlementsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/reports" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminReports /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/settings" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettings /></RoleGuard></ProtectedRoute>} />
 
