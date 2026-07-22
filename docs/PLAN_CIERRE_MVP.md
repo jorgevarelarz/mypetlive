@@ -134,6 +134,23 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
 
 3. **F5 queda libre**. Codex no lo iniciará sin una asignación explícita en este documento.
 
+### Actualización de ejecución F4 — Codex
+
+- Estado: **EN CURSO** en el worktree independiente
+  `/Users/jorge/Projects/animal-app-codex-pasaporte`, rama `test/pasaporte`.
+- Tests ampliados ya preparados en `src/__tests__/animal.passport.test.ts`: visibilidad y
+  privacidad del pasaporte, segmentación de ofertas, orden completo del timeline y meta tags
+  Open Graph de `/og/p/:code`.
+- El primer test focal ha detectado un bug real: `GET /api/animals/passport/:code` devuelve
+  HTTP 200 para animales en estado `borrador`. Codex reserva temporalmente
+  `src/controllers/animal.controller.ts` para limitar la consulta pública; el arreglo irá en
+  un commit separado de los tests, conforme al alcance de F4.
+- Impacto GitNexus antes de editar: **LOW** para `getPassport` (0 dependientes internos),
+  `buildTimeline` (2 consumidores directos) y `matchOffersForAnimal` (2 consumidores
+  directos). No se editarán los dos últimos.
+- La segunda incidencia del test focal era solo una fecha de fixture: no se ha detectado un
+  fallo de ordenación en producción.
+
 ### Hallazgos de la revisión inicial de Codex
 
 Estos puntos se han comprobado en producción y, cuando se indica, también contra
@@ -163,6 +180,26 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 - **Operación validada:** HTTPS correcto, contenedores sin reinicios ni errores recientes,
   puertos 3000/8080 bloqueados externamente, health/Mongo correctos y backup diario válido
   en prueba seca. Falta confirmar una copia fuera del propio VPS.
+
+### Registro de coordinación — Claude
+
+- **F2 extracto de liquidación**: `LISTA PARA REVISIÓN` en `feat/liquidacion-partner`
+  (pusheada; 10 tests en verde). Archivos tocados: `src/utils/settlement.ts`,
+  `src/routes/admin.sales.routes.ts`, `src/controllers/patitas.controller.ts`,
+  `src/routes/patitas.routes.ts`, `frontend/src/api/{patitas,settlements}.ts`,
+  `frontend/src/pages/admin/{AdminSettlementsPage,AdminHome}.tsx`,
+  `frontend/src/AppRoutes.tsx`, `PatitasPartnerPanel.tsx`.
+- **F0 (hallazgo crítico de Codex)**: `LISTA PARA REVISIÓN` en `security/f0-produccion`.
+  Verificado en el VPS: prod corre `NODE_ENV=development` + `ALLOW_UNVERIFIED=true`, con
+  `/api/verification/dev/verify` abierto (cualquier cuenta podía autoverificarse y p. ej.
+  publicar animales). Fix: `APP_ENV=production` como señal explícita (`utils/env.ts`,
+  `isProduction()`), aplicada en `requireVerified` y `dev/verify`; compose del repo
+  actualizado (falta replicar a mano en el compose del VPS + deploy, eso lo lanza Jorge).
+  El auto-registro de roles vet/store y el resto de hallazgos de Codex (deps, headers,
+  legal/SEO) quedan PENDIENTES de decisión de Jorge — no se tocan sin asignación aquí.
+- **F3 KPIs admin**: `EN CURSO` (siguiente). Archivos previstos: `src/controllers/metrics.controller.ts`
+  (o `admin.metrics` nuevo), `src/routes/admin.routes.ts` o montaje en `app.ts`,
+  `frontend/src/pages/admin/` (card/página KPIs), tests `admin.metrics.test.ts`.
 
 ### Protocolo de no colisión
 

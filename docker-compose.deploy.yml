@@ -23,7 +23,9 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: development
-      ALLOW_UNVERIFIED: "true"
+      # Señal explícita de producción: NODE_ENV se queda en development por los mocks,
+      # pero los bypasses de verificación (ALLOW_UNVERIFIED, /dev/verify) miran APP_ENV.
+      APP_ENV: production
       PORT: "3000"
       MONGO_URI: "mongodb://mongo:27017/mypetlive"
       JWT_SECRET: "${JWT_SECRET}"
