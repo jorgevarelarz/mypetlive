@@ -136,20 +136,34 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
 
 ### Actualización de ejecución F4 — Codex
 
-- Estado: **EN CURSO** en el worktree independiente
-  `/Users/jorge/Projects/animal-app-codex-pasaporte`, rama `test/pasaporte`.
-- Tests ampliados ya preparados en `src/__tests__/animal.passport.test.ts`: visibilidad y
+- Estado: **LISTA PARA REVISIÓN** en `mypetlive/test/pasaporte`.
+- Tests ampliados en `src/__tests__/animal.passport.test.ts`: visibilidad y
   privacidad del pasaporte, segmentación de ofertas, orden completo del timeline y meta tags
   Open Graph de `/og/p/:code`.
-- El primer test focal ha detectado un bug real: `GET /api/animals/passport/:code` devuelve
-  HTTP 200 para animales en estado `borrador`. Codex reserva temporalmente
-  `src/controllers/animal.controller.ts` para limitar la consulta pública; el arreglo irá en
-  un commit separado de los tests, conforme al alcance de F4.
+- Commits: `5461222` (tests) y `2552226` (bug real separado: el pasaporte público devolvía
+  HTTP 200 para animales en estado `borrador`; ahora devuelve 404).
 - Impacto GitNexus antes de editar: **LOW** para `getPassport` (0 dependientes internos),
   `buildTimeline` (2 consumidores directos) y `matchOffersForAnimal` (2 consumidores
   directos). No se editarán los dos últimos.
-- La segunda incidencia del test focal era solo una fecha de fixture: no se ha detectado un
-  fallo de ordenación en producción.
+- Verificación focal: **14/14 tests en verde**. Verificación completa:
+  **21/24 suites y 117/127 tests en verde**; las tres suites fallidas (`security.test.ts`,
+  `api.test.ts`, `rbac.test.ts`) son legado inmobiliario que espera rutas retiradas y falla
+  también fuera del alcance de F4. No se han modificado.
+- Archivos F4 liberados; Claude puede revisar/mergear la rama.
+
+### Relectura de Claude e inicio F1 — Codex
+
+- F2 está terminada en `6c1eec6`; Claude también ha terminado el endurecimiento F0 en
+  `ce1eb84` y está trabajando en F3 sobre `feat/kpis-admin`.
+- Los cambios F3 en curso se limitan a métricas/admin y no colisionan con F1.
+- F1 pasa a **EN CURSO** en un worktree independiente, rama
+  `feat/calendario-semanal` desde la base actual `rentalapp1.2`.
+- Archivos reservados por Codex durante F1:
+  `frontend/src/components/vet/AppointmentsCalendar.tsx` y
+  `frontend/src/pages/vet/AppointmentsPage.tsx`. Se intentará no modificar
+  `VetAppointmentsPanel.tsx` ni `frontend/src/api/vetAppointments.ts`: la mutación existente
+  se reutilizará desde la página si su contrato ya cubre fecha/hora y email.
+- Se mantienen fuera de alcance el modelo `VetAppointment`, iCal, catálogo, F2, F3 y F0.
 
 ### Hallazgos de la revisión inicial de Codex
 
@@ -183,13 +197,13 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 ### Registro de coordinación — Claude
 
-- **F2 extracto de liquidación**: `LISTA PARA REVISIÓN` en `feat/liquidacion-partner`
+- **F2 extracto de liquidación**: `INTEGRADA` en `rentalapp1.2` (22 jul, rama `feat/liquidacion-partner`
   (pusheada; 10 tests en verde). Archivos tocados: `src/utils/settlement.ts`,
   `src/routes/admin.sales.routes.ts`, `src/controllers/patitas.controller.ts`,
   `src/routes/patitas.routes.ts`, `frontend/src/api/{patitas,settlements}.ts`,
   `frontend/src/pages/admin/{AdminSettlementsPage,AdminHome}.tsx`,
   `frontend/src/AppRoutes.tsx`, `PatitasPartnerPanel.tsx`.
-- **F0 (hallazgo crítico de Codex)**: `LISTA PARA REVISIÓN` en `security/f0-produccion`.
+- **F0 (hallazgo crítico de Codex)**: `INTEGRADA` en `rentalapp1.2` (rama `security/f0-produccion`). OJO: en el deploy hay que añadir a mano `APP_ENV: production` al compose del VPS.
   Verificado en el VPS: prod corre `NODE_ENV=development` + `ALLOW_UNVERIFIED=true`, con
   `/api/verification/dev/verify` abierto (cualquier cuenta podía autoverificarse y p. ej.
   publicar animales). Fix: `APP_ENV=production` como señal explícita (`utils/env.ts`,
@@ -197,7 +211,7 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   actualizado (falta replicar a mano en el compose del VPS + deploy, eso lo lanza Jorge).
   El auto-registro de roles vet/store y el resto de hallazgos de Codex (deps, headers,
   legal/SEO) quedan PENDIENTES de decisión de Jorge — no se tocan sin asignación aquí.
-- **F3 KPIs admin**: `EN CURSO` (siguiente). Archivos previstos: `src/controllers/metrics.controller.ts`
+- **F3 KPIs admin**: `INTEGRADA` en `rentalapp1.2` (rama `feat/kpis-admin`). Tocado: `src/controllers/metrics.controller.ts`
   (o `admin.metrics` nuevo), `src/routes/admin.routes.ts` o montaje en `app.ts`,
   `frontend/src/pages/admin/` (card/página KPIs), tests `admin.metrics.test.ts`.
 

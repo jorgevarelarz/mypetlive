@@ -39,6 +39,7 @@ import serviceOffersRoutes from './routes/serviceOffers.routes';
 import adminRoutes from './routes/admin.routes';
 import adminEarningsRoutes from './routes/admin.earnings.routes';
 import adminSalesRoutes from './routes/admin.sales.routes';
+import adminMetricsRoutes from './routes/admin.metrics.routes';
 import posRoutes from './routes/pos.routes';
 import { posAuth } from './middleware/posAuth';
 import asyncHandlerApp from './utils/asyncHandler';
@@ -299,6 +300,7 @@ app.use(
   adminRoutes,
   adminEarningsRoutes,
   adminSalesRoutes,
+  adminMetricsRoutes,
   adminTenantProRoutes,
 );
 
