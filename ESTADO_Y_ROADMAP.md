@@ -182,6 +182,21 @@ está **congelado/oculto**, no borrado.
   con invoiceRef) + página `/admin/settlements` (selector de mes, facturar/marcar pagado, CSV).
   Tests en `settlements.test.ts` (10). Queda la 2ª mitad: ofertas segmentadas por items (F5 del
   `docs/PLAN_CIERRE_MVP.md`).
+- [x] **F0 seguridad (hallazgo de Codex):** producción corre `NODE_ENV=development` (mocks), así
+  que los candados `NODE_ENV !== 'production'` no cerraban nada: `/api/verification/dev/verify`
+  estaba vivo en prod (cualquier cuenta podía autoverificarse) y el bypass de `requireVerified`
+  activo. Nuevo `isProduction()` (`utils/env.ts`) que también mira `APP_ENV=production` (añadido
+  al compose del repo; **replicar a mano en el compose del VPS al desplegar**). Tests en
+  `verification.hardening.test.ts`. Pendiente de decisión: auto-registro de roles vet/store,
+  deps con CVEs, headers/compresión, legal/SEO (lista completa en el plan).
+- [x] **KPIs internos de plataforma (P2 nº6, F3):** `GET /api/admin/metrics` (+CSV) — usuarios
+  por rol, animales, solicitudes con conversión y días medios, cupones, GMV ventas+donaciones
+  con comisión, Patitas. Sección "KPIs de plataforma" en `/admin/reports` con agregados exactos
+  del servidor. Tests en `admin.metrics.test.ts`.
+- [x] **Tests ampliados del pasaporte (F4, Codex):** privacidad (nunca datos del dueño),
+  matching de ofertas por todos los criterios, timeline y OG. Destapó y arregló un bug real:
+  el pasaporte público devolvía 200 para animales en `borrador` (ahora 404). Cierra el
+  pendiente de 5.4.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).

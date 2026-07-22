@@ -41,6 +41,7 @@ afterAll(async () => {
 const shelterId = new mongoose.Types.ObjectId();
 const partnerId = new mongoose.Types.ObjectId();
 const adopterId = new mongoose.Types.ObjectId();
+const adopterBId = new mongoose.Types.ObjectId();
 const vetId = new mongoose.Types.ObjectId();
 const adminH = { 'x-user-id': new mongoose.Types.ObjectId().toHexString(), 'x-user-role': 'admin', 'x-user-verified': 'true' };
 const tenantH = { 'x-user-id': adopterId.toHexString(), 'x-user-role': 'tenant', 'x-user-verified': 'true' };
@@ -55,6 +56,7 @@ beforeEach(async () => {
     { _id: shelterId, name: 'Protectora Sur', email: 's@test.com', passwordHash: 'x', role: 'landlord' },
     { _id: partnerId, name: 'Tienda Norte', email: 'p@test.com', passwordHash: 'x', role: 'store' },
     { _id: adopterId, name: 'Ana', email: 'a@test.com', passwordHash: 'x', role: 'tenant' },
+    { _id: adopterBId, name: 'Bea', email: 'b@test.com', passwordHash: 'x', role: 'tenant' },
     { _id: vetId, name: 'Clínica Vet', email: 'v@test.com', passwordHash: 'x', role: 'vet' },
   ]);
 });
@@ -67,7 +69,8 @@ async function seedPlatformData() {
   await Adoption.collection.insertMany([
     { animalId: String(luna._id), adopterId: String(adopterId), status: 'aprobada', createdAt: daysAgo(6), updatedAt: daysAgo(1) },
     { animalId: String(michi._id), adopterId: String(adopterId), status: 'rechazada', createdAt: daysAgo(4), updatedAt: daysAgo(3) },
-    { animalId: String(michi._id), adopterId: String(adopterId), status: 'en_revision', createdAt: daysAgo(2), updatedAt: daysAgo(2) },
+    // Adoptante distinto: (animalId, adopterId) tiene índice único.
+    { animalId: String(michi._id), adopterId: String(adopterBId), status: 'en_revision', createdAt: daysAgo(2), updatedAt: daysAgo(2) },
   ]);
   await Donation.create([
     { animalId: String(luna._id), userId: String(adopterId), amount: 2500, status: 'completed' },
@@ -93,7 +96,7 @@ describe('KPIs internos de plataforma (admin)', () => {
     await seedPlatformData();
     const r = await request(app).get('/api/admin/metrics').set(adminH).expect(200);
 
-    expect(r.body.usuarios.adoptantes).toBe(1);
+    expect(r.body.usuarios.adoptantes).toBe(2);
     expect(r.body.usuarios.protectoras).toBe(1);
     expect(r.body.usuarios.vets).toBe(1);
     expect(r.body.usuarios.tiendas).toBe(1);
