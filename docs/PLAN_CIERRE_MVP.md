@@ -92,3 +92,82 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
 2. Rama pusheada a `mypetlive`.
 3. Nota breve de qué se hizo (para el changelog de `ESTADO_Y_ROADMAP.md`).
 4. Claude revisa, mergea a `rentalapp1.2` y despliega.
+
+---
+
+## Registro de coordinación — Codex (22 jul 2026)
+
+### Estado que he leído y reglas que asumo
+
+- Checkout compartido localizado en `/Users/jorge/Projects/animal-app`.
+- El worktree compartido está actualmente en `feat/liquidacion-partner`, limpio y
+  sincronizado con `mypetlive/feat/liquidacion-partner`. Es trabajo de Claude: **Codex no
+  cambiará esa rama ni tocará código fuente en ese worktree**.
+- La única excepción en el worktree compartido es esta nota de coordinación, añadida a
+  petición de Jorge.
+- Para F1 y F4, Codex trabajará en un **worktree Git independiente**, siempre desde
+  `rentalapp1.2`, y solo pusheará al remoto `mypetlive`.
+- Codex no tocará F2, F3, `src/routes/index.ts`, Docker, configuración del VPS, integración,
+  merge ni despliegue.
+
+### Orden de trabajo de Codex
+
+1. **F4 — tests ampliados del pasaporte**, rama `test/pasaporte`.
+   - Empezar por tests para reducir el riesgo de colisión con el frontend que pueda estar
+     integrando Claude.
+   - Archivos reservados mientras F4 esté en curso:
+     `src/__tests__/animal.passport.test.ts` y, si conviene separar el matching,
+     `src/__tests__/offers.matching.test.ts` (nuevo).
+   - `src/controllers/animal.controller.ts`, `src/controllers/offers.controller.ts` y
+     `src/routes/seo.routes.ts` serán inicialmente **solo lectura**. Si un test descubre un
+     bug real, se avisará aquí antes de editar y el arreglo irá en un commit separado.
+   - Verificación: test focal, después `npx jest src/__tests__`.
+
+2. **F1 — calendario semanal del veterinario**, rama `feat/calendario-semanal`, después de F4.
+   - Archivos previstos: `frontend/src/components/vet/AppointmentsCalendar.tsx`,
+     `frontend/src/pages/vet/AppointmentsPage.tsx` y, solo si hace falta reutilizar la
+     mutación existente, `frontend/src/components/vet/VetAppointmentsPanel.tsx` y
+     `frontend/src/api/vetAppointments.ts`.
+   - No se tocarán `src/models/vetAppointment.model.ts`, el feed iCal ni el catálogo.
+   - Antes de iniciar F1 se actualizará esta sección con los archivos definitivamente
+     reservados, para que Claude pueda evitar esos mismos puntos.
+
+3. **F5 queda libre**. Codex no lo iniciará sin una asignación explícita en este documento.
+
+### Hallazgos de la revisión inicial de Codex
+
+Estos puntos se han comprobado en producción y, cuando se indica, también contra
+`rentalapp1.2`. **No forman parte de F1/F4 y Codex no los corregirá por su cuenta**, para no
+invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/cierre:
+
+- **Crítico — roles profesionales autoasignables:** `rentalapp1.2` permite registrar por API
+  los roles `protectora`, `vet` y `store`. Además, el despliegue usa
+  `NODE_ENV=development` y `ALLOW_UNVERIFIED=true`, y mantiene `/api/verification/dev/verify`.
+  La combinación permite que una cuenta profesional eleve capacidades sin el alta manual
+  que promete la interfaz. Requiere decisión y rama de seguridad separada.
+- **Dependencias:** el lockfile devuelve 87 avisos con `npm audit --omit=dev` (3 críticos,
+  34 altos, 37 moderados y 13 bajos). Parte procede de la cadena CRA, pero también aparecen
+  dependencias directas de ejecución (Axios, Express, Mongoose, Nodemailer,
+  Express Validator y Multer). Debe separarse actualización de runtime y migración del
+  toolchain; no mezclarla con F1/F4.
+- **Trazabilidad del despliegue:** `/opt/mypetlive` no conserva metadatos Git y todavía se
+  identifica en varios puntos como RentalApp. El checkout correcto sí está en este Mac y el
+  remoto correcto es `mypetlive`; el despliegue debería quedar ligado a un commit/tag.
+- **Producción web:** el bundle principal se sirve sin compresión ni política de caché
+  (`~817 KB` transferidos). Faltan cabeceras web como HSTS/CSP en los estáticos.
+- **Producto/legal:** WhatsApp profesional sigue en `https://wa.me/XXXXXXXXXX`; el registro
+  no presenta términos/privacidad y admite contraseña mínima de seis caracteres; las cifras
+  de impacto de la portada están hardcodeadas y no coinciden con los datos visibles.
+- **SEO/UX:** `<html lang="en">`, ausencia de canonical, rutas inexistentes con HTTP 200,
+  textos `cat/dog/anio/anios` y un pequeño desbordamiento horizontal a 390 px.
+- **Operación validada:** HTTPS correcto, contenedores sin reinicios ni errores recientes,
+  puertos 3000/8080 bloqueados externamente, health/Mongo correctos y backup diario válido
+  en prueba seca. Falta confirmar una copia fuera del propio VPS.
+
+### Protocolo de no colisión
+
+- El estado de una tarea será `PENDIENTE`, `EN CURSO`, `LISTA PARA REVISIÓN` o `INTEGRADA`.
+- Solo `EN CURSO` reserva archivos; las reservas se anotan arriba antes de editar.
+- Si aparece un archivo compartido con Claude, Codex pausa ese cambio y lo deja documentado.
+- Codex entrega rama, commits, tests y nota de changelog; Claude revisa, integra y despliega.
+- No se ejecutará ningún cambio directo en producción desde las ramas de Codex.
