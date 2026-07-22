@@ -10,6 +10,7 @@ jest.mock('../utils/notification', () => ({
 let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
+let Coupon: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -19,6 +20,7 @@ beforeAll(async () => {
   const mod = await import('../app');
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
+  Coupon = (await import('../models/coupon.model')).Coupon;
 });
 
 afterAll(async () => {
@@ -122,5 +124,57 @@ describe('Ventas de partner con comisión', () => {
     expect(row.withSale).toBe(1);
     expect(row.withoutSale).toBe(1);
     expect(row.declaredRatio).toBeCloseTo(0.5, 2);
+  });
+});
+
+describe('Cupones aplicados junto con la venta (Caja propia)', () => {
+  it('couponIds consume el cupón, suma sus Patitas de bonus y lo marca usado', async () => {
+    const coupon = await Coupon.create({
+      partnerId: storeId, partnerType: 'store', copy: '10% en pienso', discount: '-10%', bonusPatitas: 20, active: true,
+    });
+
+    const res = await request(app)
+      .post('/api/patitas/sales')
+      .set(storeH)
+      .send({ userId: clientId, amountEur: 47.5, couponIds: [String(coupon._id)] })
+      .expect(201);
+
+    expect(res.body.appliedCoupons).toHaveLength(1);
+    expect(res.body.appliedCoupons[0].title).toBe('10% en pienso');
+    // Patitas de la venta (floor(47.5)=47) + bonus del cupón (20).
+    expect(res.body.patitasEarned).toBe(67);
+
+    const used = await Coupon.findById(coupon._id).lean();
+    expect(used.usedAt).toBeTruthy();
+    expect(String(used.usedBy)).toBe(storeId);
+  });
+
+  it('applyCoupons:true aplica todos los elegibles; sin flags no aplica ninguno', async () => {
+    await Coupon.create([
+      { partnerId: storeId, partnerType: 'store', copy: 'Bono A', discount: '-5%', active: true },
+      { partnerId: storeId, partnerType: 'store', copy: 'Bono B', discount: '-5%', active: true },
+    ]);
+
+    const off = await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 10 }).expect(201);
+    expect(off.body.appliedCoupons).toHaveLength(0);
+
+    const on = await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 10, applyCoupons: true }).expect(201);
+    expect(on.body.appliedCoupons).toHaveLength(2);
+  });
+
+  it('un cupón de otro partner no se puede colar por couponIds', async () => {
+    const otherStoreId = new mongoose.Types.ObjectId().toHexString();
+    await User.create({ _id: otherStoreId, name: 'Otra tienda', email: 'otra@test.com', passwordHash: 'x', role: 'store' });
+    const foreign = await Coupon.create({ partnerId: otherStoreId, partnerType: 'store', copy: 'Ajeno', discount: '-5%', active: true });
+
+    const res = await request(app)
+      .post('/api/patitas/sales')
+      .set(storeH)
+      .send({ userId: clientId, amountEur: 10, couponIds: [String(foreign._id)] })
+      .expect(201);
+
+    expect(res.body.appliedCoupons).toHaveLength(0);
+    const untouched = await Coupon.findById(foreign._id).lean();
+    expect(untouched.usedAt).toBeFalsy();
   });
 });

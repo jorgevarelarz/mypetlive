@@ -90,6 +90,19 @@ function sanitizeProfile(input: any): Record<string, any> {
     }
     out.vet = v;
   }
+  if (Array.isArray(input.itemCatalog)) {
+    out.itemCatalog = input.itemCatalog
+      .map((item: any) => {
+        if (!item || typeof item !== 'object') return null;
+        const name = typeof item.name === 'string' ? item.name.trim().slice(0, 100) : '';
+        if (!name) return null;
+        const price = Number(item.priceEur);
+        const priceEur = Number.isFinite(price) && price >= 0 ? Math.round(price * 100) / 100 : undefined;
+        return { name, priceEur };
+      })
+      .filter(Boolean)
+      .slice(0, 60);
+  }
   if (input.autoDonate && typeof input.autoDonate === 'object') {
     const ad: Record<string, any> = { enabled: !!input.autoDonate.enabled };
     if (input.autoDonate.shelterId && /^[a-f\d]{24}$/i.test(String(input.autoDonate.shelterId))) {

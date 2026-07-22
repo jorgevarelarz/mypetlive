@@ -67,6 +67,7 @@ type FormState = {
   orgName: string;
   website: string;
   address: { street: string; city: string; postalCode: string; region: string; country: string };
+  itemCatalog: { name: string; priceEur: string }[];
   vet: {
     licenseNumber: string;
     specialties: string[];
@@ -103,6 +104,10 @@ function initForm(user: any): FormState {
       region: a.region || '',
       country: a.country || 'España',
     },
+    itemCatalog: (p.itemCatalog || []).map(it => ({
+      name: it.name || '',
+      priceEur: it.priceEur != null ? String(it.priceEur) : '',
+    })),
     vet: {
       licenseNumber: p.vet?.licenseNumber || '',
       specialties: p.vet?.specialties || [],
@@ -334,6 +339,17 @@ export default function ProfilePage() {
         profile.orgName = form.orgName.trim();
         profile.website = form.website.trim();
       }
+      if (role === 'store' || role === 'vet') {
+        profile.itemCatalog = form.itemCatalog
+          .filter(it => it.name.trim())
+          .map(it => {
+            const price = Number(it.priceEur.replace(',', '.'));
+            return {
+              name: it.name.trim(),
+              priceEur: it.priceEur !== '' && Number.isFinite(price) && price >= 0 ? price : undefined,
+            };
+          });
+      }
       if (role === 'vet') {
         profile.vet = {
           licenseNumber: form.vet.licenseNumber.trim(),
@@ -473,6 +489,36 @@ export default function ProfilePage() {
               <Field label="País"><input value={form.address.country} onChange={e => setAddr('country', e.target.value)} style={inputStyle} /></Field>
             </div>
           </Card>
+
+          {/* Catálogo de productos (tienda/vet): quick-add en caja sin teclear cada venta */}
+          {(role === 'store' || role === 'vet') && (
+            <Card title="Catálogo de productos">
+              <p style={{ color: MPL.faint, fontSize: 12.5, margin: 0 }}>
+                Guarda tus productos habituales para añadirlos con un toque al registrar una venta en Caja, sin escribir el nombre y el precio cada vez.
+              </p>
+              {form.itemCatalog.map((item, i) => {
+                const update = (patch: Partial<typeof item>) =>
+                  set('itemCatalog', form.itemCatalog.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                return (
+                  <div key={i} className="item-catalog-row">
+                    <input value={item.name} onChange={e => update({ name: e.target.value })} maxLength={100} style={inputStyle} placeholder="Ej. Pienso cachorro 3kg" />
+                    <input type="number" min={0} step="0.01" value={item.priceEur} onChange={e => update({ priceEur: e.target.value })} style={inputStyle} placeholder="€" />
+                    <button type="button" aria-label="Quitar producto"
+                      onClick={() => set('itemCatalog', form.itemCatalog.filter((_, j) => j !== i))}
+                      style={{ border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 10, padding: '8px 0', cursor: 'pointer', color: MPL.coralDark, fontWeight: 800 }}>
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+              <button type="button"
+                onClick={() => set('itemCatalog', [...form.itemCatalog, { name: '', priceEur: '' }])}
+                disabled={form.itemCatalog.length >= 60}
+                style={{ justifySelf: 'start', border: `1.5px dashed ${MPL.teal}`, background: '#fff', color: MPL.teal, borderRadius: 11, padding: '8px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                + Añadir producto
+              </button>
+            </Card>
+          )}
 
           {/* Ficha profesional (veterinario) */}
           {role === 'vet' && (

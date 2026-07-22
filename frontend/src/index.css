@@ -205,6 +205,7 @@ a:hover {
 .profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .field-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vet-svc-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 150px 36px; gap: 8px; align-items: center; }
+.item-catalog-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 36px; gap: 8px; align-items: center; }
 @media (max-width: 900px) {
   .profile-grid { grid-template-columns: 1fr; }
 }
@@ -212,6 +213,7 @@ a:hover {
   .field-duo { grid-template-columns: 1fr; }
   .vet-svc-row { grid-template-columns: minmax(0, 1fr) 130px 36px; }
   .vet-svc-row > :first-child { grid-column: 1 / -1; }
+  .item-catalog-row { grid-template-columns: minmax(0, 1fr) 130px 36px; }
 }
 
 /* Estilos de style.css adaptados */

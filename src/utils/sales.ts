@@ -1,6 +1,9 @@
+import { Types } from 'mongoose';
 import { Sale } from '../models/sale.model';
+import { Coupon } from '../models/coupon.model';
 import { PartnerIdentification } from '../models/partnerIdentification.model';
-import { earnForUser, EarnResult } from './patitas';
+import { earnForUser, EarnResult, COUPON_PATITAS_REWARD_DEFAULT } from './patitas';
+import { eligibleCoupons, serializeCoupon } from './coupons';
 import { withTxnIfAvailable } from './txn';
 
 // Comisión de plataforma por defecto (%) sobre ventas de partners y Patitas por € de compra.
@@ -79,6 +82,73 @@ export async function recordSale(
 
     return { saleId: String(sale._id), commissionPct, commissionEur, patitasEarned: patitas, earn };
   });
+}
+
+// Qué cupones consumir en una venta: los explícitos en couponIds, todos los
+// elegibles si applyCoupons:true, o ninguno por defecto. Lo comparten el TPV
+// (posSale) y la Caja propia (registerSale) — mismo criterio en ambos canales.
+export async function couponsToApplyForSale(partnerId: string, userId: string, body: any) {
+  const explicit = Array.isArray(body?.couponIds)
+    ? body.couponIds.map(String).filter((id: string) => Types.ObjectId.isValid(id))
+    : null;
+  if (explicit?.length) {
+    return (await eligibleCoupons(partnerId, userId)).filter((c: any) => explicit.includes(String(c._id)));
+  }
+  if (body?.applyCoupons === true) return eligibleCoupons(partnerId, userId);
+  return [];
+}
+
+export type AppliedSaleCoupon = ReturnType<typeof serializeCoupon> & { bonusPatitas: number };
+
+// Consume los cupones elegidos como parte de una venta ya creada: marcado atómico
+// de uso (findOneAndUpdate con filtro usedAt evita el doble consumo con cajas
+// concurrentes) + Patitas de bonus al cliente, y persiste el detalle en la venta
+// para auditoría y para que un reintento idempotente devuelva la misma respuesta.
+export async function applyCouponsToSale(
+  saleId: string,
+  partnerId: string,
+  userId: string,
+  coupons: any[],
+): Promise<{ appliedCoupons: AppliedSaleCoupon[]; couponPatitas: number }> {
+  const appliedCoupons: AppliedSaleCoupon[] = [];
+  let couponPatitas = 0;
+  for (const c of coupons) {
+    const applied = await withTxnIfAvailable(async (session) => {
+      const used: any = await Coupon.findOneAndUpdate(
+        { _id: c._id, usedAt: { $exists: false } },
+        { usedAt: new Date(), usedBy: partnerId },
+        { new: true, session },
+      );
+      if (!used) return null;
+      const reward = Number(used.bonusPatitas) > 0 ? Math.round(Number(used.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
+      await earnForUser({
+        userId, amount: reward, source: 'coupon', partnerId, couponId: String(used._id),
+        concept: `Cupón: ${used.title || used.copy}`,
+      }, session);
+      return { used, reward };
+    });
+    if (!applied) continue;
+    couponPatitas += applied.reward;
+    appliedCoupons.push({ ...serializeCoupon(applied.used), bonusPatitas: applied.reward });
+  }
+
+  if (appliedCoupons.length) {
+    await Sale.updateOne(
+      { _id: saleId },
+      {
+        couponPatitas,
+        appliedCoupons: appliedCoupons.map(c => ({
+          couponId: c._id,
+          title: c.title,
+          discount: c.discount,
+          bonusPatitas: c.bonusPatitas,
+          targetAnimalCode: c.targetAnimalCode,
+        })),
+      },
+    );
+  }
+
+  return { appliedCoupons, couponPatitas };
 }
 
 // Ventana en la que reescanear al mismo cliente no crea otra identificación: sin

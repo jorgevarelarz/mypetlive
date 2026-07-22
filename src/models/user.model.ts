@@ -210,6 +210,20 @@ const profileSchema = new Schema(
       ),
       default: () => ({}),
     },
+    // Catálogo de productos del partner (tienda/vet): para añadirlos con un toque
+    // al registrar una venta en caja, sin teclear nombre y precio cada vez.
+    itemCatalog: {
+      type: [
+        new Schema(
+          {
+            name: { type: String, trim: true, required: true, maxlength: 100 },
+            priceEur: { type: Number, min: 0 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     // Común
     address: { type: addressSchema, default: () => ({}) },
     // Auto-donación de Patitas: reenvía automáticamente las Patitas generadas a una protectora.

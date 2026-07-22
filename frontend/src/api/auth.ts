@@ -21,6 +21,12 @@ export type UserProfile = {
   website?: string;
   address?: UserAddress;
   vet?: VetProfile;
+  itemCatalog?: ItemCatalogEntry[];
+};
+
+export type ItemCatalogEntry = {
+  name: string;
+  priceEur?: number;
 };
 
 export type VetServiceItem = {

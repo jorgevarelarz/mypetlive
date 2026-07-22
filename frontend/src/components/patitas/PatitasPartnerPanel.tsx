@@ -333,7 +333,7 @@ function PosIntegration() {
 
 // Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
 // Exportado: es también el corazón del Modo Caja (/caja), el alta sin TPV.
-export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => void }) {
+export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; onDone: () => void; catalog?: Array<{ name: string; priceEur?: number }> }) {
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -341,6 +341,11 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
   // Venta con ticket: importe + líneas opcionales (producto/cantidad/precio).
   const [saleAmount, setSaleAmount] = useState('');
   const [saleItems, setSaleItems] = useState<Array<{ name: string; qty: string; priceEur: string }>>([]);
+  // Cupones marcados para consumirse junto con esta venta (checkbox, sin llamada
+  // aparte): se envían en el propio registerSale, como hace el TPV.
+  const [selectedCoupons, setSelectedCoupons] = useState<Set<string>>(new Set());
+  const toggleCoupon = (id: string) =>
+    setSelectedCoupons(s => { const next = new Set(s); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   const couponsQ = useQuery({ queryKey: ['my-coupons'], queryFn: listCoupons });
   const myCoupons = (couponsQ.data?.items || []).filter(c => String(c.partnerId) === meId && !c.usedAt && c.active);
@@ -391,10 +396,12 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
         ...(Number(i.qty) > 0 ? { qty: Number(i.qty) } : {}),
         ...(Number(i.priceEur) >= 0 && i.priceEur !== '' ? { priceEur: Number(i.priceEur) } : {}),
       }));
+    const couponIds = Array.from(selectedCoupons);
     setBusy(true);
     try {
-      const r = await registerSale({ userId: customer.userId, amountEur: amount, items });
-      toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
+      const r = await registerSale({ userId: customer.userId, amountEur: amount, items, ...(couponIds.length ? { couponIds } : {}) });
+      const couponNote = r.appliedCoupons.length ? ` · ${r.appliedCoupons.length} cupón${r.appliedCoupons.length > 1 ? 'es' : ''} aplicado${r.appliedCoupons.length > 1 ? 's' : ''}` : '';
+      toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${couponNote}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
       reset();
     } catch (e: any) {
       toast.error(e?.response?.data?.error === 'invalid_amount' ? 'Importe no válido' : 'No se pudo registrar la venta');
@@ -404,7 +411,26 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
   const setItem = (idx: number, patch: Partial<{ name: string; qty: string; priceEur: string }>) =>
     setSaleItems(items => items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
 
-  const reset = () => { setCustomer(null); setCode(''); setScanning(false); setSaleAmount(''); setSaleItems([]); onDone(); };
+  // Añade (o incrementa cantidad) un producto del catálogo con nombre y precio ya rellenos.
+  const addFromCatalog = (p: { name: string; priceEur?: number }) => {
+    setSaleItems(items => {
+      const idx = items.findIndex(it => it.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+      if (idx >= 0) {
+        const next = [...items];
+        next[idx] = { ...next[idx], qty: String((Number(next[idx].qty) || 0) + 1) };
+        return next;
+      }
+      return [...items, { name: p.name, qty: '1', priceEur: p.priceEur != null ? String(p.priceEur) : '' }];
+    });
+  };
+
+  const itemsTotal = saleItems.reduce((sum, it) => {
+    const qty = Number(it.qty) || 0;
+    const price = Number(it.priceEur);
+    return sum + (qty > 0 && Number.isFinite(price) ? qty * price : 0);
+  }, 0);
+
+  const reset = () => { setCustomer(null); setCode(''); setScanning(false); setSaleAmount(''); setSaleItems([]); setSelectedCoupons(new Set()); onDone(); };
 
   return (
     <div style={card}>
@@ -457,6 +483,19 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
                 {busy ? '…' : 'Registrar venta'}
               </button>
             </div>
+            {catalog.length > 0 && (
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: MPL.muted }}>Tu catálogo</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {catalog.map((p, i) => (
+                    <button key={i} type="button" onClick={() => addFromCatalog(p)}
+                      style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 999, padding: '7px 13px', font: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      {p.name}{p.priceEur != null ? ` · ${p.priceEur.toFixed(2)} €` : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 8 }}>
               {saleItems.map((it, idx) => (
                 <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -466,6 +505,14 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
                   <button type="button" onClick={() => setSaleItems(items => items.filter((_, i) => i !== idx))} aria-label="Quitar línea" style={{ background: 'none', border: 0, color: MPL.faint, cursor: 'pointer' }}><X size={16} /></button>
                 </div>
               ))}
+              {itemsTotal > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                  <span style={{ color: MPL.muted }}>Suma de productos: <strong style={{ color: MPL.ink }}>{itemsTotal.toFixed(2)} €</strong></span>
+                  <button type="button" onClick={() => setSaleAmount(itemsTotal.toFixed(2))} style={{ background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
+                    Usar este importe
+                  </button>
+                </div>
+              )}
               <button type="button" onClick={() => setSaleItems(items => [...items, { name: '', qty: '1', priceEur: '' }])} style={{ justifySelf: 'start', background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
                 + Añadir línea del ticket (para ofertas personalizadas)
               </button>
@@ -484,7 +531,7 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
                 customer.coupons ?? myCoupons;
               return (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 4 }}>
                     {customer.coupons ? 'Cupones de este cliente en tu establecimiento' : 'O aplicar uno de tus cupones'}
                   </div>
                   {applicable.length === 0 ? (
@@ -492,18 +539,32 @@ export function GeneratePatitas({ meId, onDone }: { meId: string; onDone: () => 
                       {customer.coupons ? 'Este cliente no tiene cupones aplicables aquí.' : 'No tienes cupones activos.'}
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {applicable.map(c => (
-                        <button key={c._id} type="button" onClick={() => applyCoupon(c)} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '11px 14px', font: 'inherit', cursor: 'pointer' }}>
-                          <Ticket size={18} color={MPL.coralDark} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
-                            <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
-                          </div>
-                          <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <p style={{ color: MPL.faint, fontSize: 12.5, margin: '0 0 8px' }}>
+                        Marca los que se descuenten en el ticket: se consumen solos al registrar la venta.
+                      </p>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {applicable.map(c => {
+                          const selected = selectedCoupons.has(c._id);
+                          return (
+                            <div key={c._id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: selected ? MPL.olive100 : '#fff', border: `1.5px solid ${selected ? MPL.olive : MPL.border}`, borderRadius: 12, padding: '11px 14px' }}>
+                              <button type="button" onClick={() => toggleCoupon(c._id)} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: 'none', border: 0, flex: 1, minWidth: 0, font: 'inherit', cursor: 'pointer', padding: 0 }}>
+                                <input type="checkbox" checked={selected} onChange={() => toggleCoupon(c._id)} onClick={e => e.stopPropagation()} style={{ flex: 'none' }} />
+                                <Ticket size={18} color={MPL.coralDark} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
+                                  <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
+                                </div>
+                                <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
+                              </button>
+                              <button type="button" onClick={() => applyCoupon(c)} disabled={busy} title="Aplicarlo ya, sin venta" style={{ background: 'none', border: 0, color: MPL.faint, cursor: 'pointer', fontSize: 12, fontWeight: 700, flex: 'none' }}>
+                                sin venta
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </>
               );
@@ -574,7 +635,7 @@ export default function PatitasPartnerPanel() {
 
       <PartnerPayout />
 
-      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} />
+      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} catalog={user?.profile?.itemCatalog || []} />
 
       <PosIntegration />
 

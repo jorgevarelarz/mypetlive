@@ -2,12 +2,10 @@ import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import crypto from 'crypto';
 import { User } from '../models/user.model';
-import { Coupon } from '../models/coupon.model';
 import { Sale } from '../models/sale.model';
-import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
-import { recordSale, recordIdentification, computeSaleFigures } from '../utils/sales';
+import { COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
+import { recordSale, recordIdentification, computeSaleFigures, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
-import { withTxnIfAvailable } from '../utils/txn';
 import { resolveUserFromBody } from './patitas.controller';
 
 const MAX_POS_KEYS = 5;
@@ -143,20 +141,6 @@ export async function posIdentify(req: Request, res: Response) {
   });
 }
 
-// Selección de cupones a consumir según el body: couponIds explícitos (los que la
-// caja descontó de verdad), o todos los elegibles con applyCoupons:true; por
-// defecto ninguno.
-async function couponsToApply(partnerId: string, userId: string, body: any) {
-  const explicit = Array.isArray(body?.couponIds)
-    ? body.couponIds.map(String).filter((id: string) => Types.ObjectId.isValid(id))
-    : null;
-  if (explicit?.length) {
-    return (await eligibleCoupons(partnerId, userId)).filter(c => explicit.includes(String(c._id)));
-  }
-  if (body?.applyCoupons === true) return eligibleCoupons(partnerId, userId);
-  return [];
-}
-
 // Respuesta 200 para un reintento con el mismo externalRef: la venta ya existía.
 // Devuelve exactamente lo mismo que la llamada original (cupones incluidos), para
 // que el TPV pueda reimprimir el ticket real.
@@ -200,7 +184,7 @@ export async function posSale(req: Request, res: Response) {
   // ni Patitas). El integrador del TPV puede probar contra producción sin miedo.
   if (isTestMode(req)) {
     const figures = computeSaleFigures(partner, amountEur);
-    const coupons = await couponsToApply(partnerId, userId, req.body);
+    const coupons = await couponsToApplyForSale(partnerId, userId, req.body);
     const couponPatitas = coupons.reduce(
       (sum, c: any) => sum + (Number(c.bonusPatitas) > 0 ? Math.round(Number(c.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT),
       0,
@@ -235,49 +219,8 @@ export async function posSale(req: Request, res: Response) {
     throw err;
   }
 
-  const coupons = await couponsToApply(partnerId, userId, req.body);
-  const appliedCoupons: any[] = [];
-  let couponPatitas = 0;
-  for (const c of coupons) {
-    // Consumir + acreditar el bonus como unidad atómica (transacción si el
-    // despliegue lo permite): no queda cupón quemado sin Patitas ni al revés.
-    // El findOneAndUpdate con filtro usedAt evita el doble uso con cajas concurrentes.
-    const applied = await withTxnIfAvailable(async (session) => {
-      const used: any = await Coupon.findOneAndUpdate(
-        { _id: c._id, usedAt: { $exists: false } },
-        { usedAt: new Date(), usedBy: partnerId },
-        { new: true, session },
-      );
-      if (!used) return null;
-      const reward = Number(used.bonusPatitas) > 0 ? Math.round(Number(used.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
-      await earnForUser({
-        userId, amount: reward, source: 'coupon', partnerId, couponId: String(used._id),
-        concept: `Cupón: ${used.title || used.copy}`,
-      }, session);
-      return { used, reward };
-    });
-    if (!applied) continue;
-    couponPatitas += applied.reward;
-    appliedCoupons.push({ ...serializeCoupon(applied.used), bonusPatitas: applied.reward });
-  }
-
-  // Persistir los cupones consumidos en la venta: auditoría + respuesta idéntica
-  // si el TPV reintenta con el mismo externalRef.
-  if (appliedCoupons.length) {
-    await Sale.updateOne(
-      { _id: sale.saleId },
-      {
-        couponPatitas,
-        appliedCoupons: appliedCoupons.map(c => ({
-          couponId: c._id,
-          title: c.title,
-          discount: c.discount,
-          bonusPatitas: c.bonusPatitas,
-          targetAnimalCode: c.targetAnimalCode,
-        })),
-      },
-    );
-  }
+  const coupons = await couponsToApplyForSale(partnerId, userId, req.body);
+  const { appliedCoupons, couponPatitas } = await applyCouponsToSale(sale.saleId, partnerId, userId, coupons);
 
   res.status(201).json({
     ok: true,

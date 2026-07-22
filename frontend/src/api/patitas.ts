@@ -115,11 +115,17 @@ export async function addPatitas(protectoraId: string, amount: number) {
 }
 
 // Venta del partner: importe del ticket + líneas opcionales → comisión + Patitas proporcionales.
+// couponIds (o applyCoupons:true) consume esos cupones como parte de la misma venta,
+// sin un paso aparte de "aplicar cupón" — igual que hace el TPV (POST /api/pos/sales).
 export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
+export type AppliedSaleCoupon = { _id: string; title?: string; discount?: string; bonusPatitas: number; targetAnimalCode?: string | null };
 
-export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[] }) {
+export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[]; couponIds?: string[]; applyCoupons?: boolean }) {
   const { data } = await client.post('/api/patitas/sales', payload);
-  return data as { ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number; balance?: number; autoDonated?: boolean };
+  return data as {
+    ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number;
+    appliedCoupons: AppliedSaleCoupon[]; balance?: number; autoDonated?: boolean;
+  };
 }
 
 // Extracto mensual de liquidación de comisiones del partner.

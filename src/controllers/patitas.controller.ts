@@ -19,7 +19,7 @@ import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
 import { UserCode } from '../models/userCode.model';
-import { recordSale, recordIdentification } from '../utils/sales';
+import { recordSale, recordIdentification, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
 import { partnerStatements } from '../utils/settlement';
 import { canReceiveDonations } from '../utils/shelterVerification';
@@ -239,7 +239,10 @@ export async function identifyUser(req: Request, res: Response) {
 
 // POST /api/patitas/sales — el partner registra una venta con el código del cliente:
 // importe del ticket + líneas opcionales (producto/cantidad/precio). Deja calculada
-// la comisión de plataforma y da al cliente Patitas proporcionales al importe.
+// la comisión de plataforma, da al cliente Patitas proporcionales al importe y, si
+// el body trae couponIds o applyCoupons:true, consume esos cupones como parte de la
+// misma venta (mismo criterio que el TPV: POST /api/pos/sales) — el cupón se activa
+// solo, sin un paso aparte de "aplicar cupón".
 export async function registerSale(req: Request, res: Response) {
   const partner: any = (req as any).user;
   const partnerId = actorId(req);
@@ -260,8 +263,14 @@ export async function registerSale(req: Request, res: Response) {
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
   const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);
 
+  const candidates = await couponsToApplyForSale(partnerId, target, req.body);
+  const { appliedCoupons, couponPatitas } = candidates.length
+    ? await applyCouponsToSale(r.saleId, partnerId, target, candidates)
+    : { appliedCoupons: [] as any[], couponPatitas: 0 };
+
   res.status(201).json({
-    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur, patitasEarned: r.patitasEarned,
+    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur,
+    patitasEarned: r.patitasEarned + couponPatitas, appliedCoupons,
     ...(r.earn ? { balance: r.earn.balance, autoDonated: r.earn.autoDonated } : {}),
   });
 }

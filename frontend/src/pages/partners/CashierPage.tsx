@@ -29,7 +29,7 @@ export default function CashierPage() {
         </div>
       </header>
 
-      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['my-coupons'] })} />
+      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['my-coupons'] })} catalog={user?.profile?.itemCatalog || []} />
 
       <p style={{ color: MPL.faint, fontSize: 12.5, margin: 0 }}>
         ¿Tu sistema de caja puede integrarse? Conéctalo desde{' '}
