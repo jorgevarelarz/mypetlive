@@ -323,3 +323,17 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 - Codex trabaja con ramas, commits, pruebas y nota de changelog antes de integrar o desplegar.
 - Producción sólo recibe commits integrados en `rentalapp1.2`, con comprobaciones previas y
   copia recuperable.
+
+### Caja partner: catálogo y cupones — Codex
+
+- Estado: **INTEGRADA Y DESPLEGADA** el 22 jul 2026 en `rentalapp1.2`, commit `1dce308`.
+- Tiendas y veterinarios pueden guardar un catálogo en su perfil, añadir productos con un
+  toque en Caja y usar la suma del ticket como importe de la venta.
+- La Caja propia consume los cupones seleccionados dentro de la misma venta y comparte con
+  el TPV la selección, el consumo atómico y la auditoría de cupones.
+- Validación: builds backend/frontend correctos; 154 pruebas activas de MyPetLive en verde.
+  La suite global conserva fallos de los módulos RentalApp congelados y fuera de alcance.
+- Producción verificada: web, `/health`, `/health/ready` y `/api/animals` en HTTP 200;
+  `APP_ENV=production`; imagen API `sha256:a8ba7635fcf5...`; `DEPLOYED_COMMIT=1dce308`.
+- Reversión: `/opt/mypetlive/deploy-backups/2026-07-22-pre-1dce308/` y etiqueta Docker
+  `mypetlive-api:rollback-1dce308`.
