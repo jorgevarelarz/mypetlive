@@ -21,6 +21,7 @@ import { Sale } from '../models/sale.model';
 import { UserCode } from '../models/userCode.model';
 import { recordSale, recordIdentification } from '../utils/sales';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
+import { partnerStatements } from '../utils/settlement';
 import { canReceiveDonations } from '../utils/shelterVerification';
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
@@ -278,6 +279,25 @@ export async function listMySales(req: Request, res: Response) {
     { amountEur: 0, commissionEur: 0 },
   );
   res.json({ items, totals: { ...totals, count: items.length } });
+}
+
+// GET /api/patitas/sales/statements[?format=csv] — extracto mensual de liquidación
+// del partner: por cada mes con ventas, base, comisión de plataforma y estado
+// (pendiente / facturado / pagado, derivado de Sale.settlementStatus).
+export async function listMyStatements(req: Request, res: Response) {
+  const partnerId = new Types.ObjectId(actorId(req));
+  const items = await partnerStatements(partnerId);
+
+  if (String(req.query.format || '') === 'csv') {
+    const header = 'periodo;ventas;base_eur;comision_eur;estado;factura';
+    const lines = items.map(r => `${r.period};${r.sales};${r.amountEur};${r.commissionEur};${r.status};${r.invoiceRef || ''}`);
+    const csv = [header, ...lines].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="extracto-liquidacion.csv"');
+    // BOM para que Excel abra el UTF-8 con acentos correctos.
+    return res.send('\uFEFF' + csv);
+  }
+  res.json({ items });
 }
 
 // Check-in de visita a tienda: el partner identifica a un usuario y le genera Patitas.
