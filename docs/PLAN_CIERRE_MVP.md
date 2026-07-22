@@ -207,22 +207,63 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 ### Seguridad F0.2 — Codex
 
-- Estado: **EN CURSO** en una rama/worktree aislados desde `rentalapp1.2`. No se hará merge,
-  despliegue ni cambio directo en el VPS; Claude revisará e integrará.
-- Alcance inicial: impedir que el registro público autoasigne roles profesionales o
-  administrativos; elevar la política de contraseña; aplicar cabeceras y validaciones de
-  producción cuando `APP_ENV=production`; ajustar la interfaz para derivar las altas
-  profesionales al canal manual; añadir pruebas de regresión.
-- Archivos reservados mientras dure este bloque:
+- Estado: **INTEGRADA** en `rentalapp1.2` mediante `8be2fa9` (rama de origen
+  `mypetlive/security/harden-auth`, commit `0495656`). Integración asumida por Codex tras el
+  relevo de Claude; pendiente de despliegue y verificación final en producción.
+- El registro público solo crea adoptantes (`tenant`) y rechaza expresamente los roles
+  `protectora/landlord`, `vet`, `store`, `pro` y `admin`; se eliminó también el atajo de
+  roles privilegiados en tests. Las fixtures antiguas crean esos roles directamente en BD.
+- Contraseñas nuevas y restablecidas: mínimo 12 caracteres y máximo real de 72 bytes por
+  el límite de bcrypt. Las cuentas antiguas con claves más cortas siguen pudiendo entrar.
+  Login, registro y recuperación tienen límites específicos de intentos.
+- `APP_ENV=production` activa ahora CSP/HSTS, CORS sin fallback local, validación estricta
+  de entorno y salida ante excepción no capturada aunque `NODE_ENV=development`. La
+  interfaz elimina el alta directa de protectoras y sustituye el WhatsApp ficticio por
+  `soporte@mypetlive.es`.
+- Pruebas: `auth.hardening.test.ts` **14/14 en verde**; build backend correcto; build
+  frontend correcto con los avisos previos de sourcemaps. Suite completa: las únicas tres
+  suites que fallan siguen siendo las heredadas `api.test.ts`, `security.test.ts` y
+  `rbac.test.ts`, por rutas inmobiliarias retiradas; las dos primeras ya no dependen del
+  registro público inseguro. Impacto GitNexus: **MEDIUM** (índice advertido como atrasado).
+- Archivos liberados:
   `src/controllers/auth.controller.ts`, `src/routes/auth.routes.ts`, `src/app.ts`,
   `src/config/env.ts`, `src/__tests__/auth.hardening.test.ts` (nuevo),
+  `src/__tests__/api.test.ts`, `src/__tests__/security.test.ts`,
   `frontend/src/api/auth.ts`, `frontend/src/components/auth/AuthModal.tsx`,
   `frontend/src/pages/auth/RegisterPage.tsx`, `frontend/src/pages/auth/LoginPage.tsx`,
   `frontend/src/pages/auth/ResetPassword.tsx`, `frontend/src/pages/Login.tsx` y
   `frontend/src/pages/home/Landing.tsx`.
-- No hay solapamiento con los archivos reservados por Claude para F5. Las dependencias,
-  cabeceras del servidor web estático y flujo legal se auditarán y documentarán aparte para
-  no mezclar actualizaciones de alto riesgo con este parche explotable.
+
+### Seguridad F0.3 — dependencias runtime (Codex)
+
+- Estado: **INTEGRADA** en `rentalapp1.2` mediante `5d223d1` (rama de origen
+  `mypetlive/security/runtime-dependencies`, commit `70c2adc`). Integración asumida por
+  Codex tras el relevo de Claude; pendiente de despliegue y verificación final.
+- Actualizadas dependencias directas de ejecución con corrección disponible: AWS SDK S3 y
+  Secrets Manager, Express 4, Express Validator 7, Mongoose 7, Morgan, Nodemailer 9, Axios,
+  React Router 7 y PostCSS. Se conservaron los majors de Express y Mongoose para reducir el
+  riesgo; el salto mayor de Nodemailer quedó validado por compilación y pruebas.
+- `npm audit --omit=dev`: de **87** avisos (3 críticos, 34 altos, 37 moderados, 13 bajos) a
+  **29** (0 críticos, 13 altos, 7 moderados, 9 bajos). El residual procede de
+  `react-scripts@5`/Create React App y sus transitivas; resolverlo requiere migrar el
+  toolchain. No se usó `npm audit fix --force`, que propone cambios incompatibles.
+- Verificación conjunta tras integrar: instalación limpia, build backend y build frontend
+  en verde (solo los avisos previos de sourcemaps de `html5-qrcode`). Suite completa:
+  **26/29 suites y 154/164 tests en verde**; solo fallan las tres suites legacy `api.test.ts`,
+  `security.test.ts` y `rbac.test.ts` por rutas inmobiliarias retiradas, igual que antes.
+  Prueba real en Chrome: portada y navegación cliente a `/animals` correctas, sin rotura de
+  React. GitNexus no cubre manifiestos/lockfile y avisó de índice atrasado.
+- Archivos liberados: `package.json`, `package-lock.json` y `frontend/package.json`.
+
+### Relevo operativo — Codex
+
+- Jorge comunica el 22 jul 2026 que Claude se retira del cierre y que **Codex asume desde
+  este punto revisión, integración, despliegue y documentación**.
+- Base integrada local: `rentalapp1.2` en `5d223d1`; auditoría runtime final: 29 avisos
+  (0 críticos, 13 altos, 7 moderados y 9 bajos), todos pendientes de la migración de CRA.
+- El VPS está sano y ya ejecuta `APP_ENV=production`; antes del siguiente despliegue se
+  guardará una copia recuperable del backend y del docroot web, y se vinculará producción al
+  commit desplegado.
 
 ### Registro de coordinación — Claude
 
@@ -251,6 +292,7 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
 
 - El estado de una tarea será `PENDIENTE`, `EN CURSO`, `LISTA PARA REVISIÓN` o `INTEGRADA`.
 - Solo `EN CURSO` reserva archivos; las reservas se anotan arriba antes de editar.
-- Si aparece un archivo compartido con Claude, Codex pausa ese cambio y lo deja documentado.
-- Codex entrega rama, commits, tests y nota de changelog; Claude revisa, integra y despliega.
-- No se ejecutará ningún cambio directo en producción desde las ramas de Codex.
+- El registro histórico de Claude se conserva como trazabilidad; ya no reserva archivos.
+- Codex trabaja con ramas, commits, pruebas y nota de changelog antes de integrar o desplegar.
+- Producción sólo recibe commits integrados en `rentalapp1.2`, con comprobaciones previas y
+  copia recuperable.
