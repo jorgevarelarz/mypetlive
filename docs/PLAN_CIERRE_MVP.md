@@ -275,6 +275,16 @@ invadir el trabajo de Claude. Conviene tratarlos como un bloque F0 de seguridad/
   cargan portada, adopciones, registro y login sin errores de consola; el registro exige 12
   caracteres y no ofrece alta directa de protectoras.
 
+### Seguridad F0.4 — estáticos HTTP (Codex)
+
+- Estado: **EN CURSO** en `security/static-http-hardening`, desde `rentalapp1.2` (`d132213`).
+- Hallazgo confirmado tras F0.2/F0.3: Apache sirve la portada y el bundle sin HSTS/CSP,
+  cabeceras defensivas, compresión ni política de caché; Helmet sólo protege la API.
+- Archivo reservado: `frontend/public/.htaccess`. Alcance: cabeceras equivalentes a la API,
+  desactivar listado, compresión de texto y caché larga sólo para artefactos versionados.
+- Se validará la configuración en Apache, el build y las rutas reales en Chrome antes de
+  integrar y desplegar; existe copia completa del docroot para reversión.
+
 ### Registro de coordinación — Claude
 
 - **F2 extracto de liquidación**: `INTEGRADA` en `rentalapp1.2` (22 jul, rama `feat/liquidacion-partner`
