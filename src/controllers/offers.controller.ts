@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Coupon } from '../models/coupon.model';
 import { Animal } from '../models/animal.model';
 import { speciesVariants, speciesMatches } from '../utils/species';
+import { purchasedItemNames, itemsMatch, matchedItems } from '../utils/purchases';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 
 // Precio del placement patrocinado (destacado) que paga el partner. Configurable.
@@ -46,6 +47,9 @@ export async function matchOffersForAnimal(animal: any) {
 
   const matched = candidates
     .map((c: any) => {
+      // Las ofertas por items comprados exigen historial del usuario: nunca se
+      // evalúan (ni muestran) en superficies sin usuario como el pasaporte público.
+      if (c.targetItems?.length) return null;
       const exact = c.targetAnimalCode && c.targetAnimalCode === code;
       if (!exact) {
         // Refuerza: todos los criterios definidos deben casar (los vacíos no restringen).
@@ -129,7 +133,8 @@ export async function sponsorCoupon(req: Request, res: Response) {
   res.json({ status: 'pending', configured: true, id: session.id, url: session.url, priceEur: SPONSORED_PLACEMENT_EUR });
 }
 
-// GET /api/offers/for-me — unión de ofertas para las mascotas del usuario.
+// GET /api/offers/for-me — unión de ofertas para las mascotas del usuario, más
+// las segmentadas por sus compras (targetItems contra su historial de tickets).
 export async function offersForMe(req: Request, res: Response) {
   const me = String((req as any).user?._id || (req as any).user?.id || '');
   if (!me) return res.status(401).json({ error: 'unauthorized' });
@@ -143,6 +148,27 @@ export async function offersForMe(req: Request, res: Response) {
       else byId.set(o._id, { ...o, pets: [{ code: pet.code, name: pet.name }] });
     }
   }
+
+  // Ofertas por items comprados: solo aquí (contexto privado del propio usuario).
+  const purchased = await purchasedItemNames(me);
+  if (purchased.length) {
+    const now = new Date();
+    const candidates = await Coupon.find({
+      active: true,
+      usedAt: { $exists: false },
+      'targetItems.0': { $exists: true },
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+    }).populate('partnerId', 'name role').lean();
+    for (const c of candidates) {
+      if (byId.has(String(c._id)) || !itemsMatch(c.targetItems, purchased)) continue;
+      const o: any = serializeOffer(c);
+      o.byItems = true;
+      o.matchedItems = matchedItems(c.targetItems, purchased).slice(0, 3);
+      o.pets = [];
+      byId.set(o._id, o);
+    }
+  }
+
   const items = Array.from(byId.values()).sort((a, b) => Number(b.exact) - Number(a.exact) || Number(b.sponsored) - Number(a.sponsored));
   res.json({ items });
 }
