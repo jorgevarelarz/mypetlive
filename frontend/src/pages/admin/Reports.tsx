@@ -5,6 +5,7 @@ import { adminListAdoptions, ADOPTION_STATUS_LABEL } from '../../api/adoptions';
 import { searchAnimals } from '../../api/animals';
 import { getAllCoupons } from '../../api/coupons.admin';
 import api from '../../api/client';
+import { getPlatformMetrics, downloadPlatformMetricsCsv } from '../../api/metrics';
 import { MPL, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
 
 function Metric({ label, value, note, tone = MPL.teal }: { label: string; value: React.ReactNode; note?: string; tone?: string }) {
@@ -21,6 +22,54 @@ function Metric({ label, value, note, tone = MPL.teal }: { label: string; value:
       </div>
       {note && <div style={{ marginTop: 10, color: MPL.muted, fontSize: 13 }}>{note}</div>}
     </div>
+  );
+}
+
+// KPIs de negocio servidos por el backend (GET /api/admin/metrics): a diferencia de
+// las cards de arriba (listas paginadas), estos agregados son exactos.
+function PlatformKpis() {
+  const kpisQ = useQuery({ queryKey: ['admin-platform-kpis'], queryFn: getPlatformMetrics, retry: false, staleTime: 60_000 });
+  const m = kpisQ.data;
+  if (kpisQ.isError) return null;
+  return (
+    <section style={{ display: 'grid', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, margin: 0 }}>KPIs de plataforma</h2>
+        <button
+          type="button"
+          onClick={() => downloadPlatformMetricsCsv().catch(() => undefined)}
+          disabled={!m}
+          style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '8px 14px', font: 'inherit', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+        >
+          Descargar CSV
+        </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
+        <Metric
+          label="GMV"
+          value={kpisQ.isLoading ? '…' : `${m?.gmv.totalEur ?? 0} €`}
+          note={`${m?.gmv.esteMesEur ?? 0} € este mes · ${m?.gmv.ventasNumero ?? 0} ventas + ${m?.gmv.donacionesNumero ?? 0} donaciones`}
+        />
+        <Metric
+          label="Comisión de ventas"
+          value={kpisQ.isLoading ? '…' : `${m?.gmv.comisionVentasEur ?? 0} €`}
+          note={`sobre ${m?.gmv.ventasEur ?? 0} € vendidos`}
+          tone={MPL.olive}
+        />
+        <Metric
+          label="Adopciones"
+          value={kpisQ.isLoading ? '…' : m?.solicitudes.adopcionesTotal ?? 0}
+          note={`${m?.solicitudes.adopcionesEsteMes ?? 0} este mes · conversión ${m?.solicitudes.conversionPct ?? '—'} % · ${m?.solicitudes.diasMediosProceso ?? '—'} días de media`}
+          tone={MPL.gold}
+        />
+        <Metric
+          label="Patitas"
+          value={kpisQ.isLoading ? '…' : m?.patitas.emitidas ?? 0}
+          note={`${m?.patitas.donadas ?? 0} donadas · ${m?.patitas.canjeadas ?? 0} canjeadas (${m?.patitas.canjeadasEur ?? 0} €)`}
+          tone={MPL.coral}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -86,6 +135,8 @@ export default function AdminReports() {
           Algunas métricas no están disponibles para esta sesión. Revisa que el usuario admin esté verificado y tenga permisos completos.
         </div>
       )}
+
+      <PlatformKpis />
 
       {loading ? (
         <div style={{ color: MPL.muted }}>Cargando métricas...</div>

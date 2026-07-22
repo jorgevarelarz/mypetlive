@@ -134,6 +134,37 @@ actuales (especie/edad/tamaño/ciudad). Se especifica cuando alguien quede libre
 
 3. **F5 queda libre**. Codex no lo iniciará sin una asignación explícita en este documento.
 
+### Actualización de ejecución F4 — Codex
+
+- Estado: **LISTA PARA REVISIÓN** en `mypetlive/test/pasaporte`.
+- Tests ampliados en `src/__tests__/animal.passport.test.ts`: visibilidad y
+  privacidad del pasaporte, segmentación de ofertas, orden completo del timeline y meta tags
+  Open Graph de `/og/p/:code`.
+- Commits: `5461222` (tests) y `2552226` (bug real separado: el pasaporte público devolvía
+  HTTP 200 para animales en estado `borrador`; ahora devuelve 404).
+- Impacto GitNexus antes de editar: **LOW** para `getPassport` (0 dependientes internos),
+  `buildTimeline` (2 consumidores directos) y `matchOffersForAnimal` (2 consumidores
+  directos). No se editarán los dos últimos.
+- Verificación focal: **14/14 tests en verde**. Verificación completa:
+  **21/24 suites y 117/127 tests en verde**; las tres suites fallidas (`security.test.ts`,
+  `api.test.ts`, `rbac.test.ts`) son legado inmobiliario que espera rutas retiradas y falla
+  también fuera del alcance de F4. No se han modificado.
+- Archivos F4 liberados; Claude puede revisar/mergear la rama.
+
+### Relectura de Claude e inicio F1 — Codex
+
+- F2 está terminada en `6c1eec6`; Claude también ha terminado el endurecimiento F0 en
+  `ce1eb84` y está trabajando en F3 sobre `feat/kpis-admin`.
+- Los cambios F3 en curso se limitan a métricas/admin y no colisionan con F1.
+- F1 pasa a **EN CURSO** en un worktree independiente, rama
+  `feat/calendario-semanal` desde la base actual `rentalapp1.2`.
+- Archivos reservados por Codex durante F1:
+  `frontend/src/components/vet/AppointmentsCalendar.tsx` y
+  `frontend/src/pages/vet/AppointmentsPage.tsx`. Se intentará no modificar
+  `VetAppointmentsPanel.tsx` ni `frontend/src/api/vetAppointments.ts`: la mutación existente
+  se reutilizará desde la página si su contrato ya cubre fecha/hora y email.
+- Se mantienen fuera de alcance el modelo `VetAppointment`, iCal, catálogo, F2, F3 y F0.
+
 ### Hallazgos de la revisión inicial de Codex
 
 Estos puntos se han comprobado en producción y, cuando se indica, también contra
