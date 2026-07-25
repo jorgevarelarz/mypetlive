@@ -28,7 +28,7 @@ por panel (o por arreglo con entidad propia).
 | Rol | Panel | Ruta | Estado |
 |-----|-------|------|--------|
 | Adoptante | Home | `/home` | ✅ hecho |
-| Adoptante | Mi mascota | `/pet` | ⏳ |
+| Adoptante | Mi mascota | `/pet` | ✅ hecho |
 | Adoptante | Mis adopciones | `/adoptions/mine` | ⏳ |
 | Adoptante | Detalle de adopción | `/adoptions/:id` | ⏳ |
 | Adoptante | Favoritos | `/me/favorites` | ⏳ |
@@ -66,3 +66,39 @@ por panel (o por arreglo con entidad propia).
 - La tarjeta "Arena" se ofrecía también a perros.
 - El chip "Cerca de ti" era texto fijo, no un dato → ahora la ciudad real.
 - Sin estado de error: un fallo de red se pintaba como "no has registrado tu mascota".
+
+### Adoptante · Mi mascota (`/pet`) — hecho
+- **Bug real (backend):** los botones "Marcar comida" / "Cambiar arena" devolvían
+  siempre 403. `authorizeCare` (`src/controllers/animalCare.controller.ts`) buscaba
+  una adopción en estado `accepted` (legado alquiler; el real es `aprobada`) y no
+  contemplaba `ownerId`, así que el dueño de una mascota **personal** tampoco podía
+  cuidarla. Además la ruta admite el rol `protectora` y la función solo miraba
+  `landlord`. Sin tests que cubrieran estos endpoints.
+- **Bug real (carga):** `isLoading` era `myPetsLoading && !currentPet && fallbackQuery.isLoading`;
+  al resolver `/animals/mine` vacío mientras el respaldo seguía en vuelo se pintaba
+  el estado vacío y luego la mascota (falso "no tienes mascota").
+- Sin estado de error: un fallo de `/animals/mine` se pintaba como "Hoy no tenemos
+  una mascota asignada" → ahora tarjeta de error con "Reintentar".
+- Valores crudos en pantalla: `species` (`cat`), `mood` (`en_adaptacion`, que solo se
+  maquillaba con `replace('_', ' ')`) y `healthHistory[].type` (`deworming`,
+  `checkup`…). Nuevo helper `healthCategoryLabel` y especies `rabbit`/`bird`/`other`
+  añadidas a `speciesLabel` en `styles/mypetlive.tsx`.
+- Arena ofrecida a perros y conejos → `usesLitter(species)` (comida siempre).
+- Tarjeta "¿Ya vives con un animal? Regístralo" eliminada: solo podía aparecer
+  **junto a** la ficha de una mascota ya mostrada (su `petItems.length === 0` vive
+  dentro de la rama que ya tiene animal, es decir cuando el animal venía del
+  respaldo y no de `/animals/mine`), duplicando el botón "➕ Añadir otra mascota"
+  que está justo encima. Redundante, no contradictoria.
+- Alta de mascota: validación de nombre/especie/edad con mensaje concreto e inline
+  (antes un genérico "Completa los campos requeridos" por toast), traducción de los
+  códigos del backend (`missing_fields`, `invalid_file_type`… se leían crudos),
+  validación de imagen (tipo y 10 MB, lo mismo que multer) y "Guardar" bloqueado
+  mientras se sube una foto (antes se guardaba sin ella).
+- El cuidado marcado aquí no invalidaba el animal destacado de la home (60 s de
+  `staleTime`) → seguía diciendo que tocaba rellenar la comida.
+- Móvil: los dos botones de cabecera se salían por debajo de 380 px (`flex` sin
+  `flex-wrap`) y el modal de alta no hacía scroll, dejando Cancelar/Guardar fuera de
+  pantalla en pantallas bajas.
+- **No tocado:** `fetchFeaturedAnimal` captura todos los errores y devuelve `null`,
+  así que su `isError` nunca se dispara (afecta también a la home); aquí el estado de
+  error se apoya en la query de `/animals/mine`. Cambiarlo toca otro panel.

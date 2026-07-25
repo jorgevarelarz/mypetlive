@@ -57,6 +57,14 @@ export const speciesLabel = (value?: string) => {
     perro: 'Perro',
     cat: 'Gato',
     gato: 'Gato',
+    // `normalizeSpecies` solo canoniza perro/gato: el resto llega tal cual desde
+    // el alta de mascota personal (rabbit, bird, other).
+    rabbit: 'Conejo',
+    conejo: 'Conejo',
+    bird: 'Ave',
+    ave: 'Ave',
+    other: 'Otro',
+    otro: 'Otro',
   };
   return value ? labels[String(value).toLowerCase()] || value : '';
 };
@@ -92,6 +100,21 @@ export const moodLabel = (value?: string | null) => {
 export const usesLitter = (species?: string) => {
   const canonical: Record<string, string> = { cat: 'cat', gato: 'cat' };
   return canonical[String(species || '').trim().toLowerCase()] === 'cat';
+};
+
+// Categorías de `healthHistory[].type` (HEALTH_CATEGORIES del backend), que se
+// guardan en inglés y no pueden pintarse crudas en el historial de salud.
+export const healthCategoryLabel = (value?: string) => {
+  const labels: Record<string, string> = {
+    visit: 'Visita / consulta',
+    vaccine: 'Vacuna',
+    deworming: 'Desparasitación',
+    checkup: 'Revisión',
+    surgery: 'Cirugía',
+    test: 'Prueba / analítica',
+    other: 'Otro',
+  };
+  return value ? labels[String(value).toLowerCase()] || value : 'Hito de salud';
 };
 
 export const statusLabel = (value?: string) => {
