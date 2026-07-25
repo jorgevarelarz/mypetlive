@@ -48,6 +48,11 @@ api?.interceptors?.response?.use?.(
   (err) => {
     try {
       const url = err?.config?.url || '';
+      // `skipErrorToast` en la config de la petición: para endpoints cuyos códigos
+      // de error traduce la página (p. ej. el checkout de donación), evita el toast
+      // genérico que pintaba el código crudo del backend además del mensaje bueno.
+      // No afecta al 401: la sesión caducada se sigue gestionando siempre.
+      const skipToast = (err?.config as any)?.skipErrorToast === true;
       if (!/\/api\/auth\//.test(url)) {
         // Sesión caducada (JWT de 7 días): sin esto cada llamada devolvía 401 en
         // silencio y la UI parecía rota (p. ej. el QR de canje "no salía").
@@ -61,6 +66,7 @@ api?.interceptors?.response?.use?.(
           }
           return Promise.reject(err);
         }
+        if (skipToast) return Promise.reject(err);
         const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Error de red';
         // Lazy require to avoid circular deps
         require('react-hot-toast').toast.error(msg);

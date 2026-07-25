@@ -31,9 +31,9 @@ por panel (o por arreglo con entidad propia).
 | Adoptante | Mi mascota | `/pet` | ✅ hecho |
 | Adoptante | Mis adopciones | `/adoptions/mine` | ✅ hecho |
 | Adoptante | Detalle de adopción | `/adoptions/:id` | ✅ hecho |
-| Adoptante | Favoritos | `/me/favorites` | ⏳ |
-| Adoptante | Alertas | `/me/alerts` | ⏳ |
-| Adoptante | Donaciones | `/donate` | ⏳ |
+| Adoptante | Favoritos | `/me/favorites` | ✅ hecho |
+| Adoptante | Alertas | `/me/alerts` | ✅ hecho |
+| Adoptante | Donaciones | `/donate` | ✅ hecho |
 | Adoptante | Citas (solo lectura) | `/citas` | ⏳ |
 | Protectora | Dashboard | `/landlord` | ⏳ |
 | Protectora | Animales | `/landlord/animals` | ⏳ |
@@ -126,6 +126,43 @@ por panel (o por arreglo con entidad propia).
   el botón de retirar solicitud ya coincidía con el guard del backend y las fechas ya
   estaban en `es-ES`.
 
+### Adoptante · Favoritos, Alertas y Donaciones — hecho
+- **Bug real, el más grave del barrido hasta ahora:** `/donate` no podía completar
+  ninguna donación. La página solo sacaba la protectora destinataria de `?animalId`,
+  y el único enlace a `/donate` de toda la app (el pie de la landing) no lleva ese
+  parámetro; el backend responde 400 `shelter_required` sin protectora ni animal.
+  Comprobado con búsqueda exhaustiva de enlaces: no había ninguna ruta de entrada
+  que funcionase. Ahora hay selector de protectora, alimentado con
+  `GET /api/protectoras`, que ya filtra por `canReceiveDonations` — el mismo gate
+  que el checkout, así que no se ofrece a quien el servidor va a rechazar.
+- `/donate`: el beneficiario se pintaba como un ObjectId de Mongo, no se decía a
+  quién va el dinero ni que la plataforma retiene comisión (`DONATION_FEE_PERCENT`),
+  los códigos de error se mostraban crudos y **por duplicado** (interceptor global
+  más toast de la página), no había protección contra doble clic — cada pulsación
+  creaba una sesión de Stripe y un `Donation` pendiente — y una respuesta sin `url`
+  dejaba el botón como si no se hubiera pulsado. **Lógica de pago intacta**: no se
+  tocan importes, `application_fee_amount`, `transfer_data` ni URLs de retorno.
+- Nuevo opt-out `skipErrorToast` en `frontend/src/api/client.ts`, aditivo y usado
+  solo por el checkout de donación. El 401 de sesión caducada se sigue gestionando
+  siempre, deliberadamente fuera del flag.
+- **Favoritos:** `favorites.ids` e `items` divergen y nadie lo contaba — el backend
+  filtra los items por `createdByRole: 'protectora'` e `isPersonalPet`, pero devuelve
+  todos los ids, así que al aprobarse una adopción ese favorito desaparecía de la
+  pantalla sin explicación y sin forma de quitarlo de la lista. Ahora hay aviso y
+  botón para limpiarlos. Además: sin estado de error (el `Promise.allSettled` de la
+  ruta anónima se comía los fallos de red y los hacía indistinguibles de "no tienes
+  favoritos"), `toggle` sin catch dejando una promesa rechazada sin capturar, estado
+  `borrador` pintado crudo, y `adoptado`/`no_disponible` con el mismo chip dorado que
+  `reservado`, de modo que un animal ya adoptado se leía como disponible.
+- **Alertas:** sin estado de error, mutaciones sin `onError` (pausar o borrar algo que
+  el servidor rechaza no cambiaba nada en pantalla), borrado irreversible sin
+  confirmación, y ninguna forma de ejecutar la búsqueda guardada — se veía "N
+  compañeros coinciden" sin camino a esos N animales. La copy también prometía menos
+  de lo que hace: sí se avisa por email al publicarse un animal que encaje.
+- Contrato UI↔servidor de alertas **verificado correcto**: las nueve claves de filtro
+  del backend coinciden exactamente con los parámetros que lee el catálogo público,
+  así que el "Ver resultados" nuevo reconstruye la búsqueda de verdad.
+
 ## Pendientes detectados de paso (para cuando toque su panel)
 
 - **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
@@ -142,3 +179,15 @@ por panel (o por arreglo con entidad propia).
   código muerto.
 - **`listMine` pagina a 20 sin UI de paginación:** con más de 20 solicitudes el resto es
   invisible y "Total" cuenta solo la página cargada.
+- **Donaciones · retorno de Stripe sin acuse:** `success_url`/`cancel_url` apuntan a la
+  portada (`/?donation=success|cancel`) y **nadie lee ese parámetro**, así que una
+  donación cobrada no da ninguna confirmación. Es lógica de pago: necesita decisión
+  (¿apuntar el retorno a `/donate` o tratarlo en la portada?).
+- **Donaciones · sin tope de importe** en ninguna capa: un dedazo (1000 en vez de 100)
+  se cobra. En TEST es inocuo; antes de Stripe live hay que decidir el límite.
+- **Doble toast de error en más de 20 páginas:** el interceptor global y las páginas
+  toastean lo mismo. Ya existe el opt-out `skipErrorToast`; queda aplicarlo panel a
+  panel a medida que se recorran.
+- **Test previo en rojo, ajeno a este trabajo:** `frontend/src/__tests__/rbac.ui.test.tsx`
+  busca el texto "Inicio" en el Sidebar, que ya no lo contiene. Esta rama no toca
+  Sidebar.

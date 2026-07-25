@@ -84,6 +84,8 @@ export function useAnimalFavorites() {
     ids,
     items: query.data?.items || [],
     isLoading: Boolean(user) && query.isLoading,
+    // Sin esto un fallo de red al listar favoritos era indistinguible de "no tienes ninguno".
+    isError: Boolean(user) && query.isError,
     isFavorite: (id: string) => ids.includes(String(id)),
     isPending: (id: string) => pendingIds.includes(String(id)),
     toggle,
