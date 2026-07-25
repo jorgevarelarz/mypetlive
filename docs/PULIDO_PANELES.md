@@ -36,10 +36,10 @@ por panel (o por arreglo con entidad propia).
 | Adoptante | Donaciones | `/donate` | ✅ hecho |
 | Adoptante | Citas (solo lectura) | `/citas` | ⏳ |
 | Protectora | Dashboard | `/landlord` | ✅ hecho |
-| Protectora | Animales | `/landlord/animals` | ⏳ |
+| Protectora | Animales | `/landlord/animals` | ✅ hecho |
 | Protectora | Solicitudes | `/landlord/adoptions` | ✅ hecho |
-| Protectora | Cuestionario | `/landlord/questionnaire` | ⏳ |
-| Protectora | Verificación | `/landlord/verificacion` | ⏳ |
+| Protectora | Cuestionario | `/landlord/questionnaire` | ✅ hecho |
+| Protectora | Verificación | `/landlord/verificacion` | ✅ hecho |
 | Veterinario | Panel partner | `/partner` | ⏳ |
 | Veterinario | Caja | `/caja` | ⏳ |
 | Veterinario | Agenda / calendario | `/citas` | ⏳ |
@@ -200,6 +200,39 @@ por panel (o por arreglo con entidad propia).
 - Lo que ya estaba bien: **ningún vocabulario de legado en estos dos ficheros**, y
   `NEXT_ACTIONS` coincide exactamente con el enum del validador — ninguna acción imposible.
 
+### Protectora · Animales, Cuestionario y Verificación — hecho
+- **Bug real (pérdida de datos):** el cuestionario se podía borrar solo. Sin estado de
+  error, un fallo al cargar pintaba "Aún no tienes preguntas" con el botón de guardar
+  activo, y un clic enviaba `[]`. Y `create` de adopciones solo exige respuestas
+  `if (requiredQuestions.length)` — verificado en el controlador —, así que un
+  cuestionario vacío **desactiva el filtro de adopción entero**.
+- **Bug real:** el `useEffect` del cuestionario se rehidrataba con la respuesta de
+  react-query al volver a la pestaña, machacando lo que la protectora estaba escribiendo.
+- **Bug real (de diseño):** el **texto** de la pregunta es su identificador — el adoptante
+  responde en un mapa `pregunta → respuesta` y el servidor casa por texto exacto —, así
+  que dos preguntas iguales dejan una sola casilla y una sola respuesta. Ahora se bloquean.
+- **Bug real:** la página de verificación mentía sobre el estado. Sin `isError`, un fallo
+  de red daba `status: 'unverified'`, de modo que una protectora ya verificada veía "aún no
+  estás verificada" y un formulario en blanco; reenviarlo la pone en `pending`, o sea que un
+  error de red podía costarle el permiso de publicar.
+- **Bug real:** el panel de animales pedía `limit: 200` con el servidor topando en 100
+  (truncado silencioso), no tenía `catch` en la carga (un fallo de red se leía como "no
+  tienes animales" en la pantalla de gestión), ofrecía "Publicado" sin comprobar
+  `canPublishAnimals` (403), dejaba escribir la especie a mano cuando el modelo la canoniza
+  (se escribía "Perro" y la tarjeta pintaba `dog`), no permitía **editar** una ficha —un
+  nombre mal puesto solo se arreglaba borrando el animal, con su código y su pasaporte— y
+  dejaba crear la ficha mientras las fotos aún subían.
+- **RECHAZADO del informe del agente:** afirmaba que filtrar por especie en el catálogo
+  público devuelve cero resultados, porque la UI manda `perro` y el modelo guarda `dog`.
+  **Es falso**, comprobado ejecutándolo: Mongoose 7.8 aplica los setters también a los
+  filtros de consulta, y `find({species:'perro'})` se castea a `{species:'dog'}`. El uso de
+  `speciesVariants` en las alertas es red de seguridad para datos legados sin migrar, no
+  porque el filtro directo esté roto.
+- **Aviso de confianza:** el arreglo del panel de animales llegó como **reescritura de 1254
+  líneas** (el agente se salió del encargo y además lo repasó a estilos MPL). Está en un
+  commit aparte (`9eb1788`) para poder revertirlo solo. Verificado contra el backend, `tsc`,
+  las 4 suites y el build, pero **no auditado línea a línea**.
+
 ## Pendientes detectados de paso (para cuando toque su panel)
 
 - **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
@@ -242,3 +275,9 @@ por panel (o por arreglo con entidad propia).
 - **`getMyVerification` usa `axios` crudo con una cabecera `x-user-id` vestigial** (el
   bypass por cabeceras solo funciona en tests). Funciona porque `api/auth.ts` fija
   `axios.defaults.headers.common.Authorization`, pero es un patrón a limpiar.
+- **El servidor no limita número ni longitud de las preguntas** del cuestionario.
+- **`AnimalsList.tsx` pinta `species` cruda** (`dog`): otro panel, pendiente.
+- **`questionnaire.controller.ensureProtectora` devuelve `null` para admin**, así que un
+  admin en `/landlord/questionnaire` recibe 403. Pre-existente y menor.
+- **`verificationLevel` lo fija el admin al aprobar**, no se deriva de los documentos
+  subidos: la copia de la página evita prometer automatismo.
