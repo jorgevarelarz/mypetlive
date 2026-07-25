@@ -1,15 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  listAdoptionsForMyAnimals,
+  listAllAdoptionsForMyAnimals,
   setAdoptionStatus,
   ADOPTION_STATUS_LABEL,
   AdoptionShelterStatus,
 } from '../../api/adoptions';
+import { speciesLabel, statusLabel } from '../../styles/mypetlive';
 import { toast } from 'react-hot-toast';
 
 // Transiciones que ofrece el panel según el estado actual de la solicitud (dossier p.9).
+// El backend (`setStatus`) no valida transiciones: acepta cualquiera de los siete
+// estados del `adoptionStatusSchema` desde cualquier otro, así que esta tabla es la
+// única barrera. Por eso los estados terminales quedan vacíos a propósito: desde
+// `aprobada` el animal ya se ha traspasado al adoptante y pasarla a `rechazada` no
+// revertiría el traspaso, así que no ofrecemos esa salida.
 const NEXT_ACTIONS: Record<string, AdoptionShelterStatus[]> = {
   recibida: ['en_revision', 'info_adicional', 'rechazada'],
   cuestionario_pendiente: ['en_revision', 'info_adicional', 'rechazada'],
@@ -51,43 +57,67 @@ const FILTERS = [
 type FilterKey = (typeof FILTERS)[number]['key'];
 
 export default function AdoptionsPage() {
-  const { data, isLoading, refetch } = useQuery({
+  const qc = useQueryClient();
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['adoptions-for-my-animals'],
-    queryFn: () => listAdoptionsForMyAnimals({ page: 1, limit: 100 }),
+    queryFn: () => listAllAdoptionsForMyAnimals(),
   });
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<{ id: string; status: AdoptionShelterStatus } | null>(null);
   const [filter, setFilter] = useState<FilterKey>('abiertas');
 
   const onTransition = async (id: string, status: AdoptionShelterStatus, animalName?: string) => {
     let note: string | undefined;
-    if (status === 'info_adicional' || status === 'rechazada') {
-      note = window.prompt(
-        status === 'rechazada' ? 'Motivo del rechazo (opcional):' : '¿Qué información necesitas del adoptante?',
-      ) || undefined;
+    if (status === 'info_adicional') {
+      // La nota se le envía al adoptante y es todo lo que va a leer: pedir información
+      // sin decir cuál lo dejaba en un estado sin salida. Aquí sí es obligatoria.
+      const answer = window.prompt('¿Qué información necesitas del adoptante?')?.trim();
+      if (!answer) {
+        toast.error('Indica qué información necesitas para que el adoptante sepa qué enviarte.');
+        return;
+      }
+      note = answer;
+    } else if (status === 'rechazada') {
+      note = window.prompt('Motivo del rechazo (opcional):')?.trim() || undefined;
     }
-    // Aprobar cierra el proceso (y descarta al resto de candidatos): confirmación explícita.
-    if (status === 'aprobada' && !window.confirm(`¿Aprobar la adopción de ${animalName || 'este animal'}? Esta acción cierra el proceso.`)) {
+    // Aprobar traspasa el animal al adoptante y el panel ya no ofrece marcha atrás:
+    // confirmación explícita y sin prometer que se cierran las demás candidaturas
+    // (el backend no las toca).
+    if (
+      status === 'aprobada' &&
+      !window.confirm(
+        `¿Aprobar la adopción de ${animalName || 'este animal'}? El animal pasará a ser del adoptante y no podrás deshacerlo.`,
+      )
+    ) {
       return;
     }
-    setBusyId(id);
+    setBusy({ id, status });
     try {
       await setAdoptionStatus(id, status, note);
       toast.success('Estado actualizado');
-      refetch();
+      await refetch();
+      // El dashboard vive de otras claves: sin esto los contadores y el tablero
+      // seguían mostrando el estado anterior tras cambiarlo aquí.
+      qc.invalidateQueries({ queryKey: ['shelter-adoptions'] });
+      qc.invalidateQueries({ queryKey: ['shelter-metrics'] });
+      if (status === 'aprobada') qc.invalidateQueries({ queryKey: ['shelter-animals-count'] });
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'No se pudo actualizar');
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   };
 
   const allItems = useMemo(() => data?.items || [], [data?.items]);
-  const counts = useMemo(() => ({
-    abiertas: allItems.filter((it: any) => OPEN_STATES.includes(it.status)).length,
-    todas: allItems.length,
-    aprobadas: allItems.filter((it: any) => it.status === 'aprobada').length,
-    cerradas: allItems.filter((it: any) => ['rechazada', 'cancelada'].includes(it.status)).length,
-  }), [allItems]);
+  // Sin datos no hay nada que contar: unos "(0)" en cada filtro parecían un dato real.
+  const counts = useMemo(() => {
+    if (!data) return null;
+    return {
+      abiertas: allItems.filter((it: any) => OPEN_STATES.includes(it.status)).length,
+      todas: allItems.length,
+      aprobadas: allItems.filter((it: any) => it.status === 'aprobada').length,
+      cerradas: allItems.filter((it: any) => ['rechazada', 'cancelada'].includes(it.status)).length,
+    };
+  }, [allItems, data]);
   const items = useMemo(() => {
     if (filter === 'todas') return allItems;
     if (filter === 'aprobadas') return allItems.filter((it: any) => it.status === 'aprobada');
@@ -115,16 +145,39 @@ export default function AdoptionsPage() {
               ? { background: '#1F6F6F', color: '#fff', borderColor: '#1F6F6F' }
               : { background: '#fff', color: '#3F4A3C', borderColor: '#E7E1D5' }}
           >
-            {f.label} ({counts[f.key]})
+            {f.label}{counts ? ` (${counts[f.key]})` : ''}
           </button>
         ))}
       </div>
 
+      {data?.truncated && (
+        <div className="text-xs text-gray-500">
+          Mostrando las {allItems.length} solicitudes más recientes de {data.total}.
+        </div>
+      )}
+
       {isLoading ? (
         <div>Cargando…</div>
+      ) : isError ? (
+        // Un fallo de red se pintaba como "No hay solicitudes", que es mentira: la
+        // protectora podía dejar candidaturas sin contestar creyendo que no había.
+        <div className="border rounded-2xl p-6 grid gap-3 bg-white" style={{ borderColor: '#E7E1D5' }}>
+          <h2 className="text-lg font-semibold">No hemos podido cargar las solicitudes</h2>
+          <p className="text-sm text-gray-600">Puede ser un problema de conexión. Vuelve a intentarlo en un momento.</p>
+          <div>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="px-4 py-2 rounded border text-sm font-medium bg-white"
+              style={{ borderColor: '#D7D0C2', color: '#3F4A3C' }}
+            >
+              Reintentar
+            </button>
+          </div>
+        </div>
       ) : items.length === 0 ? (
         <div className="text-gray-600">
-          {filter === 'abiertas' && counts.todas > 0
+          {filter === 'abiertas' && (counts?.todas || 0) > 0
             ? 'No tienes solicitudes abiertas ahora mismo. Mira "Todas" para ver el histórico.'
             : 'No hay solicitudes.'}
         </div>
@@ -133,6 +186,9 @@ export default function AdoptionsPage() {
           {items.map((it: any) => {
             const id = it.id || it._id;
             const actions = NEXT_ACTIONS[it.status] || [];
+            // Al aprobar una candidatura el animal se traspasa, pero el backend no
+            // cierra las demás: avisamos para que no se queden abiertas para siempre.
+            const animalAlreadyAdopted = it.animal?.status === 'adoptado' && OPEN_STATES.includes(it.status);
             return (
               <div
                 key={id}
@@ -151,12 +207,26 @@ export default function AdoptionsPage() {
                     {it.adopter?.name || 'Adoptante'}
                     {it.adopter?.email ? ` · ${it.adopter.email}` : ''}
                   </div>
+                  <div className="text-xs text-gray-500">
+                    {[
+                      speciesLabel(it.animal?.species),
+                      statusLabel(it.animal?.status) && `animal: ${statusLabel(it.animal.status).toLowerCase()}`,
+                      it.createdAt && `solicitada el ${new Date(it.createdAt).toLocaleDateString('es-ES')}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
                   <div
                     className="text-xs uppercase tracking-wide font-semibold"
                     style={{ color: STATUS_TONE[it.status] || '#6B7280' }}
                   >
                     {ADOPTION_STATUS_LABEL[it.status as keyof typeof ADOPTION_STATUS_LABEL] || it.status}
                   </div>
+                  {animalAlreadyAdopted && (
+                    <div className="text-xs" style={{ color: '#C05621' }}>
+                      Este animal ya está adoptado. Cierra esta solicitud para que el adoptante no siga esperando.
+                    </div>
+                  )}
                   {Array.isArray(it.answers) && it.answers.length > 0 && (
                     <div className="mt-1">
                       <div className="text-sm font-semibold" style={{ color: '#3F4A3C' }}>
@@ -179,7 +249,7 @@ export default function AdoptionsPage() {
                     actions.map((action) => (
                       <button
                         key={action}
-                        disabled={busyId === id}
+                        disabled={busy?.id === id}
                         className="px-3 py-1.5 rounded border text-sm disabled:opacity-50"
                         style={
                           action === 'aprobada'
@@ -190,7 +260,7 @@ export default function AdoptionsPage() {
                         }
                         onClick={() => onTransition(id, action, it.animal?.name)}
                       >
-                        {ACTION_LABEL[action]}
+                        {busy?.id === id && busy?.status === action ? 'Guardando…' : ACTION_LABEL[action]}
                       </button>
                     ))
                   )}

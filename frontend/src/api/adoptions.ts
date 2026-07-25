@@ -41,6 +41,26 @@ export async function listAdoptionsForMyAnimals(params: { status?: string; page?
   return data as { items: any[]; page: number; limit: number; total: number };
 }
 
+// `listForMyAnimals` topa `limit` en 50 en el servidor, así que un panel que pida
+// 100 recibe 50 en silencio y sus contadores mienten. Paginamos hasta `maxItems`
+// para que "abiertas/aprobadas/cerradas" cuenten sobre todo el histórico, y
+// devolvemos `truncated` para poder decirlo cuando ni así cabe.
+const SHELTER_PAGE_SIZE = 50;
+
+export async function listAllAdoptionsForMyAnimals(maxItems = 400) {
+  const first = await listAdoptionsForMyAnimals({ page: 1, limit: SHELTER_PAGE_SIZE });
+  const items = [...(first.items || [])];
+  const total = typeof first.total === 'number' ? first.total : items.length;
+  const target = Math.min(total, maxItems);
+  const lastPage = Math.ceil(maxItems / SHELTER_PAGE_SIZE);
+  for (let page = 2; items.length < target && page <= lastPage; page += 1) {
+    const next = await listAdoptionsForMyAnimals({ page, limit: SHELTER_PAGE_SIZE });
+    if (!next.items?.length) break;
+    items.push(...next.items);
+  }
+  return { items, total, truncated: total > items.length };
+}
+
 export async function adminListAdoptions(params: { status?: string; page?: number; limit?: number } = {}) {
   const { data } = await client.get('/api/adoptions', { params });
   return data as { items: any[]; page: number; limit: number; total: number };

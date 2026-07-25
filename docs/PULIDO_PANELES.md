@@ -35,9 +35,9 @@ por panel (o por arreglo con entidad propia).
 | Adoptante | Alertas | `/me/alerts` | ✅ hecho |
 | Adoptante | Donaciones | `/donate` | ✅ hecho |
 | Adoptante | Citas (solo lectura) | `/citas` | ⏳ |
-| Protectora | Dashboard | `/landlord` | ⏳ |
+| Protectora | Dashboard | `/landlord` | ✅ hecho |
 | Protectora | Animales | `/landlord/animals` | ⏳ |
-| Protectora | Solicitudes | `/landlord/adoptions` | ⏳ |
+| Protectora | Solicitudes | `/landlord/adoptions` | ✅ hecho |
 | Protectora | Cuestionario | `/landlord/questionnaire` | ⏳ |
 | Protectora | Verificación | `/landlord/verificacion` | ⏳ |
 | Veterinario | Panel partner | `/partner` | ⏳ |
@@ -163,6 +163,43 @@ por panel (o por arreglo con entidad propia).
   del backend coinciden exactamente con los parámetros que lee el catálogo público,
   así que el "Ver resultados" nuevo reconstruye la búsqueda de verdad.
 
+### Protectora · Dashboard (`/landlord`) y Solicitudes (`/landlord/adoptions`) — hecho
+- **Bug real:** la tarjeta "adopciones cerradas" era **siempre 0**. Contaba animales con
+  `status === 'adoptado'` sobre el listado de la protectora, pero ese listado filtra
+  `createdByRole: 'protectora'` e `isPersonalPet`, y aprobar una adopción pone justo lo
+  contrario: el animal adoptado no vuelve a aparecer nunca ahí. Ahora sale de
+  `metrics.adopciones.total`. Verificado en los dos controladores.
+- **Bug real:** las solicitudes en `info_adicional` **desaparecían del tablero**. No había
+  columna para ese estado (ni para `cuestionario_pendiente`) aunque el contador de "en
+  proceso" sí las sumaba: el contador decía 3 y el tablero mostraba 1. Justo la solicitud
+  en la que la protectora había pedido datos era la invisible.
+- **Bug real:** el servidor topa `limit` en 50 y los dos paneles pedían 100, recibiendo 50
+  en silencio. Con más de 50 solicitudes los cuatro contadores de los filtros y las notas
+  "N total" del dashboard eran falsos y el histórico quedaba truncado sin avisar. Nuevo
+  `listAllAdoptionsForMyAnimals()` que pagina y expone `truncated`. Lo mismo pasaba con
+  "animales en total", capado a 100: ahora se lee el `total` del servidor con `limit: 1`.
+- **Bug real:** el CTA principal "Publicar animal" llevaba a un 403. `canPublishAnimals`
+  exige verificación aprobada; si la protectora no lo está, el botón principal del panel
+  la mandaba a una pantalla que iba a rechazarla. Ahora, si consta no verificada, el CTA
+  pasa a "Verificar protectora" con banner explicativo; si el estado es desconocido por
+  error de red no se afirma nada.
+- **Bug real:** "Pedir información" con el `prompt` cancelado seguía adelante, dejando al
+  adoptante en "pendiente de información adicional" sin ninguna pista de qué enviar — y esa
+  nota es lo único que ve. Ahora es obligatoria para `info_adicional`, opcional al rechazar.
+- El confirm de aprobar prometía que se descartaba al resto de candidatos: `setStatus` no
+  toca las demás solicitudes del animal, se quedan abiertas para siempre. Texto corregido
+  y aviso en las tarjetas cuyo animal ya está `adoptado` con la solicitud aún abierta.
+- Sin estado de error en ninguno de los dos (séptima vez): el de solicitudes pintaba un
+  fallo de red como "No hay solicitudes" con los filtros a "(0)", de modo que la protectora
+  podía dejar candidaturas sin contestar creyendo que no había ninguna.
+- El export CSV se tragaba los fallos en un `.catch(() => {})`: el botón no hacía nada.
+- Cambiar un estado no invalidaba las claves del dashboard, que se quedaba obsoleto.
+- Conversión y días medios mal rotulados: la conversión se calcula sobre solicitudes
+  cerradas y los días medios solo sobre las aprobadas, pero el panel los colgaba de la
+  tarjeta "este mes" y de "N solicitudes en total". Reetiquetado con nota al pie.
+- Lo que ya estaba bien: **ningún vocabulario de legado en estos dos ficheros**, y
+  `NEXT_ACTIONS` coincide exactamente con el enum del validador — ninguna acción imposible.
+
 ## Pendientes detectados de paso (para cuando toque su panel)
 
 - **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
@@ -196,3 +233,12 @@ por panel (o por arreglo con entidad propia).
   El único test de RBAC de la UI (`rbac.ui.test.tsx`) cubre por tanto código muerto:
   queda un hueco real de cobertura sobre la navegación que sí se usa. Borrarlos o
   escribir el test contra `AppShell` es decisión del dueño del proyecto.
+- **Al aprobar no se cierran las candidaturas hermanas:** el resto de solicitudes del mismo
+  animal quedan abiertas para siempre. Hoy solo se avisa en la UI; cerrarlas es backend.
+- **`cuestionario_pendiente` es un estado muerto:** está en el modelo y en el enum, pero
+  nadie lo fija en todo `src/`.
+- **`AnimalsPage.tsx` pide `limit: 200`** y el servidor topa en 100: el mismo bug del tope
+  silencioso, en un panel aún por revisar.
+- **`getMyVerification` usa `axios` crudo con una cabecera `x-user-id` vestigial** (el
+  bypass por cabeceras solo funciona en tests). Funciona porque `api/auth.ts` fija
+  `axios.defaults.headers.common.Authorization`, pero es un patrón a limpiar.
