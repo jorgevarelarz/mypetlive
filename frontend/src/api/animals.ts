@@ -34,6 +34,29 @@ export async function searchAnimals(params: AnimalSearchParams = {}) {
   return data as { items: any[]; page: number; limit: number; total: number };
 }
 
+// El servidor topa `limit` en 100 (`Math.min(100, …)` en animal.controller.search),
+// así que un panel que pedía 200 recibía 100 en silencio: por encima de 100 fichas
+// el listado quedaba truncado sin avisar y cualquier contador derivado mentía.
+// Paginamos hasta `maxItems`, devolvemos el `total` real del servidor y `truncated`
+// para poder decir en pantalla que falta cola.
+const SHELTER_ANIMALS_PAGE_SIZE = 100;
+
+export async function listAllShelterAnimals(shelterId: string, maxItems = 400) {
+  const fetchPage = (page: number) =>
+    searchAnimals({ shelter: shelterId, page, limit: SHELTER_ANIMALS_PAGE_SIZE, sort: 'createdAt', dir: 'desc' });
+  const first = await fetchPage(1);
+  const items = [...(first.items || [])];
+  const total = typeof first.total === 'number' ? first.total : items.length;
+  const target = Math.min(total, maxItems);
+  const lastPage = Math.ceil(maxItems / SHELTER_ANIMALS_PAGE_SIZE);
+  for (let page = 2; items.length < target && page <= lastPage; page += 1) {
+    const next = await fetchPage(page);
+    if (!next.items?.length) break;
+    items.push(...next.items);
+  }
+  return { items, total, truncated: total > items.length };
+}
+
 export async function getAnimal(id: string) {
   const { data } = await client.get(`/api/animals/${id}`);
   return data;

@@ -78,6 +78,18 @@ export const sizeLabel = (value?: string) => {
   return value ? labels[value] || value : '';
 };
 
+// `ageGroup` del modelo (puppy/young/adult/senior): otro vocabulario en inglés
+// que no puede pintarse crudo en la ficha.
+export const ageGroupLabel = (value?: string) => {
+  const labels: Record<string, string> = {
+    puppy: 'Cachorro',
+    young: 'Joven',
+    adult: 'Adulto',
+    senior: 'Senior',
+  };
+  return value ? labels[value] || value : '';
+};
+
 export const sexLabel = (value?: string) => {
   const labels: Record<string, string> = {
     female: 'Hembra',
