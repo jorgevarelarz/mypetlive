@@ -191,3 +191,8 @@ por panel (o por arreglo con entidad propia).
 - **Test previo en rojo, ajeno a este trabajo:** `frontend/src/__tests__/rbac.ui.test.tsx`
   busca el texto "Inicio" en el Sidebar, que ya no lo contiene. Esta rama no toca
   Sidebar.
+- **`Layout.tsx` y `Sidebar.tsx` son código muerto:** nadie importa `Layout`, y `Sidebar`
+  solo lo importaba `Layout` (y su test). La navegación viva es `layout/AppShell.tsx`.
+  El único test de RBAC de la UI (`rbac.ui.test.tsx`) cubre por tanto código muerto:
+  queda un hueco real de cobertura sobre la navegación que sí se usa. Borrarlos o
+  escribir el test contra `AppShell` es decisión del dueño del proyecto.
