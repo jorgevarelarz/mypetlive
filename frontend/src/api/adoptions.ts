@@ -41,6 +41,24 @@ export async function listAdoptionsForMyAnimals(params: { status?: string; page?
   return data as { items: any[]; page: number; limit: number; total: number };
 }
 
+// El backend recorta `limit` a 50 (adoption.controller.listForMyAnimals), así que pedir
+// 100 devolvía solo 50 y los paneles contaban/filtraban sobre un subconjunto silencioso.
+// Paginamos hasta `maxItems` y avisamos con `truncated` si aún queda cola.
+export async function listAllAdoptionsForMyAnimals(maxItems = 500) {
+  const first = await listAdoptionsForMyAnimals({ page: 1, limit: 50 });
+  const items = [...(first.items || [])];
+  const total = typeof first.total === 'number' ? first.total : items.length;
+  const pageSize = first.limit || 50;
+  let page = 1;
+  while (items.length < Math.min(total, maxItems)) {
+    page += 1;
+    const next = await listAdoptionsForMyAnimals({ page, limit: pageSize });
+    if (!next.items?.length) break; // defensa ante un total incoherente: no bucles infinitos
+    items.push(...next.items);
+  }
+  return { items, total, truncated: items.length < total };
+}
+
 export async function adminListAdoptions(params: { status?: string; page?: number; limit?: number } = {}) {
   const { data } = await client.get('/api/adoptions', { params });
   return data as { items: any[]; page: number; limit: number; total: number };
