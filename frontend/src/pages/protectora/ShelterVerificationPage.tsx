@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { ShieldCheck, ShieldAlert, Clock3, FileUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ShieldAlert, Clock3, FileUp, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getMyVerification,
@@ -35,6 +36,28 @@ const LEVEL_LABEL: Record<string, string> = {
   authorized_center: 'Centro autorizado',
 };
 
+// `canReceiveDonations` (src/utils/shelterVerification.ts) solo acepta estos dos
+// niveles. Con nivel `association` la protectora queda verificada y puede publicar,
+// pero las donaciones siguen cerradas: decirlo evita prometer lo que no se cumple.
+const DONATION_LEVELS = ['animal_protection_entity', 'authorized_center'];
+
+// Multer corta en 10 MB por archivo y solo acepta imágenes o PDF.
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+const BACKEND_ERRORS: Record<string, string> = {
+  invalid_file_type: 'Ese archivo no vale: sube una foto (JPG o PNG) o un PDF.',
+  missing_file: 'No hemos recibido el archivo. Vuelve a intentarlo.',
+  upload_error: 'No se pudo subir el documento. Inténtalo otra vez.',
+  unauthorized: 'Tu sesión ha caducado. Vuelve a iniciar sesión.',
+};
+
+function backendErrorMessage(error: any, fallback: string) {
+  const code = error?.response?.data?.error;
+  if (typeof code === 'string' && BACKEND_ERRORS[code]) return BACKEND_ERRORS[code];
+  if (error?.response?.status === 413) return 'El archivo es demasiado grande (máximo 10 MB).';
+  return fallback;
+}
+
 const inputStyle: React.CSSProperties = {
   border: `1px solid ${MPL.border}`,
   borderRadius: 10,
@@ -56,49 +79,74 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
+// Lo que la verificación bloquea de verdad, en un sitio: sin ella `canPublishAnimals`
+// devuelve 403 y ninguna ficha puede salir de borrador, que es lo que más duele.
+function BlockedNotice() {
+  return (
+    <div style={{ fontSize: 13.5, marginTop: 6 }}>
+      Mientras no esté aprobada <strong>no puedes publicar ningún animal</strong>: las fichas se quedan en
+      borrador y no las ve nadie fuera de tu protectora. Puedes irlas preparando en{' '}
+      <Link to="/landlord/animals" style={{ color: 'inherit', fontWeight: 800 }}>Mis animales</Link>.
+    </div>
+  );
+}
+
 function StatusBanner({ status, level, notes }: { status: string; level?: string; notes?: string }) {
   if (status === 'verified') {
+    const donationsOn = !!level && DONATION_LEVELS.includes(level);
     return (
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#EAF7EF', border: '1px solid #2F855A', borderRadius: 14, padding: '14px 18px', color: '#276749' }}>
-        <ShieldCheck size={22} />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#EAF7EF', border: '1px solid #2F855A', borderRadius: 14, padding: '14px 18px', color: '#276749' }}>
+        <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: 1 }} />
         <div>
           <div style={{ fontWeight: 800 }}>Protectora verificada</div>
           <div style={{ fontSize: 13.5 }}>
             {level && LEVEL_LABEL[level] ? `Nivel: ${LEVEL_LABEL[level]}. ` : ''}
-            Ya puedes publicar animales{level === 'animal_protection_entity' || level === 'authorized_center' ? ' y recibir donaciones' : ''}.
+            Ya puedes publicar animales{donationsOn ? ' y recibir donaciones' : ''}.
           </div>
+          {!donationsOn && (
+            <div style={{ fontSize: 13.5, marginTop: 6 }}>
+              Las <strong>donaciones siguen cerradas</strong>: hacen falta el nivel de entidad de protección animal o
+              de centro autorizado. Si ya tienes el registro de protección animal o el núcleo zoológico, escríbenos a{' '}
+              <a href="mailto:soporte@mypetlive.es" style={{ color: 'inherit', fontWeight: 800 }}>soporte@mypetlive.es</a>{' '}
+              para que lo revisemos: reenviar el formulario devolvería tu verificación a “en revisión” y dejarías de
+              poder publicar mientras tanto.
+            </div>
+          )}
         </div>
       </div>
     );
   }
   if (status === 'pending') {
     return (
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: MPL.gold100, border: `1px solid ${MPL.gold}`, borderRadius: 14, padding: '14px 18px', color: MPL.goldDark }}>
-        <Clock3 size={22} />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: MPL.gold100, border: `1px solid ${MPL.gold}`, borderRadius: 14, padding: '14px 18px', color: MPL.goldDark }}>
+        <Clock3 size={22} style={{ flexShrink: 0, marginTop: 1 }} />
         <div>
           <div style={{ fontWeight: 800 }}>Verificación en revisión</div>
           <div style={{ fontSize: 13.5 }}>Nuestro equipo está revisando tu documentación. Te avisaremos por email. Puedes corregir y reenviar los datos si lo necesitas.</div>
+          <BlockedNotice />
         </div>
       </div>
     );
   }
   if (status === 'rejected') {
     return (
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#F8EAEA', border: '1px solid #C05656', borderRadius: 14, padding: '14px 18px', color: '#8F2F2F' }}>
-        <ShieldAlert size={22} />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#F8EAEA', border: '1px solid #C05656', borderRadius: 14, padding: '14px 18px', color: '#8F2F2F' }}>
+        <ShieldAlert size={22} style={{ flexShrink: 0, marginTop: 1 }} />
         <div>
           <div style={{ fontWeight: 800 }}>Verificación rechazada</div>
           <div style={{ fontSize: 13.5 }}>{notes || 'Revisa los datos y vuelve a enviarla.'}</div>
+          <BlockedNotice />
         </div>
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 14, padding: '14px 18px', color: MPL.coralDark }}>
-      <ShieldAlert size={22} />
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 14, padding: '14px 18px', color: MPL.coralDark }}>
+      <ShieldAlert size={22} style={{ flexShrink: 0, marginTop: 1 }} />
       <div>
         <div style={{ fontWeight: 800 }}>Tu protectora aún no está verificada</div>
         <div style={{ fontSize: 13.5 }}>Para publicar animales necesitamos comprobar que sois una entidad real. Solo te llevará unos minutos.</div>
+        <BlockedNotice />
       </div>
     </div>
   );
@@ -109,7 +157,7 @@ export default function ShelterVerificationPage() {
   const meId = String(user?._id || '');
   const qc = useQueryClient();
 
-  const { data: verification, isLoading } = useQuery({
+  const { data: verification, isLoading, isError, refetch } = useQuery({
     queryKey: ['my-verification', meId],
     queryFn: () => getMyVerification(meId),
     enabled: !!meId,
@@ -131,8 +179,11 @@ export default function ShelterVerificationPage() {
   const [sending, setSending] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
 
-  // Prefill una sola vez con lo ya enviado (reenvíos tras un rechazo).
-  if (!prefilled && verification && verification.status !== 'unverified') {
+  // Prefill una sola vez con lo ya enviado (reenvíos tras un rechazo). En efecto y no
+  // en el cuerpo del render: así no se encadenan tres setState en fase de render, y el
+  // guard `prefilled` sigue evitando que un refetch machaque lo que se está editando.
+  useEffect(() => {
+    if (prefilled || !verification || verification.status === 'unverified') return;
     setForm(prev => ({
       ...prev,
       legalName: verification.legalName || '',
@@ -146,19 +197,31 @@ export default function ShelterVerificationPage() {
     }));
     setDocuments(verification.documents || []);
     setPrefilled(true);
-  }
+  }, [verification, prefilled]);
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.value }));
 
   const addDocument = async (file?: File | null) => {
     if (!file) return;
+    // Lo mismo que aplica multer: sin esto un PDF de 12 MB fallaba con un mensaje
+    // genérico y no había forma de saber que el problema era el peso.
+    const allowed = file.type.startsWith('image/') || file.type === 'application/pdf';
+    if (!allowed) {
+      toast.error('Solo aceptamos imágenes (JPG, PNG) o PDF.');
+      return;
+    }
+    if (file.size > MAX_DOC_BYTES) {
+      toast.error('El archivo pesa más de 10 MB. Sube una versión más ligera.');
+      return;
+    }
     setUploading(true);
     try {
       const { url } = await uploadImage(file);
       setDocuments(prev => [...prev, { type: docType, fileUrl: url, status: 'pending' }]);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'No se pudo subir el documento');
+      // El código crudo del backend (`invalid_file_type`) se pintaba tal cual.
+      toast.error(backendErrorMessage(error, 'No se pudo subir el documento.'));
     } finally {
       setUploading(false);
     }
@@ -180,7 +243,7 @@ export default function ShelterVerificationPage() {
       toast.success('Verificación enviada. La revisaremos lo antes posible.');
       qc.invalidateQueries({ queryKey: ['my-verification', meId] });
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'No se pudo enviar la verificación');
+      toast.error(backendErrorMessage(error, 'No se pudo enviar la verificación.'));
     } finally {
       setSending(false);
     }
@@ -188,6 +251,8 @@ export default function ShelterVerificationPage() {
 
   const status = verification?.status || 'unverified';
   const isVerified = status === 'verified';
+  // El formulario solo se ofrece cuando sabemos de verdad que falta verificación.
+  const showForm = !!meId && !isLoading && !isError && !isVerified;
 
   return (
     <div style={{ maxWidth: 860, margin: '0 auto', display: 'grid', gap: 18, color: MPL.ink }}>
@@ -200,13 +265,41 @@ export default function ShelterVerificationPage() {
         </p>
       </header>
 
-      {isLoading ? (
+      {/* Sin estado de error, un fallo de red se leía como "aún no estás verificada":
+          una protectora ya aprobada veía el formulario en blanco y podía reenviarlo,
+          devolviéndose a "en revisión" y perdiendo el permiso de publicar. */}
+      {!meId ? (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 14, padding: '14px 18px', color: MPL.coralDark }}>
+          <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <div style={{ fontWeight: 800 }}>No hemos podido identificar tu cuenta</div>
+            <div style={{ fontSize: 13.5 }}>Vuelve a iniciar sesión para gestionar la verificación de tu protectora.</div>
+          </div>
+        </div>
+      ) : isLoading ? (
         <div style={{ color: MPL.muted }}>Cargando estado…</div>
+      ) : isError ? (
+        <div style={{ display: 'grid', gap: 10, justifyItems: 'start', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800 }}>
+            <AlertTriangle size={18} color={MPL.coralDark} />
+            No hemos podido consultar el estado de tu verificación
+          </div>
+          <div style={{ color: MPL.muted, fontSize: 13.5 }}>
+            No te decimos que estás sin verificar porque no lo sabemos. Puede ser un problema de conexión.
+          </div>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 10, padding: '9px 18px', fontSize: 13.5, fontWeight: 800, color: MPL.tealDark, cursor: 'pointer' }}
+          >
+            Reintentar
+          </button>
+        </div>
       ) : (
         <StatusBanner status={status} level={verification?.verificationLevel} notes={verification?.notes} />
       )}
 
-      {!isVerified && (
+      {showForm && (
         <form onSubmit={submit} style={{ display: 'grid', gap: 16, background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 }}>
           <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 19, fontWeight: 800, margin: 0 }}>Datos de la entidad</h2>
           <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
@@ -241,8 +334,9 @@ export default function ShelterVerificationPage() {
 
           <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 19, fontWeight: 800, margin: '6px 0 0' }}>Documentación</h2>
           <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-            Sube foto o PDF de al menos un documento oficial. El registro de protección animal o el núcleo
-            zoológico habilitan además recibir donaciones.
+            Sube foto o PDF de al menos un documento oficial (máximo 10 MB por archivo). Con la tarjeta NIF y el
+            registro de asociaciones ya podrás publicar animales; el registro de protección animal o el núcleo
+            zoológico son los que permiten aprobarte con el nivel que además habilita recibir donaciones.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select style={{ ...inputStyle, width: 'auto' }} value={docType} onChange={e => setDocType(e.target.value as VerificationDocumentType)}>
@@ -273,7 +367,8 @@ export default function ShelterVerificationPage() {
           <div>
             <button type="submit" disabled={sending || uploading}
               style={{ background: MPL.coral, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 26px', fontWeight: 800, fontSize: 15, cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>
-              {sending ? 'Enviando…' : status === 'pending' ? 'Reenviar verificación' : 'Enviar verificación'}
+              {/* Tras un rechazo también es un reenvío: el botón decía "Enviar". */}
+              {sending ? 'Enviando…' : status === 'pending' || status === 'rejected' ? 'Reenviar verificación' : 'Enviar verificación'}
             </button>
           </div>
         </form>
