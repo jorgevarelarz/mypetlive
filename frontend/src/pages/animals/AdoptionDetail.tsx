@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
 import ChatPanel from '../../components/chat/ChatPanel';
+import { speciesLabel } from '../../styles/mypetlive';
 
 const MANAGE_ACTIONS: AdoptionShelterStatus[] = ['en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada'];
 
@@ -53,13 +54,14 @@ function nextStep(status: AdoptionStatus, canManage: boolean) {
     case 'en_revision':
       return 'La protectora está revisando tu perfil y respuestas.';
     case 'info_adicional':
-      return 'La protectora puede necesitar más información antes de avanzar.';
+      // El chat de esta misma página es el único canal para responder.
+      return 'La protectora necesita más información: respóndele por el chat de esta solicitud.';
     case 'cita_propuesta':
-      return 'La siguiente fase es coordinar una cita con la protectora.';
+      return 'La protectora ha propuesto una cita: concretad día y hora por el chat de esta solicitud.';
     case 'preaprobada':
       return 'Tu solicitud está en fase final.';
     case 'aprobada':
-      return 'La protectora ha aprobado la adopción.';
+      return 'La protectora ha aprobado la adopción: tu nueva mascota ya está en Mi Mascota.';
     case 'rechazada':
       return 'Esta solicitud no ha continuado.';
     case 'cancelada':
@@ -69,20 +71,64 @@ function nextStep(status: AdoptionStatus, canManage: boolean) {
   }
 }
 
+// Al cambiar de estado, la protectora puede adjuntar una nota (qué información
+// necesita, motivo del rechazo). Se guardaba en `history` y no se pintaba en
+// ningún sitio: el adoptante veía "Información adicional" sin saber qué le piden.
+function findLastShelterNote(history: any): { text: string; ts?: string } | null {
+  if (!Array.isArray(history)) return null;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const payload = history[i]?.payload || {};
+    // `by: 'adopter'` marca la retirada del propio adoptante: esa nota no es de la protectora.
+    if (payload.note && payload.by !== 'adopter') {
+      return { text: String(payload.note), ts: history[i]?.ts };
+    }
+  }
+  return null;
+}
+
 export default function AdoptionDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { data, isLoading, refetch } = useQuery({ queryKey: ['adoption', id], queryFn: () => getAdoption(id || ''), enabled: !!id });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['adoption', id], queryFn: () => getAdoption(id || ''), enabled: !!id });
 
-  if (isLoading || !data) return <div className="p-4">Cargando solicitud...</div>;
+  const canManage = user?.role === 'landlord' || user?.role === 'admin';
+  const backTo = canManage ? '/landlord/adoptions' : '/adoptions/mine';
+
+  if (isLoading) return <div className="p-4">Cargando solicitud...</div>;
+
+  // Antes `isLoading || !data` dejaba "Cargando solicitud..." para siempre cuando la
+  // petición fallaba (red caída, 403 de otra persona o solicitud inexistente).
+  if (isError || !data) {
+    return (
+      <div className="grid gap-3 p-4" style={{ color: '#3F4A3C' }}>
+        <h1 className="text-2xl font-semibold">No hemos podido cargar la solicitud</h1>
+        <p className="max-w-xl text-sm" style={{ color: '#7A8273' }}>
+          Puede ser un problema de conexión, o que esta solicitud ya no exista.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: '#D7D0C2', borderRadius: 8, color: '#3F4A3C', background: '#fff' }}
+          >
+            Reintentar
+          </button>
+          <Link to={backTo} className="px-4 py-2 text-sm font-medium text-white" style={{ background: '#1F6F6F', borderRadius: 8 }}>
+            Volver a solicitudes
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const adoption: any = data;
   const status = adoption.status as AdoptionStatus;
   const animal = adoption.animal || {};
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
-  const canManage = user?.role === 'landlord' || user?.role === 'admin';
   const isTerminal = ['aprobada', 'rechazada', 'cancelada'].includes(status);
   const image = Array.isArray(animal.images) ? animal.images[0] : undefined;
+  const lastShelterNote = findLastShelterNote(adoption.history);
 
   const decide = async (newStatus: AdoptionShelterStatus) => {
     try {
@@ -109,7 +155,7 @@ export default function AdoptionDetail() {
     <div className="grid gap-5 p-4" style={{ color: '#3F4A3C' }}>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link to={canManage ? '/landlord/adoptions' : '/adoptions/mine'} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
+          <Link to={backTo} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
             Volver a solicitudes
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">Solicitud de adopción</h1>
@@ -137,7 +183,7 @@ export default function AdoptionDetail() {
           <div>
             <h2 className="text-xl font-semibold">{animal.name || 'Animal'}</h2>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {animal.species || 'Mascota'}
+              {speciesLabel(animal.species) || 'Mascota'}
               {animal.breed ? ` · ${animal.breed}` : ''}
               {animal.age ? ` · ${animal.age}` : ''}
               {animal.code ? ` · ${animal.code}` : ''}
@@ -149,11 +195,31 @@ export default function AdoptionDetail() {
               {nextStep(status, canManage)}
             </p>
           </div>
-          {animal._id && (
+          {lastShelterNote && (
+            <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
+              <div className="text-sm font-medium">
+                {canManage ? 'Última nota que enviaste' : 'Mensaje de la protectora'}
+              </div>
+              <p className="mt-1 whitespace-pre-line break-words text-sm" style={{ color: '#3F4A3C' }}>
+                {lastShelterNote.text}
+              </p>
+              {lastShelterNote.ts && (
+                <div className="mt-1 text-xs" style={{ color: '#9AA08F' }}>{formatDate(lastShelterNote.ts)}</div>
+              )}
+            </div>
+          )}
+          {/* Al aprobarse la adopción el animal pasa a mascota personal y la ficha
+              pública devuelve 404. Solo su nuevo dueño tiene dónde ir (Mi Mascota);
+              si es personal y no es tu adopción aprobada, no hay enlace válido. */}
+          {!animal.isPersonalPet && animal._id ? (
             <Link to={`/animals/${animal._id}`} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
               Ver ficha del animal
             </Link>
-          )}
+          ) : status === 'aprobada' && !canManage ? (
+            <Link to="/pet" className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
+              Ver mi mascota
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -195,7 +261,7 @@ export default function AdoptionDetail() {
                     <div style={{ width: 28, height: 28, borderRadius: 999, overflow: 'hidden', background: '#F6F3EC', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {pet.image ? <img src={toAbsoluteUrl(pet.image)} alt={pet.name} className="h-full w-full object-cover" /> : <span style={{ fontSize: 11, color: '#7A8273' }}>🐾</span>}
                     </div>
-                    <span className="text-sm">{pet.name}{pet.species ? ` · ${pet.species}` : ''}</span>
+                    <span className="text-sm">{pet.name}{pet.species ? ` · ${speciesLabel(pet.species)}` : ''}</span>
                   </div>
                 ))}
               </div>

@@ -29,8 +29,8 @@ por panel (o por arreglo con entidad propia).
 |-----|-------|------|--------|
 | Adoptante | Home | `/home` | ✅ hecho |
 | Adoptante | Mi mascota | `/pet` | ✅ hecho |
-| Adoptante | Mis adopciones | `/adoptions/mine` | ⏳ |
-| Adoptante | Detalle de adopción | `/adoptions/:id` | ⏳ |
+| Adoptante | Mis adopciones | `/adoptions/mine` | ✅ hecho |
+| Adoptante | Detalle de adopción | `/adoptions/:id` | ✅ hecho |
 | Adoptante | Favoritos | `/me/favorites` | ⏳ |
 | Adoptante | Alertas | `/me/alerts` | ⏳ |
 | Adoptante | Donaciones | `/donate` | ⏳ |
@@ -102,3 +102,43 @@ por panel (o por arreglo con entidad propia).
 - **No tocado:** `fetchFeaturedAnimal` captura todos los errores y devuelve `null`,
   así que su `isError` nunca se dispara (afecta también a la home); aquí el estado de
   error se apoya en la query de `/animals/mine`. Cambiarlo toca otro panel.
+
+### Adoptante · Mis adopciones (`/adoptions/mine`) y detalle (`/adoptions/:id`) — hecho
+- **Bug real:** el enlace "Ver animal" estaba roto en toda adopción aprobada. Aprobar
+  convierte el animal en mascota personal (`isPersonalPet = true`,
+  `createdByRole = 'tenant'`, `adoption.controller.ts`) y `GET /api/animals/:id`
+  devuelve 404 con esos dos filtros (`animal.controller.ts`), así que el enlace llevaba
+  a "no encontramos esta ficha". Ahora apunta a `/pet` cuando la adopción es tuya y
+  desaparece cuando no hay destino válido.
+- **Bug real:** "Cargando solicitud…" eterno en el detalle. `isLoading || !data` dejaba
+  el spinner para siempre ante un fallo de red, un 403 (solicitud de otra persona) o un
+  id inexistente. No había estado de error en ninguno de los dos paneles.
+- **Bug real:** la nota que escribe la protectora al pedir información o al rechazar se
+  guardaba en `history[].payload.note` y **no se pintaba en ningún sitio**: el adoptante
+  veía el chip "Información adicional" sin saber qué le piden. Ahora se muestra la última
+  (filtrando `payload.by === 'adopter'`, que marca la retirada del propio adoptante).
+- Texto falso: "aparecerá en Mi Mascota cuando se complete el cierre" — no hay cierre
+  posterior, aprobar traspasa el animal en el mismo paso.
+- `species` cruda (`cat`) en las tarjetas y en los chips de mascotas del solicitante.
+- Los contadores Total / En proceso / Aprobadas se pintaban como tres ceros en error y en
+  vacío, con aspecto de dato real.
+- Lo que ya estaba bien: las nueve etiquetas de estado salían de `ADOPTION_STATUS_LABEL`,
+  el botón de retirar solicitud ya coincidía con el guard del backend y las fechas ya
+  estaban en `es-ES`.
+
+## Pendientes detectados de paso (para cuando toque su panel)
+
+- **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
+  no hay guard de estado terminal, así que una adopción **ya aprobada** se puede pasar a
+  `rechazada` — y el traspaso del animal no se revierte: se queda como mascota personal del
+  adoptante con la solicitud marcada como rechazada. Verificado leyendo el controlador.
+  Necesita decisión de producto (¿desaprobar revierte la propiedad?) antes de tocarlo.
+- **Protectora · detalle de solicitud sin máquina de estados:** `MANAGE_ACTIONS` en
+  `AdoptionDetail.tsx` ofrece las 6 transiciones siempre, mientras el panel
+  `landlord/AdoptionsPage.tsx` sí tiene mapa de transiciones válidas. Incoherencia entre
+  las dos pantallas de la misma protectora.
+- **Público · `AnimalDetail.tsx`:** `res.status === 'pending' ? … : 'Solicitud creada'` es
+  vocabulario del legado; `createAdoption` devuelve `recibida`, así que la primera rama es
+  código muerto.
+- **`listMine` pagina a 20 sin UI de paginación:** con más de 20 solicitudes el resto es
+  invisible y "Total" cuenta solo la página cargada.
