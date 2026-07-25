@@ -48,6 +48,9 @@ const STATUS_TONE: Record<string, string> = {
 
 const OPEN_STATES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada'];
 
+// Tope que impone `adoptionStatusSchema` en el servidor (`note: z.string().max(1000)`).
+const NOTE_MAX_LENGTH = 1000;
+
 const FILTERS = [
   { key: 'abiertas', label: 'Abiertas' },
   { key: 'todas', label: 'Todas' },
@@ -78,6 +81,13 @@ export default function AdoptionsPage() {
       note = answer;
     } else if (status === 'rechazada') {
       note = window.prompt('Motivo del rechazo (opcional):')?.trim() || undefined;
+    }
+    // `adoptionStatusSchema` valida `note` con `.max(1000)`: pasarse devuelve un 400 de
+    // validación y la transición entera se cae con un "No se pudo actualizar" opaco.
+    // Mejor recortar y decirlo que perder el cambio de estado.
+    if (note && note.length > NOTE_MAX_LENGTH) {
+      note = note.slice(0, NOTE_MAX_LENGTH);
+      toast(`La nota se ha recortado a ${NOTE_MAX_LENGTH} caracteres, que es el máximo que acepta el servidor.`);
     }
     // Aprobar traspasa el animal al adoptante y el panel ya no ofrece marcha atrás:
     // confirmación explícita y sin prometer que se cierran las demás candidaturas
