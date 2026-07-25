@@ -78,6 +78,22 @@ export const sexLabel = (value?: string) => {
   return value ? labels[value] || value : '';
 };
 
+export const moodLabel = (value?: string | null) => {
+  const labels: Record<string, string> = {
+    relajado: 'Relajado',
+    timido: 'Tímido',
+    energico: 'Enérgico',
+    en_adaptacion: 'En adaptación',
+  };
+  return value ? labels[String(value).toLowerCase()] || value : '';
+};
+
+// Solo los gatos usan arena: evita ofrecer "cambiar arena" a dueños de perros.
+export const usesLitter = (species?: string) => {
+  const canonical: Record<string, string> = { cat: 'cat', gato: 'cat' };
+  return canonical[String(species || '').trim().toLowerCase()] === 'cat';
+};
+
 export const statusLabel = (value?: string) => {
   const labels: Record<string, string> = {
     borrador: 'Borrador',

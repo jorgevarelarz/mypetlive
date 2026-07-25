@@ -9,6 +9,7 @@ export type AnimalDoc = {
   age?: string;
   images?: string[];
   shelter?: string;
+  city?: string;
   code?: string;
   lastFeeding?: string;
   lastLitterChange?: string;
@@ -67,7 +68,10 @@ export async function fetchFeaturedAnimal(assignedId?: string | null): Promise<A
       const { items } = await listMyAdoptions();
       const adopted = (items || []).find((item: any) => {
         const status = String(item?.status || '').toLowerCase();
-        return ['accepted', 'active'].includes(status) && (item?.animal?._id || item?.animalId);
+        // Estados reales de AdoptionStatus: solo 'aprobada' significa que el animal
+        // ya es del adoptante (antes se comparaba con 'accepted'/'active', vocabulario
+        // del legado de alquiler que nunca casaba → la mascota adoptada no salía).
+        return status === 'aprobada' && (item?.animal?._id || item?.animalId);
       });
       if (adopted) {
         if (adopted.animal?.images?.length) {

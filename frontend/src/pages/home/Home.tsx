@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import { toAbsoluteUrl } from '../../utils/media';
 import Brand from '../../components/Brand';
+import { moodLabel, speciesLabel, usesLitter } from '../../styles/mypetlive';
 
 const colors = {
   bg: '#F6F3EC',
@@ -102,7 +103,7 @@ export default function Home() {
 
   const assignedAnimalId = (user as any)?.assignedAnimalId || (user as any)?.animalId || (user as any)?.petId || null;
 
-  const { data: featuredAnimal, isLoading } = useQuery({
+  const { data: featuredAnimal, isLoading, isError, refetch } = useQuery({
     queryKey: ['tenant-featured-animal', assignedAnimalId],
     queryFn: () => fetchFeaturedAnimal(assignedAnimalId),
     staleTime: 60_000,
@@ -139,9 +140,10 @@ export default function Home() {
 
   const hasPet = Boolean(featuredAnimal);
   const displayName = featuredAnimal?.name || 'tu mascota';
-  const displaySpecies = featuredAnimal?.species || '';
+  const displaySpecies = speciesLabel(featuredAnimal?.species);
   const displayAge = featuredAnimal?.age || '';
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
+  const showLitter = usesLitter(featuredAnimal?.species);
 
   return (
     <main style={{ background: colors.bg, color: colors.ink, margin: '-24px -16px', minHeight: 'calc(100vh - 56px)' }}>
@@ -212,7 +214,22 @@ export default function Home() {
                 </span>
               )}
             </div>
-            {hasPet ? (
+            {isError ? (
+              <div className="grid gap-3 p-5">
+                <h2
+                  className="text-2xl font-extrabold"
+                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
+                >
+                  No hemos podido cargar tu mascota
+                </h2>
+                <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                  Puede ser un problema de conexión. Vuelve a intentarlo en un momento.
+                </p>
+                <ActionButton variant="ghost" onClick={() => refetch()}>
+                  Reintentar
+                </ActionButton>
+              </div>
+            ) : hasPet ? (
               <div className="grid gap-3 p-5">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2
@@ -227,12 +244,14 @@ export default function Home() {
                   {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                    Cerca de ti
-                  </span>
+                  {featuredAnimal?.city && (
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
+                      {featuredAnimal.city}
+                    </span>
+                  )}
                   {featuredAnimal?.mood && (
                     <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                      {featuredAnimal.mood}
+                      {moodLabel(featuredAnimal.mood)}
                     </span>
                   )}
                 </div>
@@ -288,17 +307,19 @@ export default function Home() {
                 </ActionButton>
               </div>
 
-              <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                <p className="text-sm font-bold" style={{ color: colors.soft }}>Arena</p>
-                <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeLitter()}</p>
-                <ActionButton
-                  variant="ghost"
-                  onClick={() => careMutation.mutate('litter')}
-                  disabled={!featuredAnimal || careMutation.isPending}
-                >
-                  Cambiar arena
-                </ActionButton>
-              </div>
+              {showLitter && (
+                <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
+                  <p className="text-sm font-bold" style={{ color: colors.soft }}>Arena</p>
+                  <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeLitter()}</p>
+                  <ActionButton
+                    variant="ghost"
+                    onClick={() => careMutation.mutate('litter')}
+                    disabled={!featuredAnimal || careMutation.isPending}
+                  >
+                    Cambiar arena
+                  </ActionButton>
+                </div>
+              )}
             </div>
           </Card>
 
