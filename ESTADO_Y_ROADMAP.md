@@ -217,8 +217,7 @@ está **congelado/oculto**, no borrado.
   sin revertir el traspaso del animal. Ahora una transición ilegal responde **409**; los
   estados finales no tienen salida y el admin no está exento. Las tres pantallas
   (protectora, admin, `AdoptionDetail`) comparten el mapa. Tests en `adoption.transitions.test.ts`.
-  **Pendiente de producto:** si algún día se quiere deshacer una aprobación, es una función
-  aparte que además revierta la propiedad del animal.
+  **Resuelto el 29 jul (ver 5.13):** deshacer una aprobación ya existe, como función aparte.
 - [x] **Topes de importe (`utils/limits.ts`):** las donaciones no tenían tope y las ventas
   cortaban en 100.000 €. Defaults 1 €–2.000 € por donación y 3.000 € por venta,
   configurables (`DONATION_MIN_EUR`, `DONATION_MAX_EUR`, `SALE_MAX_EUR`, añadidas al
@@ -259,6 +258,27 @@ cinco bloques de arriba.
 - **`DEPLOYED_COMMIT` estaba obsoleto** (decía `1dce308`, 20 commits atrás): `deploy.sh` no
   lo escribe, se puso a mano. Si vuelve a desfasarse, no fiarse de él: la comprobación buena
   es `rsync -azn -ii --delete src/ valeris-vps:/opt/mypetlive/src/`.
+
+## 5.13 Deshacer una aprobación de adopción (29 jul 2026)
+`POST /api/adoptions/:id/undo-approval` — **no es una transición**: `aprobada` sigue siendo
+terminal en `adoptionTransitions.ts`. Revierte los cinco efectos de aprobar: traspaso del
+animal (vuelve a la protectora en `reservado`, no en `publicado`), evento de linaje
+(`returned` compensatorio, **el `adopted` no se borra**), plan de bienvenida (se elimina),
+candidaturas hermanas (se reabren al estado exacto, guardado en `previousStatus` al
+cerrarlas) y correo al adoptante.
+
+- **Ventana:** 72 h para la protectora, configurable con `ADOPTION_UNDO_WINDOW_HOURS`; el
+  admin no tiene límite. Pasado el plazo → 403 `undo_window_expired`. La idea: a las dos
+  horas es un error de clic, a las tres semanas es una devolución, que es otro proceso.
+- **Motivo obligatorio** (mínimo 3 caracteres), queda en el historial con `action:
+  'undo_approval'`, quién lo hizo y cuántas horas habían pasado.
+- **409 `animal_moved_on`** si el animal ya cambió de manos después de la adopción.
+- **UI:** solo en `AdoptionDetail.tsx`, en el hueco donde antes se leía "este proceso está
+  cerrado", con modal que enumera las consecuencias (el nº de candidaturas a reabrir sale de
+  `closedSiblings`, que devuelve `getById`). **No está en los paneles de lista a propósito**:
+  ahí los botones se apilan por filas y un clic de más revertiría la propiedad de un animal.
+- Tests en `adoption.undo.test.ts` (11). `utils/adoptionUndo.ts` aísla ventana, timestamp de
+  aprobación y reconstrucción del estado previo de las hermanas.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
