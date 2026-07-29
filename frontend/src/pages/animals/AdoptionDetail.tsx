@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getAdoption, setAdoptionStatus, adoptionStatusErrorMessage, cancelAdoption, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
+import { getAdoption, setAdoptionStatus, adoptionStatusErrorMessage, cancelAdoption, undoAdoptionApproval, undoApprovalErrorMessage, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
@@ -93,6 +93,10 @@ export default function AdoptionDetail() {
   const canManage = user?.role === 'landlord' || user?.role === 'admin';
   const backTo = canManage ? '/landlord/adoptions' : '/adoptions/mine';
 
+  const [undoOpen, setUndoOpen] = React.useState(false);
+  const [undoReason, setUndoReason] = React.useState('');
+  const [undoBusy, setUndoBusy] = React.useState(false);
+
   if (isLoading) return <div className="p-4">Cargando solicitud...</div>;
 
   // Antes `isLoading || !data` dejaba "Cargando solicitud..." para siempre cuando la
@@ -136,6 +140,26 @@ export default function AdoptionDetail() {
       refetch();
     } catch (e: any) {
       toast.error(adoptionStatusErrorMessage(e));
+    }
+  };
+
+  const confirmUndo = async () => {
+    if (undoReason.trim().length < 3 || undoBusy) return;
+    setUndoBusy(true);
+    try {
+      const res = await undoAdoptionApproval(String(id), undoReason.trim());
+      toast.success(
+        res.reopenedApplications
+          ? `Aprobación deshecha. Se han reabierto ${res.reopenedApplications} solicitud${res.reopenedApplications === 1 ? '' : 'es'}.`
+          : 'Aprobación deshecha.',
+      );
+      setUndoOpen(false);
+      setUndoReason('');
+      refetch();
+    } catch (e: any) {
+      toast.error(undoApprovalErrorMessage(e));
+    } finally {
+      setUndoBusy(false);
     }
   };
 
@@ -304,9 +328,26 @@ export default function AdoptionDetail() {
               de la protectora. Esta pantalla ofrecía las seis siempre, así que las dos
               pantallas de la misma protectora no decían lo mismo. */}
           {isTerminal ? (
-            <p className="text-sm" style={{ color: '#7A8273' }}>
-              Este proceso está cerrado ({statusLabel(status)}) y ya no admite cambios de estado.
-            </p>
+            <>
+              <p className="text-sm" style={{ color: '#7A8273' }}>
+                Este proceso está cerrado ({statusLabel(status)}) y ya no admite cambios de estado.
+              </p>
+              {/* Deshacer vive solo aquí, en la ficha, y no en los paneles de lista:
+                  ahí los botones se apilan por filas y un clic de más revertiría la
+                  propiedad de un animal. Entrar en la solicitud es la fricción. */}
+              {status === 'aprobada' && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setUndoOpen(true)}
+                    className="border px-3 py-2 text-sm font-medium"
+                    style={{ borderColor: '#C05656', borderRadius: 8, color: '#8F2F2F', background: '#fff' }}
+                  >
+                    Deshacer la aprobación
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex flex-wrap gap-2">
               {nextAdoptionStatuses(status).map((newStatus) => (
@@ -342,6 +383,81 @@ export default function AdoptionDetail() {
             </button>
           </div>
         </section>
+      )}
+
+      {undoOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+          onClick={() => !undoBusy && setUndoOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="undo-title"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 12, padding: 20, width: 'min(520px, 96vw)',
+              maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(15,23,42,0.25)',
+            }}
+          >
+            <h2 id="undo-title" className="text-lg font-semibold" style={{ marginBottom: 8 }}>
+              Deshacer la aprobación
+            </h2>
+            <p className="text-sm" style={{ color: '#3F4A3C' }}>
+              Esto devuelve a {animal.name || 'el animal'} a tu protectora. En concreto:
+            </p>
+            <ul className="text-sm" style={{ color: '#7A8273', margin: '8px 0 0 18px', listStyle: 'disc', display: 'grid', gap: 4 }}>
+              <li>
+                deja de ser mascota personal de {adoption.adopter?.name || 'la persona adoptante'} y vuelve a estar a tu
+                nombre, en estado <strong>reservado</strong>
+              </li>
+              <li>se retira su plan de bienvenida y las tareas ya marcadas</li>
+              {!!adoption.closedSiblings && (
+                <li>
+                  se reabren las {adoption.closedSiblings} solicitud{adoption.closedSiblings === 1 ? '' : 'es'} que se
+                  cerraron al adjudicarla, y esas personas recibirán un aviso de que sigue disponible
+                </li>
+              )}
+              <li>{adoption.adopter?.name || 'La persona adoptante'} recibirá un correo explicando que se ha revertido</li>
+            </ul>
+            <p className="text-sm" style={{ color: '#7A8273', marginTop: 8 }}>
+              El historial conserva las dos cosas: la adopción y su reversión.
+            </p>
+            <label className="text-sm font-medium" style={{ display: 'block', marginTop: 14 }}>
+              Motivo (obligatorio, lo verá el equipo)
+              <textarea
+                rows={3}
+                value={undoReason}
+                onChange={e => setUndoReason(e.target.value)}
+                className="w-full border p-2 text-sm"
+                style={{ borderColor: '#D7D0C2', borderRadius: 8, marginTop: 4, fontFamily: 'inherit', fontWeight: 400 }}
+              />
+            </label>
+            <div className="flex flex-wrap justify-end gap-2" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setUndoOpen(false)}
+                disabled={undoBusy}
+                className="border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ borderColor: '#D7D0C2', borderRadius: 8, background: '#fff' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmUndo}
+                disabled={undoBusy || undoReason.trim().length < 3}
+                className="px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: '#8F2F2F', borderRadius: 8 }}
+              >
+                {undoBusy ? 'Deshaciendo…' : 'Sí, deshacer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

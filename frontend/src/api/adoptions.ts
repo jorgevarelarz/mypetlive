@@ -94,6 +94,38 @@ export function adoptionStatusErrorMessage(error: any): string {
   return 'No se pudo actualizar el estado.';
 }
 
+/**
+ * Deshace una aprobación: devuelve el animal a la protectora, retira el plan de
+ * bienvenida y reabre las candidaturas que se cerraron al adjudicarlo. No es un
+ * cambio de estado, por eso no pasa por `setAdoptionStatus`.
+ */
+export async function undoAdoptionApproval(id: string, reason: string) {
+  const { data } = await client.post(
+    `/api/adoptions/${id}/undo-approval`,
+    { reason },
+    { skipErrorToast: true } as any,
+  );
+  return data as { ok: boolean; id: string; status: AdoptionStatus; reopenedApplications: number };
+}
+
+export function undoApprovalErrorMessage(error: any): string {
+  const data = error?.response?.data;
+  switch (data?.error) {
+    case 'undo_window_expired':
+      return `El plazo para deshacer una aprobación es de ${data.windowHours} horas. Pasado ese tiempo lo que corresponde es registrar una devolución; escribe a soporte si necesitas revertirla.`;
+    case 'animal_moved_on':
+      return 'El animal ya ha cambiado de manos desde la adopción, así que no se puede revertir sin pisar ese historial.';
+    case 'not_approved':
+      return 'Esta solicitud ya no está aprobada. Recarga la página para ver el estado real.';
+    case 'reason_required':
+      return 'Explica el motivo antes de deshacer la aprobación.';
+    case 'forbidden':
+      return 'No puedes deshacer esta aprobación.';
+    default:
+      return 'No se pudo deshacer la aprobación.';
+  }
+}
+
 export async function getAdoption(id: string) {
   const { data } = await client.get(`/api/adoptions/${id}`);
   return data;

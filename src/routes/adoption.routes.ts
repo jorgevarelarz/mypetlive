@@ -15,6 +15,9 @@ r.post('/:id/cancel', ...assertRole('tenant', 'adoptante', 'admin'), asyncHandle
 // Protectora
 r.get('/for-my-animals', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.listForMyAnimals));
 r.patch('/:id/status', ...assertRole('landlord', 'protectora', 'admin'), validate(adoptionStatusSchema), asyncHandler(ctrl.setStatus));
+// Deshacer la aprobación no es un cambio de estado (ver el controlador): tiene
+// ruta propia porque revierte el traspaso del animal, no solo un campo.
+r.post('/:id/undo-approval', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.undoApproval));
 
 // Admin
 r.get('/', ...assertRole('admin'), asyncHandler(ctrl.listAll));
