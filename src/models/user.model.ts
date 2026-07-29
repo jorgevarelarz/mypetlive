@@ -103,6 +103,11 @@ const userSchema = new Schema(
     termsVersionAccepted: { type: String },
     privacyVersionAccepted: { type: String },
     patitas: { type: Number, default: 0 },
+    // Patitas comprometidas y aún no gastadas (hoy: citas veterinarias que la
+    // protectora ha decidido pagar con Patitas). Se bloquean al pedir la cita y
+    // salen del saldo real al completarla, o se liberan si se cancela. El saldo
+    // disponible para gastar en cualquier otra cosa es `patitas - patitasLocked`.
+    patitasLocked: { type: Number, default: 0, min: 0 },
     // Password reset support. select:false: el token de reseteo es una
     // credencial temporal de toma de control de cuenta y nunca debe viajar
     // en respuestas por defecto (p. ej. el listado de usuarios).

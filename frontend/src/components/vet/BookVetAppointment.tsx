@@ -54,7 +54,10 @@ export default function BookVetAppointment() {
   });
   const myPets = (petsQ.data || []).filter(p => p.code);
   const patitasQ = useQuery({ queryKey: ['my-patitas'], queryFn: getMyPatitas, enabled: isShelter });
-  const balance = patitasQ.data?.balance ?? 0;
+  // Lo que se puede comprometer es el disponible, no el saldo bruto: lo ya
+  // comprometido en otras citas está bloqueado hasta que se completen o cancelen.
+  const balance = patitasQ.data?.available ?? patitasQ.data?.balance ?? 0;
+  const lockedPatitas = patitasQ.data?.locked ?? 0;
   const vets = vetsQ.data?.items || [];
   const selectedVet = vets.find(v => v._id === vetId);
   const catalog = selectedVet?.serviceCatalog || [];
@@ -215,7 +218,9 @@ export default function BookVetAppointment() {
               Pagar con Patitas (opcional)
               <input type="number" min={0} max={balance} value={patitasCost} onChange={e => setPatitasCost(e.target.value)} style={inputStyle} placeholder="0" />
               <span style={{ color: MPL.faint, fontSize: 12, fontWeight: 600 }}>
-                Saldo: {balance} Patitas{patitasCost ? ` · gastarás ${Math.max(0, Math.round(Number(patitasCost)))} (≈ ${(Math.max(0, Math.round(Number(patitasCost))) * 0.1).toFixed(2)} €)` : ''}. Se descuentan al completar la cita.
+                Disponible: {balance} Patitas{lockedPatitas > 0 ? ` (${lockedPatitas} ya comprometidas en otras citas)` : ''}
+                {patitasCost ? ` · comprometerás ${Math.max(0, Math.round(Number(patitasCost)))} (≈ ${(Math.max(0, Math.round(Number(patitasCost))) * 0.1).toFixed(2)} €)` : ''}.
+                {' '}Se bloquean al pedir la cita y se abonan al veterinario cuando la complete. Si se cancela, se liberan.
               </span>
             </label>
           )}

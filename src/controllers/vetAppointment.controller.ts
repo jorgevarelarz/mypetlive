@@ -8,7 +8,10 @@ import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { PatitaTxn } from '../models/patitaTxn.model';
-import { eurFromPatitas, centsFromPatitas, genRedeemCode } from '../utils/patitas';
+import {
+  eurFromPatitas, centsFromPatitas, genRedeemCode,
+  lockPatitas, releasePatitas, consumeLockedPatitas, availablePatitas,
+} from '../utils/patitas';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import logger from '../utils/logger';
 
@@ -175,25 +178,35 @@ export async function createAppointment(req: Request, res: Response) {
     code = animal.code;
   }
 
-  // Pago con Patitas: solo cuando agenda una protectora (landlord). Validamos saldo
-  // ahora (la liquidación real se hace al completar la cita).
+  // Pago con Patitas: solo cuando agenda una protectora (landlord). Decidir
+  // pagar con Patitas las BLOQUEA en el acto — antes solo se comprobaba el saldo
+  // aquí y se debitaba al completar, así que gastarlo entre medias dejaba al vet
+  // sin cobrar. El bloqueo es atómico, no un "leer y luego escribir".
   let patitasCost = 0;
   if ((role === 'landlord' || role === 'admin') && req.body?.patitasCost != null) {
     const n = Number(req.body.patitasCost);
     if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_patitas_cost' });
     patitasCost = Math.round(n);
-    if (patitasCost > 0) {
-      const shelter: any = await User.findById(userId).select('patitas').lean();
-      if ((shelter?.patitas || 0) < patitasCost) {
-        return res.status(400).json({ error: 'insufficient_patitas', available: shelter?.patitas || 0 });
-      }
+  }
+  if (patitasCost > 0) {
+    const locked = await lockPatitas(String(userId), patitasCost);
+    if (!locked) {
+      const shelter: any = await User.findById(userId).select('patitas patitasLocked').lean();
+      return res.status(400).json({ error: 'insufficient_patitas', available: availablePatitas(shelter) });
     }
   }
 
-  const appt = await VetAppointment.create({
-    vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
-    patitasCost, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
-  });
+  let appt;
+  try {
+    appt = await VetAppointment.create({
+      vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
+      patitasCost, patitasReserved: patitasCost > 0, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
+    });
+  } catch (err) {
+    // Si la cita no llega a existir, el bloqueo no puede quedarse puesto.
+    if (patitasCost > 0) await releasePatitas(String(userId), patitasCost);
+    throw err;
+  }
 
   // Avisar al veterinario de la nueva solicitud.
   const [vetUser, owner] = await Promise.all([
@@ -278,15 +291,31 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
   appt.status = status;
   await appt.save();
 
+  // Al cancelar se libera la reserva: las Patitas comprometidas vuelven a estar
+  // disponibles. Sin esto, cancelar dejaría el saldo bloqueado para siempre.
+  if (status === 'cancelled' && appt.patitasCost > 0 && appt.patitasReserved && !appt.patitasPaid) {
+    await releasePatitas(String(appt.userId), appt.patitasCost);
+    appt.patitasReserved = false;
+    appt.payoutStatus = 'none';
+    await appt.save();
+  }
+
   // Al completar: si la protectora comprometió Patitas, se liquida (debita a la
   // protectora y paga € al vet, gateado por Stripe — mismo modelo que el canje).
+  let patitasSettlementFailed = false;
   if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
-    const debited = await User.findOneAndUpdate(
-      { _id: appt.userId, patitas: { $gte: appt.patitasCost } },
-      { $inc: { patitas: -appt.patitasCost } },
-      { new: true },
-    ).select('patitas');
+    // Lo normal es consumir la reserva hecha al pedir la cita. Las citas creadas
+    // antes de existir la reserva (patitasReserved: false) caen al débito
+    // directo de siempre, que sí puede fallar por saldo insuficiente.
+    const debited = appt.patitasReserved
+      ? await consumeLockedPatitas(String(appt.userId), appt.patitasCost)
+      : await User.findOneAndUpdate(
+        { _id: appt.userId, patitas: { $gte: appt.patitasCost } },
+        { $inc: { patitas: -appt.patitasCost } },
+        { new: true },
+      ).select('patitas');
     if (debited) {
+      appt.patitasReserved = false;
       const valueEur = eurFromPatitas(appt.patitasCost);
       const code = genRedeemCode();
       const txn: any = await PatitaTxn.create({
@@ -313,6 +342,10 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
       appt.patitasPaid = true; appt.patitasCode = code; appt.payoutStatus = payoutStatus as any;
       await appt.save();
     } else {
+      // Solo alcanzable con citas anteriores a la reserva (sin bloqueo previo).
+      // Antes se quedaba en un log y el vet veía "Cita actualizada" sin saber
+      // que no había cobrado: ahora se devuelve al cliente para poder decirlo.
+      patitasSettlementFailed = true;
       logger.warn({ appt: String(appt._id) }, '[vet-appointments] saldo de Patitas insuficiente al completar');
     }
   }
@@ -351,5 +384,5 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
     await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status]);
   }
 
-  res.json({ ...appt.toObject(), clinicalRecordAdded });
+  res.json({ ...appt.toObject(), clinicalRecordAdded, patitasSettlementFailed });
 }

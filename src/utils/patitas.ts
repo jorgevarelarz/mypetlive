@@ -80,6 +80,62 @@ export async function creditPatitas(userId: string, amount: number, session?: Cl
   return updated?.patitas ?? 0;
 }
 
+// ---- Reserva de Patitas ----------------------------------------------------
+// Comprometer Patitas (p. ej. pagar una cita del vet) las bloquea al momento:
+// siguen en el saldo pero no se pueden gastar en otra cosa. Así el profesional
+// no se queda sin cobrar porque el saldo se gastara entre el encargo y el cobro.
+// No hay movimiento en el ledger: bloquear no es gastar, y una reserva liberada
+// no debe ensuciar las métricas de impacto.
+
+// Patitas realmente disponibles = saldo menos lo ya comprometido.
+export function availablePatitas(user: { patitas?: number; patitasLocked?: number } | null | undefined): number {
+  return Math.max(0, (user?.patitas || 0) - (user?.patitasLocked || 0));
+}
+
+// Bloquea `amount` solo si hay disponible suficiente. Atómico: la condición y el
+// incremento viajan en la misma operación, así que dos reservas simultáneas no
+// pueden comprometer el mismo saldo. Devuelve null si no llega.
+export async function lockPatitas(userId: string, amount: number, session?: ClientSession) {
+  if (amount <= 0) return { patitas: 0, patitasLocked: 0 };
+  return User.findOneAndUpdate(
+    {
+      _id: userId,
+      $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
+    },
+    { $inc: { patitasLocked: amount } },
+    { new: true },
+  )
+    .select('patitas patitasLocked')
+    .session(session ?? null);
+}
+
+// Libera una reserva sin gastarla (cita cancelada). Nunca deja el contador en
+// negativo: si la reserva ya no está, no hace nada.
+export async function releasePatitas(userId: string, amount: number, session?: ClientSession) {
+  if (amount <= 0) return null;
+  return User.findOneAndUpdate(
+    { _id: userId, patitasLocked: { $gte: amount } },
+    { $inc: { patitasLocked: -amount } },
+    { new: true },
+  )
+    .select('patitas patitasLocked')
+    .session(session ?? null);
+}
+
+// Consume una reserva: sale del saldo real y deja de estar bloqueada, en una
+// sola operación. Devuelve null si la reserva no existe (cita anterior a este
+// mecanismo: el llamante debe caer al débito directo de siempre).
+export async function consumeLockedPatitas(userId: string, amount: number, session?: ClientSession) {
+  if (amount <= 0) return null;
+  return User.findOneAndUpdate(
+    { _id: userId, patitas: { $gte: amount }, patitasLocked: { $gte: amount } },
+    { $inc: { patitas: -amount, patitasLocked: -amount } },
+    { new: true },
+  )
+    .select('patitas patitasLocked')
+    .session(session ?? null);
+}
+
 // Transferencia atómica de Patitas: descuenta del origen solo si tiene saldo suficiente,
 // luego acredita al destino. Devuelve los saldos resultantes o null si saldo insuficiente.
 export async function transferPatitas(
@@ -88,8 +144,13 @@ export async function transferPatitas(
   amount: number,
   session?: ClientSession,
 ): Promise<{ fromBalance: number; toBalance: number } | null> {
+  // Se descuenta del disponible, no del saldo bruto: lo comprometido en citas
+  // del vet no se puede donar (si no, la reserva sería papel mojado).
   const debited = await User.findOneAndUpdate(
-    { _id: fromId, patitas: { $gte: amount } },
+    {
+      _id: fromId,
+      $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
+    },
     { $inc: { patitas: -amount } },
     { new: true },
   )

@@ -14,6 +14,7 @@ import {
   verifyUserToken,
   transferPatitas,
   earnForUser,
+  availablePatitas,
 } from '../utils/patitas';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
@@ -115,9 +116,13 @@ async function fetchHistory(meId: string, opts: { limit?: number; type?: string 
 export async function getMyPatitas(req: Request, res: Response) {
   const me = actorId(req);
   if (!me) return res.status(401).json({ error: 'unauthorized' });
-  const user = await User.findById(me).select('patitas role profile.autoDonate').lean();
+  const user = await User.findById(me).select('patitas patitasLocked role profile.autoDonate').lean();
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const balance = (user as any).patitas || 0;
+  // Comprometidas y aún no gastadas (citas del vet pagadas con Patitas): siguen
+  // en el saldo pero no se pueden gastar en otra cosa.
+  const locked = (user as any).patitasLocked || 0;
+  const available = availablePatitas(user as any);
 
   // Total histórico generado (solo para usuarios).
   const earnedAgg = await PatitaTxn.aggregate([
@@ -128,6 +133,8 @@ export async function getMyPatitas(req: Request, res: Response) {
 
   res.json({
     balance,
+    locked,
+    available,
     valueEur: eurFromPatitas(balance),
     patitaValueEur: PATITA_VALUE_EUR,
     totalGenerated,
@@ -345,11 +352,14 @@ export async function getWalletToken(req: Request, res: Response) {
   // Protectoras reales usan role 'protectora'; 'landlord' es el rol legado de
   // RentalApp que las protectoras antiguas aún conservan.
   if (!['landlord', 'protectora'].includes(user?.role)) return res.status(403).json({ error: 'only_shelters' });
-  const shelter = await User.findById(me).select('patitas');
+  const shelter = await User.findById(me).select('patitas patitasLocked');
   const token = signWalletToken(me);
   const code = shortCode();
   walletCodeStore.set(code, { shelterId: me, expiresAt: Date.now() + WALLET_CODE_TTL_MS });
-  res.json({ token, code, balance: shelter?.patitas || 0, valueEur: eurFromPatitas(shelter?.patitas || 0) });
+  // El QR que la protectora enseña al partner debe anunciar lo canjeable, no el
+  // saldo bruto: lo comprometido en citas no se puede gastar aquí.
+  const spendable = availablePatitas(shelter as any);
+  res.json({ token, code, balance: spendable, valueEur: eurFromPatitas(spendable) });
 }
 
 function resolveShelterFromBody(body: any): string | null {
@@ -371,11 +381,12 @@ export async function redeemPreview(req: Request, res: Response) {
   const shelterId = resolveShelterFromBody(req.body || {});
   if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
 
-  const shelter = await User.findById(shelterId).select('name patitas role');
+  const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
     return res.status(404).json({ error: 'protectora_not_found' });
   }
-  const available = shelter.patitas || 0;
+  // Lo que el partner ve como canjeable debe ser lo mismo que el confirm acepta.
+  const available = availablePatitas(shelter as any);
   const rawAmount = (req.body || {}).amount;
   const amount = rawAmount === 'all' || rawAmount == null ? available : Math.round(Number(rawAmount));
   res.json({
@@ -396,22 +407,28 @@ export async function redeemConfirm(req: Request, res: Response) {
   const shelterId = resolveShelterFromBody(req.body || {});
   if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
 
-  const shelter = await User.findById(shelterId).select('name patitas role');
+  const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
     return res.status(404).json({ error: 'protectora_not_found' });
   }
 
+  // Lo comprometido en citas del vet no se puede canjear en un partner: si no,
+  // la reserva no serviría de nada y el vet volvería a quedarse sin cobrar.
+  const spendable = availablePatitas(shelter as any);
   const rawAmount = (req.body || {}).amount;
-  const amount = rawAmount === 'all' ? shelter.patitas || 0 : Math.round(Number(rawAmount));
+  const amount = rawAmount === 'all' ? spendable : Math.round(Number(rawAmount));
   if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
 
-  // Débito atómico de la protectora (solo si tiene saldo suficiente).
+  // Débito atómico de la protectora (solo si tiene disponible suficiente).
   const debited = await User.findOneAndUpdate(
-    { _id: shelterId, patitas: { $gte: amount } },
+    {
+      _id: shelterId,
+      $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
+    },
     { $inc: { patitas: -amount } },
     { new: true },
   ).select('patitas');
-  if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: shelter.patitas || 0 });
+  if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: spendable });
 
   const valueEur = eurFromPatitas(amount);
   const code = genRedeemCode();

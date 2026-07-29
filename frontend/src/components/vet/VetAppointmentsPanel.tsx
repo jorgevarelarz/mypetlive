@@ -22,7 +22,13 @@ export default function VetAppointmentsPanel() {
     mutationFn: (vars: { id: string; status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; cancelReason?: string; addToHistory?: boolean }) =>
       updateVetAppointmentStatus(vars.id, { status: vars.status, scheduledAt: vars.scheduledAt, vetNotes: vars.vetNotes, cancelReason: vars.cancelReason, addToHistory: vars.addToHistory }),
     onSuccess: (data: any) => {
-      toast.success(data?.clinicalRecordAdded ? 'Cita completada y añadida al pasaporte' : 'Cita actualizada');
+      // Antes esto se quedaba en un log del servidor: el vet veía "Cita
+      // actualizada" sin enterarse de que no había cobrado las Patitas.
+      if (data?.patitasSettlementFailed) {
+        toast.error('Cita completada, pero la protectora no tenía saldo: las Patitas no se han cobrado. Contacta con ella.', { duration: 8000 });
+      } else {
+        toast.success(data?.clinicalRecordAdded ? 'Cita completada y añadida al pasaporte' : 'Cita actualizada');
+      }
       setReschedFor(null); setReschedAt('');
       queryClient.invalidateQueries({ queryKey: ['vet-appointments'] });
     },

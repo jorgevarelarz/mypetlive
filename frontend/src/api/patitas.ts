@@ -17,6 +17,10 @@ export type PatitaTxn = {
 
 export type MyPatitas = {
   balance: number;
+  /** Comprometidas en citas del vet aún sin completar: cuentan en balance pero no se pueden gastar. */
+  locked: number;
+  /** balance - locked. Es lo que de verdad se puede gastar. */
+  available: number;
   valueEur: number;
   patitaValueEur: number;
   totalGenerated: number;

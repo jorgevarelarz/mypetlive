@@ -189,3 +189,105 @@ describe('Citas veterinarias', () => {
     await request(app).patch(`/api/vet-appointments/${id}/status`).set({ 'x-user-id': otherVetId, 'x-user-role': 'vet', 'x-user-verified': 'true' }).send({ status: 'confirmed' }).expect(403);
   });
 });
+
+// Decidir pagar una cita con Patitas las bloquea en el acto. Antes solo se
+// comprobaba el saldo al pedir la cita y se debitaba al completarla, así que
+// gastarlo entre medias dejaba al veterinario sin cobrar.
+describe('Citas veterinarias · reserva de Patitas', () => {
+  const bookWithPatitas = (patitasCost: number) =>
+    request(app).post('/api/vet-appointments').set(shelterH)
+      .send({ vetId, reason: 'Vacunación', requestedAt: future(), patitasCost });
+
+  const wallet = async () => {
+    const w = await request(app).get('/api/patitas/wallet/token').set(shelterH).expect(200);
+    return w.body;
+  };
+
+  const shelterBalances = async () => {
+    const s: any = await User.findById(shelterId).select('patitas patitasLocked').lean();
+    return { patitas: s.patitas || 0, locked: s.patitasLocked || 0 };
+  };
+
+  it('bloquea las Patitas al pedir la cita, sin tocar todavía el saldo', async () => {
+    const created = await bookWithPatitas(30).expect(201);
+    expect(created.body.patitasReserved).toBe(true);
+
+    // El saldo sigue siendo 50: bloquear no es gastar.
+    expect(await shelterBalances()).toEqual({ patitas: 50, locked: 30 });
+
+    const me = await request(app).get('/api/patitas/me').set(shelterH).expect(200);
+    expect(me.body.balance).toBe(50);
+    expect(me.body.locked).toBe(30);
+    expect(me.body.available).toBe(20);
+  });
+
+  it('lo bloqueado no se puede canjear en un partner (era la fuga original)', async () => {
+    await bookWithPatitas(30).expect(201);
+
+    // Quedan 20 disponibles de 50: canjear 40 tiene que fallar aunque el saldo
+    // bruto llegue, y el partner debe ver 20 como canjeable, no 50.
+    const w = await wallet();
+    expect(w.balance).toBe(20);
+
+    const preview = await request(app).post('/api/patitas/redeem/preview').set(vetH)
+      .send({ walletToken: w.token }).expect(200);
+    expect(preview.body.available).toBe(20);
+
+    const rejected = await request(app).post('/api/patitas/redeem/confirm').set(vetH)
+      .send({ walletToken: w.token, amount: 40 }).expect(400);
+    expect(rejected.body.error).toBe('insufficient_patitas');
+    expect(rejected.body.available).toBe(20);
+
+    // Y lo disponible sí se puede canjear.
+    await request(app).post('/api/patitas/redeem/confirm').set(vetH)
+      .send({ walletToken: w.token, amount: 20 }).expect(200);
+    expect(await shelterBalances()).toEqual({ patitas: 30, locked: 30 });
+  });
+
+  it('dos citas no pueden comprometer el mismo saldo', async () => {
+    await bookWithPatitas(30).expect(201);
+    const second = await bookWithPatitas(30).expect(400);
+    expect(second.body.error).toBe('insufficient_patitas');
+    expect(second.body.available).toBe(20);
+    expect(await shelterBalances()).toEqual({ patitas: 50, locked: 30 });
+  });
+
+  it('cancelar libera la reserva', async () => {
+    const created = await bookWithPatitas(30).expect(201);
+    const cancelled = await request(app).patch(`/api/vet-appointments/${created.body._id}/status`)
+      .set(shelterH).send({ status: 'cancelled' }).expect(200);
+    expect(cancelled.body.patitasReserved).toBe(false);
+
+    expect(await shelterBalances()).toEqual({ patitas: 50, locked: 0 });
+    // Y vuelve a poder gastarse entera.
+    const w = await wallet();
+    expect(w.balance).toBe(50);
+  });
+
+  it('completar consume la reserva: sale del saldo y deja de estar bloqueada', async () => {
+    const created = await bookWithPatitas(30).expect(201);
+    const id = created.body._id;
+    await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const done = await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'completed' }).expect(200);
+
+    expect(done.body.patitasPaid).toBe(true);
+    expect(done.body.patitasSettlementFailed).toBe(false);
+    expect(await shelterBalances()).toEqual({ patitas: 20, locked: 0 });
+  });
+
+  it('una cita anterior a la reserva se sigue liquidando, y avisa si no hay saldo', async () => {
+    // Simula el dato que ya está en producción: coste comprometido sin bloqueo.
+    const created = await bookWithPatitas(30).expect(201);
+    const id = created.body._id;
+    const { VetAppointment } = await import('../models/vetAppointment.model');
+    await VetAppointment.findByIdAndUpdate(id, { patitasReserved: false });
+    await User.findByIdAndUpdate(shelterId, { patitas: 5, patitasLocked: 0 });
+
+    await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const done = await request(app).patch(`/api/vet-appointments/${id}/status`).set(vetH).send({ status: 'completed' }).expect(200);
+
+    // No se cobra, pero ya no se queda en un log: el vet puede enterarse.
+    expect(done.body.patitasPaid).toBeFalsy();
+    expect(done.body.patitasSettlementFailed).toBe(true);
+  });
+});
