@@ -279,6 +279,11 @@ cerrarlas) y correo al adoptante.
   ahí los botones se apilan por filas y un clic de más revertiría la propiedad de un animal.
 - Tests en `adoption.undo.test.ts` (11). `utils/adoptionUndo.ts` aísla ventana, timestamp de
   aprobación y reconstrucción del estado previo de las hermanas.
+- **DESPLEGADO el 29 jul 2026** (`deploy.sh api` + `web`, smoke verde). Verificado en vivo:
+  la ruta responde 404 `not_found` a una adopción inexistente con token de protectora, 403
+  con rol adoptante y 401 sin token; el bundle desplegado contiene el modal. `src/` del VPS y
+  docroot idénticos a `HEAD`. No hizo falta tocar el `.env`: sin
+  `ADOPTION_UNDO_WINDOW_HOURS` la ventana son 72 h.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
