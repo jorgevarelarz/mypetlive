@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { User } from '../models/user.model';
 import getRequestLogger from '../utils/requestLogger';
+import { escapeRegex } from '../utils/regex';
 
 /**
  * Retrieve a list of all users. The password hash is excluded for security.
@@ -13,7 +14,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
   const query: any = {};
   if (role) query.role = role;
   if (q) {
-    const term = String(q).trim();
+    const term = escapeRegex(String(q).trim());
     if (term) query.$or = [
       { email: { $regex: term, $options: 'i' } },
       { role: { $regex: term, $options: 'i' } },

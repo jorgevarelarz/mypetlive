@@ -354,7 +354,28 @@ export async function listAll(_req: Request, res: Response) {
     Adoption.find(filter).sort({ createdAt: -1 }).skip((pg - 1) * lim).limit(lim).lean(),
     Adoption.countDocuments(filter),
   ]);
-  res.json({ items, page: pg, limit: lim, total });
+
+  // El panel de admin pintaba `animalId` y `adopterId` crudos: dos columnas de
+  // ObjectIds con las que no se puede trabajar. En el modelo son String sin
+  // `ref`, así que populate no sirve y el join se hace aquí (dos consultas por
+  // página, no una por fila).
+  const ids = (key: 'animalId' | 'adopterId') =>
+    Array.from(new Set(items.map((i: any) => String(i[key] || '')).filter(v => Types.ObjectId.isValid(v))));
+
+  const [animals, adopters] = await Promise.all([
+    Animal.find({ _id: { $in: ids('animalId') } }).select('name code species').lean(),
+    User.find({ _id: { $in: ids('adopterId') } }).select('name email').lean(),
+  ]);
+  const animalById = new Map(animals.map((a: any) => [String(a._id), a]));
+  const adopterById = new Map(adopters.map((u: any) => [String(u._id), u]));
+
+  const enriched = items.map((it: any) => ({
+    ...it,
+    animal: animalById.get(String(it.animalId)) || null,
+    adopter: adopterById.get(String(it.adopterId)) || null,
+  }));
+
+  res.json({ items: enriched, page: pg, limit: lim, total });
 }
 
 export async function getById(req: Request, res: Response) {

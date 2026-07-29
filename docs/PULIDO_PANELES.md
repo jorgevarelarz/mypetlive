@@ -46,9 +46,9 @@ por panel (o por arreglo con entidad propia).
 | Tienda | Panel partner | `/partner` | ✅ hecho |
 | Tienda | Caja | `/caja` | ✅ hecho |
 | Admin | Home | `/admin` | ⏳ |
-| Admin | Usuarios | `/admin/users` | ⏳ |
+| Admin | Usuarios | `/admin/users` | ✅ hecho |
 | Admin | Animales | `/admin/animals` | ⏳ |
-| Admin | Adopciones | `/admin/adoptions` | ⏳ |
+| Admin | Adopciones | `/admin/adoptions` | ✅ hecho |
 | Admin | Cupones | `/admin/coupons` | ⏳ |
 | Admin | Verificaciones | `/admin/verifications` | ⏳ |
 | Admin | Liquidaciones | `/admin/settlements` | ⏳ |
@@ -347,7 +347,45 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
   son códigos crudos; y el `useEffect` de rehidratación depende solo de `user?._id`, así
   que **no** reproduce el bug del cuestionario (machacar lo que se está escribiendo).
 
+### Admin · Usuarios (`/admin/users`) y Adopciones (`/admin/adoptions`) — hecho
+
+- **Bug real y transversal (backend):** los `$regex` de búsqueda no escapaban la
+  entrada. Escribir un `(` en el buscador de usuarios hace que Mongo rechace la
+  expresión y la petición acabe en **500** — y como el panel tampoco tenía estado de
+  error, se leía como "No hay usuarios para esos filtros". Nuevo `utils/regex.ts`
+  aplicado en los tres sitios que lo tenían: `user.controller` (buscador admin),
+  `property.controller` (donde la variable se llamaba `safe` pero solo hacía `trim`)
+  y `offers.controller`. Este último es el de más alcance: casa `targetCity` contra
+  `animal.city`, que **lo escribe una persona**, así que un animal en
+  "A Coruña (centro)" se quedaba sin ninguna oferta y sin ningún error visible.
+  Tests en `utils/regex.test.ts`.
+- **Bug real:** el panel de adopciones pintaba `animalId` y `adopterId` **crudos**:
+  dos columnas de ObjectIds. En el modelo son `String` sin `ref`, así que `populate`
+  no sirve; el join se hace ahora en `listAll` (dos consultas por página, no una por
+  fila) y se muestran nombre + código del animal y nombre + email del adoptante.
+- **Truncado silencioso, otra vez, y peor de lo registrado:** adopciones pedía
+  `limit: 200` con el servidor topando en **50**, y animales pide 200 con tope de
+  **100**. Además el contador de la cabecera era `items.length`, o sea que con más
+  de 50 solicitudes decía "50" para siempre. Ahora sale el `total` del servidor y hay
+  paginación real.
+- **Estado de error muerto:** `AdminUsersPage` tenía un `useState` de error y un
+  `{error && …}` en el render, pero `setError` **solo se llamaba con `null`**. El
+  hueco estaba pintado y nunca se rellenaba.
+- **Una petición por tecla** en el buscador de usuarios: la `queryKey` colgaba de `q`
+  directamente. Ahora hay debounce de 350 ms.
+- El "Exportar CSV" solo baja la página cargada (10 filas), no los `total` usuarios.
+  Renombrado a "Exportar esta página" en vez de cambiar el comportamiento.
+- Comprobado y **correcto** (no se toca): `GET /api/users` sí lleva `requireAdmin` en
+  `user.routes.ts` — el listado de emails no está expuesto. Y el confirm de los
+  estados finales de adopción ya existía.
+
 ## Pendientes detectados de paso (para cuando toque su panel)
+
+- **Admin · adopciones sin máquina de estados:** `ADMIN_STATUSES.filter(s => s !== it.status)`
+  ofrece las siete transiciones siempre. Es la misma incoherencia ya anotada para
+  `AdoptionDetail`, y aquí choca de frente con el agujero de `setStatus`: desde el panel
+  de admin se puede pasar una adopción **ya aprobada** a `rechazada` sin revertir el
+  traspaso del animal. Necesita la decisión de producto que sigue pendiente.
 
 - **Perfil · sin aviso de cambios sin guardar:** es el formulario más largo de la app y
   navegar fuera lo pierde entero, sin preguntar.

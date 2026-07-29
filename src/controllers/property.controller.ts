@@ -5,6 +5,7 @@ import { AlertSubscription } from '../models/alertSubscription.model';
 import { Application } from '../models/application.model';
 import { sendAvailabilityAlert, sendPriceAlert } from '../utils/email';
 import { User } from '../models/user.model';
+import { escapeRegex } from '../utils/regex';
 import mongoose from 'mongoose';
 import { ensureStripeCustomerForUser } from '../core/stripeCustomer';
 import getRequestLogger from '../utils/requestLogger';
@@ -166,7 +167,9 @@ export async function search(req: Request, res: Response) {
   }
   if (status) q.status = String(status);
   if (text) {
-    const safe = String(text).trim();
+    // `safe` era solo un trim, no escapaba nada: un "(" en el buscador tumbaba
+    // la consulta con un 500 de regex inválida.
+    const safe = escapeRegex(String(text).trim());
     if (safe) {
       q.$or = [
         { title: { $regex: safe, $options: 'i' } },

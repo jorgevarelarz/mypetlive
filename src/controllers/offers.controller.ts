@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Coupon } from '../models/coupon.model';
 import { Animal } from '../models/animal.model';
 import { speciesVariants, speciesMatches } from '../utils/species';
+import { escapeRegex } from '../utils/regex';
 import { purchasedItemNames, itemsMatch, matchedItems } from '../utils/purchases';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 
@@ -37,7 +38,9 @@ export async function matchOffersForAnimal(animal: any) {
   if (animal.species) targetOr.push({ targetSpecies: { $in: speciesVariants(animal.species) } });
   if (animal.ageGroup) targetOr.push({ targetAgeGroup: animal.ageGroup });
   if (animal.size) targetOr.push({ targetSize: animal.size });
-  if (animal.city) targetOr.push({ targetCity: { $regex: String(animal.city), $options: 'i' } });
+  // La ciudad la escribe una persona: un paréntesis en "A Coruña (centro)" haría
+  // que Mongo rechazara la consulta y el animal se quedaría sin ninguna oferta.
+  if (animal.city) targetOr.push({ targetCity: { $regex: escapeRegex(String(animal.city)), $options: 'i' } });
 
   const candidates = await Coupon.find({
     active: true,
