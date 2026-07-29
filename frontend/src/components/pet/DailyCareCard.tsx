@@ -7,7 +7,10 @@ import {
   markAnimalLitter,
   markAnimalWalk,
   type CareEntry,
+  type CareSupply,
 } from '../../api/animals';
+import SupplyList from './SupplyList';
+import { describeSupply } from '../../utils/supplies';
 import { usesLitter, usesWalks, walkKindLabel } from '../../styles/mypetlive';
 import WalkSheet, { type WalkDraft } from './WalkSheet';
 
@@ -176,6 +179,14 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
         {showLitter && <button type="button" onClick={() => setSheet('litter')} style={btnGhost}>Cambiar arena</button>}
       </div>
 
+      <SupplyList
+        animalId={animalId}
+        foods={pantry.foods}
+        litters={pantry.litters}
+        showLitter={showLitter}
+        onChange={() => refetch()}
+      />
+
       {(sheet === 'feed' || sheet === 'litter') && (
         <div style={backdrop} onClick={() => !care.isPending && closeSheet()}>
           <div role="dialog" aria-modal="true" style={modal} onClick={e => e.stopPropagation()}>
@@ -187,12 +198,19 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
                     <p className="text-sm" style={{ color: MUTED, marginTop: 4 }}>Lo de siempre — puedes marcar hasta dos.</p>
                     <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
                       {pantry.foods.map(food => (
-                        <Chip key={food} label={food} active={foods.includes(food)} onClick={() => toggleFood(food)} />
+                        <Chip
+                          key={food.name}
+                          label={food.name}
+                          hint={describeSupply(food, 'comidas')}
+                          warn={food.runningLow}
+                          active={foods.includes(food.name)}
+                          onClick={() => toggleFood(food.name)}
+                        />
                       ))}
                     </div>
                   </>
                 )}
-                {foods.filter(f => !pantry.foods.includes(f)).map(food => (
+                {foods.filter(f => !pantry.foods.some(p => p.name === f)).map(food => (
                   <div key={food} style={{ marginTop: 8 }}>
                     <Chip label={food} active onClick={() => toggleFood(food)} />
                   </div>
@@ -213,7 +231,14 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
                 {pantry.litters.length > 0 && (
                   <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
                     {pantry.litters.map(type => (
-                      <Chip key={type} label={type} active={litter === type} onClick={() => setLitter(litter === type ? '' : type)} />
+                      <Chip
+                        key={type.name}
+                        label={type.name}
+                        hint={describeSupply(type, 'cambios')}
+                        warn={type.runningLow}
+                        active={litter === type.name}
+                        onClick={() => setLitter(litter === type.name ? '' : type.name)}
+                      />
                     ))}
                   </div>
                 )}
@@ -266,21 +291,30 @@ function CareLine({ icon, title, detail, actor, aside }: { icon: string; title: 
   );
 }
 
-function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function Chip({ label, hint, warn, active, onClick }: { label: string; hint?: string | null; warn?: boolean; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="border px-3 py-2 text-sm"
+      className="border px-3 py-2 text-sm text-left"
       style={{
         borderRadius: 999,
-        borderColor: active ? '#1F6F6F' : '#D7D0C2',
+        borderColor: active ? '#1F6F6F' : warn ? '#E8654A' : '#D7D0C2',
         background: active ? '#1F6F6F' : '#FFFFFF',
         color: active ? '#FFFFFF' : '#3F4A3C',
       }}
     >
-      {label}
+      <span>{label}</span>
+      {/* Lo que queda va en el propio chip: es donde se decide qué darle. */}
+      {!!hint && (
+        <span
+          className="text-xs"
+          style={{ display: 'block', color: active ? 'rgba(255,255,255,.85)' : warn ? '#8F3827' : MUTED }}
+        >
+          {warn ? `⚠️ ${hint}` : hint}
+        </span>
+      )}
     </button>
   );
 }

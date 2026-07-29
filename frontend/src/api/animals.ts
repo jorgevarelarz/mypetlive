@@ -190,7 +190,25 @@ export type CareEntry = {
   createdAt: string;
 };
 
-export type CarePantry = { foods: string[]; litters: string[] };
+export type SupplyUnit = 'g' | 'kg' | 'ml' | 'l' | 'ud';
+
+/**
+ * Producto de la despensa. Las cantidades llegan en la unidad base de su familia
+ * (g, ml, ud); `usesLeft`/`daysLeft` los calcula el servidor a partir del ritmo
+ * real de consumo, y son `null` cuando no hay datos para afirmarlo.
+ */
+export type CareSupply = {
+  name: string;
+  unit?: SupplyUnit;
+  packSize?: number;
+  perUse?: number;
+  remaining?: number;
+  usesLeft: number | null;
+  daysLeft: number | null;
+  runningLow: boolean;
+};
+
+export type CarePantry = { foods: CareSupply[]; litters: CareSupply[] };
 
 export type CareSummary = {
   feedings: number;
@@ -218,6 +236,24 @@ export async function markAnimalWalk(
 ) {
   const { data } = await client.post(`/api/animals/${id}/care/walk`, walk);
   return data as { ok: boolean; lastWalk: string; entry: CareEntry };
+}
+
+/** Alta, edición, reposición (`refill`) o baja (`remove`) de un producto. */
+export async function upsertAnimalSupply(
+  id: string,
+  supply: {
+    kind: 'food' | 'litter';
+    name: string;
+    packSize?: number;
+    packUnit?: SupplyUnit;
+    perUse?: number;
+    perUseUnit?: SupplyUnit;
+    refill?: boolean;
+    remove?: boolean;
+  },
+) {
+  const { data } = await client.put(`/api/animals/${id}/care/supplies`, supply);
+  return data as { ok: boolean; pantry: CarePantry };
 }
 
 export async function getAnimalCare(id: string) {

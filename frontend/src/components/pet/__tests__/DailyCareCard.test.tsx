@@ -10,6 +10,11 @@ import * as animalsApi from '../../../api/animals';
 
 jest.mock('react-hot-toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+/** Producto de despensa sin cuenta de existencias, que es el caso por defecto. */
+const supply = (name: string, extra: any = {}) => ({
+  name, usesLeft: null, daysLeft: null, runningLow: false, ...extra,
+});
+
 const care = {
   items: [],
   summary: { feedings: 0, litterChanges: 0, walks: 0, walkKm: 0, walkMinutes: 0 },
@@ -76,13 +81,15 @@ describe('Tarjeta de cuidado diario', () => {
 
   it('la despensa se ofrece como chips y no deja marcar más de dos', async () => {
     const markFeeding = jest.spyOn(animalsApi, 'markAnimalFeeding').mockResolvedValue({ ok: true } as any);
-    renderCard('gato', { ...care, pantry: { foods: ['Acana Adult', 'Latita Almo', 'Snack'], litters: [] } });
+    renderCard('gato', { ...care, pantry: { foods: [supply('Acana Adult'), supply('Latita Almo'), supply('Snack')], litters: [] } });
 
     fireEvent.click(await screen.findByText('Marcar comida'));
-    fireEvent.click(screen.getByText('Acana Adult'));
-    fireEvent.click(screen.getByText('Latita Almo'));
-    fireEvent.click(screen.getByText('Snack')); // sobra: solo caben dos
-    fireEvent.click(screen.getByRole('button', { name: 'Marcar' }));
+    // El nombre también sale en la lista de despensa: hay que mirar dentro de la hoja.
+    const sheet = within(screen.getByRole('dialog'));
+    fireEvent.click(sheet.getByText('Acana Adult'));
+    fireEvent.click(sheet.getByText('Latita Almo'));
+    fireEvent.click(sheet.getByText('Snack')); // sobra: solo caben dos
+    fireEvent.click(sheet.getByRole('button', { name: 'Marcar' }));
 
     await waitFor(() => expect(markFeeding).toHaveBeenCalledWith('abc123', ['Acana Adult', 'Latita Almo']));
   });
@@ -106,5 +113,66 @@ describe('Tarjeta de cuidado diario', () => {
     expect(screen.getByText('12 comidas')).toBeInTheDocument();
     expect(screen.getByText('Senderismo · 8.2 km · 95 min · Monte Xalo')).toBeInTheDocument();
     expect(screen.getByText('marcado por Jorge')).toBeInTheDocument();
+  });
+});
+
+describe('Existencias de la despensa', () => {
+  it('dice para cuántas comidas queda y avisa cuando se acaba', async () => {
+    renderCard('gato', {
+      ...care,
+      pantry: {
+        foods: [
+          supply('Acana Adult', { unit: 'kg', packSize: 6000, perUse: 80, remaining: 960, usesLeft: 12, daysLeft: 6 }),
+          supply('Latita', { unit: 'ud', packSize: 12, perUse: 1, remaining: 2, usesLeft: 2, daysLeft: 1, runningLow: true }),
+        ],
+        litters: [],
+      },
+    });
+
+    expect(await screen.findByText(/Para 12 comidas · 6 días/)).toBeInTheDocument();
+    expect(screen.getByText(/queda 960 g/)).toBeInTheDocument();
+    expect(screen.getByText(/Se está acabando: 2 comidas · 1 día/)).toBeInTheDocument();
+  });
+
+  it('reponer devuelve el paquete entero sin preguntar cuánto había', async () => {
+    const upsert = jest.spyOn(animalsApi, 'upsertAnimalSupply').mockResolvedValue({ ok: true } as any);
+    renderCard('gato', {
+      ...care,
+      pantry: { foods: [supply('Pienso', { unit: 'kg', packSize: 6000, perUse: 80, remaining: 160, usesLeft: 2 })], litters: [] },
+    });
+
+    fireEvent.click(await screen.findByText('Reponer'));
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith('abc123', { kind: 'food', name: 'Pienso', refill: true }));
+  });
+
+  it('sin paquete configurado no ofrece reponer, solo editar', async () => {
+    renderCard('gato', { ...care, pantry: { foods: [supply('Lo que haya')], litters: [] } });
+
+    expect(await screen.findByText('Editar')).toBeInTheDocument();
+    expect(screen.queryByText('Reponer')).not.toBeInTheDocument();
+    expect(screen.getByText('Sin cuenta de existencias')).toBeInTheDocument();
+  });
+
+  it('guarda paquete y ración en las unidades que se escriben', async () => {
+    const upsert = jest.spyOn(animalsApi, 'upsertAnimalSupply').mockResolvedValue({ ok: true } as any);
+    renderCard('gato');
+
+    fireEvent.click(await screen.findByText('+ Añadir producto'));
+    const form = within(screen.getByRole('dialog'));
+    fireEvent.change(form.getByPlaceholderText('Acana Adult'), { target: { value: 'Acana Adult' } });
+    fireEvent.change(form.getByPlaceholderText('6'), { target: { value: '6' } });
+    fireEvent.change(form.getByPlaceholderText('80'), { target: { value: '80' } });
+    fireEvent.click(form.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() =>
+      expect(upsert).toHaveBeenCalledWith('abc123', {
+        kind: 'food',
+        name: 'Acana Adult',
+        packSize: 6,
+        packUnit: 'kg',
+        perUse: 80,
+        perUseUnit: 'g',
+      }),
+    );
   });
 });

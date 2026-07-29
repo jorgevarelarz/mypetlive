@@ -311,6 +311,27 @@ con quién lo marcó congelado en el registro (importa con voluntarios turnándo
   rápida (comida y arena de un toque); el paseo abre la hoja porque exige tipo.
 - Tests: `animalCare.test.ts` (15) y `DailyCareCard.test.tsx` (6).
 
+### Existencias: para cuántas comidas queda
+La despensa deja de ser una lista de nombres. Cada producto admite **tamaño del paquete** y
+**ración por uso** (`utils/supplies.ts`), y cada marca de comida o arena **descuenta una
+ración** de lo que queda. `PUT /api/animals/:id/care/supplies` da de alta, edita, repone
+(`refill: true` → vuelve al paquete entero) y quita (`remove: true`).
+
+- **Unidades:** se guarda todo en la unidad base de su familia (g, ml, ud) para que "saco de
+  6 kg" y "ración de 80 g" puedan restarse. Mezclar magnitudes → 400 `unit_mismatch`.
+- **Días restantes sin preguntar nada:** el ritmo sale del propio `CareLog` (usos de ese
+  producto en la semana ÷ 7). Sin ritmo conocido, `daysLeft: null` y la tarjeta calla en vez
+  de inventar. Aviso `runningLow` con ≤3 usos o ≤2 días.
+- **Todo opcional:** un producto sin ración configurada sigue siendo solo un nombre para
+  marcarlo de un toque, que es como nació la despensa.
+- Gotcha que destapó un test: `!remaining` daba "no llevo la cuenta" justo con el saco a
+  cero, que es cuando el número importa. Se compara contra `undefined`/`null`, no por
+  falsedad.
+- UI: `components/pet/SupplyList.tsx` bajo los botones de cuidado (la pregunta "¿queda
+  pienso?" aparece justo al ir a dar de comer) y lo que queda también en el propio chip del
+  modal de comida, que es donde se decide qué darle.
+- Tests: 8 más en `animalCare.test.ts` y 4 en `DailyCareCard.test.tsx`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.

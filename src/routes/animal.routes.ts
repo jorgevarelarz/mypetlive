@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/animal.controller';
 import { animalCreateSchema, animalUpdateSchema, animalStatusSchema } from '../validators/animal.schema';
 import asyncHandler from '../utils/asyncHandler';
-import { markFeeding, markLitter, markWalk, listCare } from '../controllers/animalCare.controller';
+import { markFeeding, markLitter, markWalk, listCare, upsertSupply } from '../controllers/animalCare.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import * as favoriteCtrl from '../controllers/animalFavorite.controller';
 import * as alertCtrl from '../controllers/animalAlert.controller';
@@ -43,5 +43,8 @@ r.post('/:id/care/litter', ...assertRole('tenant', 'landlord', 'protectora', 'ad
 r.post('/:id/care/walk', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markWalk));
 // Registro y resumen semanal: sin esto, marcar distancia y minutos no serviría de nada.
 r.get('/:id/care', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(listCare));
+// Despensa: alta, edición, reposición y baja de un producto (para saber para
+// cuántas comidas queda, no solo cómo se llama).
+r.put('/:id/care/supplies', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(upsertSupply));
 
 export default r;

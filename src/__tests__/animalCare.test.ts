@@ -162,7 +162,9 @@ describe('cuidado diario: qué se guarda', () => {
     await feed(['acana adult']); // la misma con otra caja: no debe duplicarse
 
     const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
-    expect(res.body.pantry.foods).toEqual(['acana adult', 'Latita Almo']);
+    // Conserva el nombre original: la entrada lleva pegadas las existencias, y
+    // renombrarla porque alguien lo tecleó en minúsculas sería perderlas de vista.
+    expect(res.body.pantry.foods.map((f: any) => f.name)).toEqual(['Acana Adult', 'Latita Almo']);
   });
 
   it('el tipo de arena también se recuerda', async () => {
@@ -175,7 +177,7 @@ describe('cuidado diario: qué se guarda', () => {
       .expect(200);
 
     const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
-    expect(res.body.pantry.litters).toEqual(['Sílice']);
+    expect(res.body.pantry.litters.map((l: any) => l.name)).toEqual(['Sílice']);
     expect(res.body.items[0].litterType).toBe('Sílice');
   });
 });
@@ -260,5 +262,121 @@ describe('paseos', () => {
     });
 
     await request(app).post(`/api/animals/${rabbit._id}/care/litter`).set(adopterH).send({}).expect(200);
+  });
+});
+
+// "¿Para cuántas comidas queda?" es la pregunta de verdad. La despensa deja de
+// ser una lista de nombres en cuanto sabe el tamaño del paquete y la ración.
+describe('existencias de la despensa', () => {
+  const setSupply = (animalId: string, body: any) =>
+    request(app).put(`/api/animals/${animalId}/care/supplies`).set(adopterH).send(body);
+
+  it('calcula las comidas que quedan y las descuenta al marcar', async () => {
+    const pet = await createPersonalPet();
+    // Saco de 6 kg con raciones de 80 g: 75 comidas.
+    await setSupply(String(pet._id), {
+      kind: 'food', name: 'Acana Adult', packSize: 6, packUnit: 'kg', perUse: 80, perUseUnit: 'g',
+    }).expect(200);
+
+    const before = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(before.body.pantry.foods[0]).toMatchObject({ remaining: 6000, perUse: 80, usesLeft: 75 });
+
+    await request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Acana Adult'] }).expect(200);
+
+    const after = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(after.body.pantry.foods[0].remaining).toBe(5920);
+    expect(after.body.pantry.foods[0].usesLeft).toBe(74);
+  });
+
+  it('estima los días a partir del ritmo real, sin preguntarlo', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), {
+      kind: 'food', name: 'Pienso', packSize: 1000, packUnit: 'g', perUse: 100, perUseUnit: 'g',
+    }).expect(200);
+
+    // Catorce comidas esta semana ≈ dos al día.
+    for (let i = 0; i < 14; i += 1) {
+      await request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Pienso'] }).expect(200);
+    }
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    const food = res.body.pantry.foods[0];
+    expect(food.usesLeft).toBe(0); // se ha gastado el kilo entero
+    expect(food.runningLow).toBe(true);
+  });
+
+  it('no baja de cero ni inventa días sin ritmo conocido', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), {
+      kind: 'food', name: 'Pienso', packSize: 150, packUnit: 'g', perUse: 100, perUseUnit: 'g',
+    }).expect(200);
+
+    const first = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    // Sin comidas registradas todavía no hay ritmo: no se inventa una estimación.
+    expect(first.body.pantry.foods[0].daysLeft).toBeNull();
+
+    const feed = () => request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Pienso'] }).expect(200);
+    await feed();
+    await feed();
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(res.body.pantry.foods[0].remaining).toBe(0);
+  });
+
+  it('reponer devuelve el paquete entero', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), {
+      kind: 'food', name: 'Pienso', packSize: 500, packUnit: 'g', perUse: 100, perUseUnit: 'g',
+    }).expect(200);
+    await request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Pienso'] }).expect(200);
+
+    await setSupply(String(pet._id), { kind: 'food', name: 'Pienso', refill: true }).expect(200);
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(res.body.pantry.foods[0].remaining).toBe(500);
+    expect(res.body.pantry.foods[0].usesLeft).toBe(5);
+  });
+
+  it('la arena se cuenta igual, en litros', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), {
+      kind: 'litter', name: 'Aglomerante', packSize: 10, packUnit: 'l', perUse: 4, perUseUnit: 'l',
+    }).expect(200);
+
+    await request(app).post(`/api/animals/${pet._id}/care/litter`).set(adopterH).send({ litterType: 'Aglomerante' }).expect(200);
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(res.body.pantry.litters[0]).toMatchObject({ remaining: 6000, usesLeft: 1 });
+  });
+
+  it('no deja mezclar magnitudes ni productos sin nombre', async () => {
+    const pet = await createPersonalPet();
+
+    const sinNombre = await setSupply(String(pet._id), { kind: 'food', packSize: 1, packUnit: 'kg' });
+    expect(sinNombre.status).toBe(400);
+    expect(sinNombre.body.error).toBe('name_required');
+
+    // Un saco en kilos con una "ración" en mililitros no se puede restar.
+    const mezcla = await setSupply(String(pet._id), {
+      kind: 'food', name: 'Pienso', packSize: 6, packUnit: 'kg', perUse: 80, perUseUnit: 'ml',
+    });
+    expect(mezcla.status).toBe(400);
+    expect(mezcla.body.error).toBe('unit_mismatch');
+  });
+
+  it('un producto se puede quitar de la despensa', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), { kind: 'food', name: 'Pienso viejo', packSize: 1, packUnit: 'kg' }).expect(200);
+
+    const res = await setSupply(String(pet._id), { kind: 'food', name: 'Pienso viejo', remove: true }).expect(200);
+    expect(res.body.pantry.foods).toHaveLength(0);
+  });
+
+  it('quien no lleve la cuenta sigue teniendo solo nombres', async () => {
+    const pet = await createPersonalPet();
+    await request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Lo que haya'] }).expect(200);
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(res.body.pantry.foods[0]).toMatchObject({ name: 'Lo que haya', usesLeft: null, daysLeft: null, runningLow: false });
   });
 });

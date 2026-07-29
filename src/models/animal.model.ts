@@ -1,5 +1,6 @@
 import { Schema, model, Document } from 'mongoose';
 import { normalizeSpecies } from '../utils/species';
+import { SUPPLY_UNITS } from '../utils/supplies';
 
 const CODE_ATTEMPTS = 8;
 
@@ -59,6 +60,21 @@ const healthEntrySchema = new Schema(
   { _id: false },
 );
 
+// Producto de la despensa. Las cantidades viven en la unidad base de su familia
+// (g, ml, ud) para que "saco de 6 kg" y "ración de 80 g" puedan restarse; `unit`
+// solo recuerda en qué unidad prefiere leerlo quien lo escribió.
+const supplySchema = new Schema(
+  {
+    name: { type: String, trim: true, maxlength: 80, required: true },
+    unit: { type: String, enum: SUPPLY_UNITS },
+    packSize: { type: Number, min: 0 },
+    perUse: { type: Number, min: 0 },
+    remaining: { type: Number, min: 0 },
+    updatedAt: { type: Date },
+  },
+  { _id: false },
+);
+
 const animalSchema = new Schema(
   {
     shelter: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -101,11 +117,16 @@ const animalSchema = new Schema(
     // "Despensa": lo que de verdad usa esta mascota, aprendido de lo que se marca.
     // Evita reescribir la marca del pienso tres veces al día y evita mantener un
     // catálogo global de productos que nadie actualizaría.
+    //
+    // Con `packSize` y `perUse` deja de ser una lista de nombres y pasa a
+    // responder "¿para cuántas comidas queda?": cada marca descuenta una ración
+    // de `remaining`. Todo salvo el nombre es opcional — quien no quiera llevar
+    // la cuenta sigue teniendo los mismos chips de siempre.
     carePantry: {
       type: new Schema(
         {
-          foods: { type: [{ type: String, trim: true, maxlength: 80 }], default: [] },
-          litters: { type: [{ type: String, trim: true, maxlength: 80 }], default: [] },
+          foods: { type: [supplySchema], default: [] },
+          litters: { type: [supplySchema], default: [] },
         },
         { _id: false },
       ),
