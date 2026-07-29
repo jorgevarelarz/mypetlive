@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="MyPetLive">
+  <!-- Huella de MyPetLive. La geometría está medida sobre apple-touch-icon.png
+       para que el icono de la pestaña y el de la app sean el mismo dibujo. -->
+  <rect width="100" height="100" fill="#1F6F6F"/>
+  <g fill="#FDFBF4">
+    <ellipse cx="33.3" cy="46.4" rx="5.0" ry="6.4"/>
+    <ellipse cx="41.9" cy="36.4" rx="4.7" ry="5.8"/>
+    <ellipse cx="57.5" cy="36.4" rx="4.7" ry="5.8"/>
+    <ellipse cx="66.1" cy="46.4" rx="5.0" ry="6.4"/>
+    <ellipse cx="49.7" cy="59.7" rx="13.6" ry="10.3"/>
+  </g>
+  <circle cx="68.6" cy="31.9" r="6.4" fill="#F2856D"/>
+</svg>

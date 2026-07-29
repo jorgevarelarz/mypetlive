@@ -373,6 +373,30 @@ Antes de montar marketplace, carrito, pagos y logística, **medir si alguien pin
   así que "dónde comprarlo" no puede mostrar nada. Antes de concluir que la gente no pincha,
   hay que conseguir que al menos una tienda cargue su catálogo.
 
+## 5.16 Favicon y restos de RentalApp en la marca (29 jul 2026)
+La pestaña del navegador salía sin icono desde siempre: `index.html` enlazaba `/favicon.svg`
+y `/favicon.ico` y **ninguno de los dos existía en el repo**, así que el `FallbackResource`
+del vhost devolvía `index.html` con `content-type: text/html` donde el navegador esperaba una
+imagen.
+
+- Creados `favicon.svg` (huella dibujada con la geometría medida sobre `apple-touch-icon.png`),
+  `favicon.ico` real multi-tamaño (16/32/48/64) y `favicon-32.png`.
+- `logo192.png` y `logo512.png` **eran el logo de RentalApp** (resto del fork) y se servían en
+  producción; sustituidos por la huella. `NavBar.tsx` (código muerto, nadie lo importaba) y los
+  `rental-{logo,favicon}.png` que solo él usaba, borrados.
+- `og:image` apuntaba a un SVG: X y WhatsApp no lo renderizan, así que la tarjeta salía sin
+  imagen. Ahora es `logo512.png` con sus dimensiones.
+- `<html lang="en">` en una web íntegramente en español → `lang="es"`.
+- `manifest.json` apuntaba a `../icons/...` (sale fuera del docroot) y declaraba `image/png`
+  para ficheros `.webp`.
+
+**GOTCHA DEL SERVIDOR, vale para cualquier proyecto en este VPS:** `/icons/` es una ruta
+**reservada por Apache** en AlmaLinux — `/etc/httpd/conf.d/autoindex.conf` trae
+`Alias /icons/ "/usr/share/httpd/icons/"`. Cualquier fichero propio bajo `/icons/` es
+invisible: el alias manda, no existe allí y cae al `FallbackResource`. Los iconos de la PWA
+llevaban así desde que se subieron. Renombrado a `/pwa-icons/`. Verificado en vivo: sirve
+`image/webp`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
