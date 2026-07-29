@@ -364,6 +364,14 @@ Antes de montar marketplace, carrito, pagos y logística, **medir si alguien pin
   recomendación es comisión, porque el sobrecoste convierte a MyPetLive en vendedor con todo
   lo que implica (facturación con Veri*factu, desistimiento a 14 días, garantía).
 - Tests: `supplyAlerts.test.ts` (9) y uno más en `DailyCareCard.test.tsx`.
+- **DESPLEGADO el 29 jul 2026** junto con paseos y existencias (`deploy.sh api` + `web`).
+  Verificado en vivo: `where-to-buy` responde 200 con lista vacía (ninguna tienda tiene
+  catálogo todavía) y 400 `product_required` sin producto; el redirector devuelve 302 a
+  `/comprar`; la página carga; sin errores en el log del arranque del cron. El clic de prueba
+  se borró de `shopclicks` para no ensuciar la métrica.
+- **Ojo con el dato que se va a mirar:** hoy `profile.itemCatalog` está vacío en producción,
+  así que "dónde comprarlo" no puede mostrar nada. Antes de concluir que la gente no pincha,
+  hay que conseguir que al menos una tienda cargue su catálogo.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
