@@ -54,7 +54,7 @@ por panel (o por arreglo con entidad propia).
 | Admin | Liquidaciones | `/admin/settlements` | ⏳ |
 | Admin | Informes / KPIs | `/admin/reports` | ⏳ |
 | Admin | Ajustes | `/admin/settings` | ⏳ |
-| Todos | Perfil | `/profile` | ⏳ |
+| Todos | Perfil | `/profile` | ✅ hecho |
 
 ## Hallazgos por panel
 
@@ -241,13 +241,19 @@ solo su `GeneratePatitas`. Un mismo arreglo cubre por tanto las cuatro filas de 
 (vet y tienda comparten pantalla; `RoleGuard roles={["store","vet"]}` cuadra con el
 `assertRole('store','vet','admin')` de las rutas del backend — verificado).
 
-- **Bug real:** "**Perfil → Conectar tu TPV**" no existe. La única UI de claves del TPV
-  (`PosIntegration`) vive en `/partner`, y `ProfilePage` no tiene ni una línea de TPV
-  (grep de `TPV|posKey` en el fichero: cero). Lo prometían dos sitios: el pie de la Caja
-  (`CashierPage.tsx`, con `<Link to="/profile">`) y la guía que el partner **reenvía a su
-  proveedor de TPV** (`TpvGuidePage.tsx`), o sea que el integrador externo también
-  buscaba la clave donde no está. Mismo patrón que el `/donate` sin camino de entrada.
-  Ahora ambos dicen "Patitas → Conectar tu TPV" y el enlace apunta a `/partner`.
+- **RETIRADO — hallazgo propio, falso.** Se dio por bueno que "Perfil → Conectar tu TPV"
+  no existía, porque un grep de `TPV|posKey` sobre `ProfilePage.tsx` no devuelve nada.
+  **Es falso:** `ProfilePage.tsx:670` monta `<PatitasPartnerPanel />` para `store`/`vet`,
+  y ese componente incluye `PosIntegration`, o sea la tarjeta "Conectar tu TPV". El
+  enlace de la Caja y el texto de la guía del TPV eran correctos y se han dejado como
+  estaban. Lección: en esta app los paneles se montan transitivamente en varias rutas —
+  grepear el fichero de la página no basta, hay que seguir los componentes que monta.
+- **Duplicación real detectada al comprobarlo:** el panel entero (735 líneas: métricas,
+  extracto, cobro, caja, TPV, canje e historial) se renderiza en **dos rutas a la vez**,
+  `/partner` (vía `PatitasPending`) y `/profile`, para el mismo usuario store/vet. No es
+  un fallo funcional pero sí dos sitios que mantener y dos veces las mismas consultas.
+  Unificarlo (dejar el panel solo en `/partner` y en Perfil un enlace) es decisión de
+  producto.
 - **Sin estado de error, quinta y sexta vez, y esta vez sobre el dinero:** el **extracto
   de liquidación** pintaba cualquier fallo de red como "Todavía no hay ventas
   registradas" — el partner podía dar por bueno que no debía comisión de un mes que sí
@@ -319,7 +325,36 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
   pese al nombre confuso de sus dos helpers, el `RoleGuard` cuadra con los permisos del
   controlador y la protectora sí debe ver `BookVetAppointment` (agenda pagando Patitas).
 
+### Todos · Perfil (`/profile`) — hecho
+
+- **Bug real, el mismo que en el panel de partner:** `DonationPayout` solo trataba el 503
+  y se tragaba el resto de errores, dejando `status` en `null`. Una protectora **con la
+  cuenta de cobro ya lista** veía "Configurar cuenta de cobro" ante un fallo de red, y
+  pulsarlo la mandaba a rehacer el onboarding KYC de Stripe. Dos instancias del mismo
+  patrón en dos ficheros distintos.
+- **Bug real:** guardar mientras la foto se estaba subiendo **descartaba la foto en
+  silencio** — el PATCH sale con el `avatarUrl` anterior. Es el mismo fallo que ya se
+  arregló en el alta de mascota de `/pet`; aquí seguía vivo.
+- **Sin validación de la foto:** ni tipo ni tamaño, cuando multer corta en 10 MB y solo
+  acepta imágenes (`upload.routes.ts`). Se subían 10 MB para recibir un error. Ahora se
+  valida antes, con los mismos límites y los mismos textos que `/pet`.
+- El campo Email no decía que es la dirección con la que se inicia sesión. Cambiarlo es
+  inmediato y sin confirmación, y quien lo tocase sin saberlo se quedaba fuera.
+- Comprobado y **correcto** (no se toca): `isVerified` viaja en el JWT, no en el
+  documento de usuario (`auth.middleware.ts`), así que cambiar el email desde aquí no
+  altera el estado de verificación; el 409 de email duplicado ya se traduce
+  (`user.controller.ts`); los mensajes de error del backend ya vienen en castellano, no
+  son códigos crudos; y el `useEffect` de rehidratación depende solo de `user?._id`, así
+  que **no** reproduce el bug del cuestionario (machacar lo que se está escribiendo).
+
 ## Pendientes detectados de paso (para cuando toque su panel)
+
+- **Perfil · sin aviso de cambios sin guardar:** es el formulario más largo de la app y
+  navegar fuera lo pierde entero, sin preguntar.
+- **Perfil · cambiar el email no lo confirma en la nueva dirección** ni avisa a la
+  anterior. Con una sesión abierta se puede mover la cuenta a otro correo en silencio, y
+  desde ahí usar "he olvidado mi contraseña". Necesita decisión de producto (¿doble
+  opt-in?), es backend y toca auth.
 
 - **Citas · el vet puede quedarse sin cobrar en silencio (dinero, necesita decisión):**
   la protectora compromete Patitas al pedir la cita, pero el débito ocurre **al

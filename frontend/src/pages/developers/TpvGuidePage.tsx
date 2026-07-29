@@ -34,7 +34,7 @@ export default function TpvGuidePage() {
         <p style={p}>
           Todas las llamadas llevan la cabecera <code>X-Api-Key</code> con la clave del establecimiento
           (formato <code>mpl_pos_…</code>). El partner la genera en su panel de MyPetLive
-          (<strong>Patitas → Conectar tu TPV</strong>) y os la hace llegar. Empezad con una{' '}
+          (<strong>Perfil → Conectar tu TPV</strong>) y os la hace llegar. Empezad con una{' '}
           <strong>clave de pruebas</strong> (<code>mpl_pos_test_…</code>): mismo flujo y misma respuesta,
           pero sin efectos reales (no crea ventas, ni consume cupones, ni acredita Patitas); las respuestas
           llevan <code>"test": true</code>. Base URL: <code>https://mypetlive.es/api/pos</code>.

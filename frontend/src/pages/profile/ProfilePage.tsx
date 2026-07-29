@@ -78,6 +78,8 @@ type FormState = {
   };
 };
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // mismo tope que multer en upload.routes.ts
+
 const VET_SPECIALTIES = ['Felina', 'Canina', 'Exóticos', 'Cirugía', 'Dermatología', 'Traumatología', 'Oftalmología', 'Etología'];
 const VET_SERVICES = ['Vacunación', 'Desparasitación', 'Cirugía', 'Urgencias', 'Análisis', 'Microchip', 'Peluquería', 'Hospitalización'];
 
@@ -206,16 +208,22 @@ function DonationPayout() {
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [linking, setLinking] = useState(false);
 
+  // Todo error que no sea el 503 de "pagos aún no disponibles" hay que decirlo:
+  // si se traga, `status` se queda null y se ofrece "Configurar cuenta de cobro"
+  // a una protectora que ya la tiene lista, invitándola a rehacer el KYC.
   const load = async () => {
     setLoading(true);
+    setFailed(false);
     try {
       const s = await getShelterConnectStatus();
       setStatus(s);
       setUnavailable(false);
     } catch (e: any) {
       if (e?.response?.status === 503) setUnavailable(true);
+      else setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -252,6 +260,14 @@ function DonationPayout() {
 
       {loading ? (
         <div style={{ color: MPL.faint }}>Comprobando estado…</div>
+      ) : failed ? (
+        <div style={{ background: MPL.bg, borderRadius: 12, padding: 14, display: 'grid', gap: 8, justifyItems: 'start' }}>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>No hemos podido comprobar tu cuenta de cobro.</div>
+          <div style={{ color: MPL.muted, fontSize: 13.5 }}>Puede ser un problema de conexión. No rehagas la verificación sin comprobarlo.</div>
+          <button type="button" onClick={load} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 11, padding: '8px 16px', font: 'inherit', fontSize: 13, fontWeight: 800, color: MPL.tealDark, cursor: 'pointer' }}>
+            Reintentar
+          </button>
+        </div>
       ) : unavailable ? (
         <div style={{ background: MPL.gold100, color: MPL.goldDark, borderRadius: 12, padding: 14, fontSize: 13.5, fontWeight: 700 }}>
           El cobro de donaciones se activará muy pronto. Vuelve más adelante para conectar tu cuenta.
@@ -301,6 +317,16 @@ export default function ProfilePage() {
 
   const onPickPhoto = async (file?: File) => {
     if (!file) return;
+    // Mismos límites que multer (upload.routes.ts): así el error se ve antes de
+    // subir 10 MB para nada, y con el mismo criterio que el alta de mascota.
+    if (!file.type.startsWith('image/')) {
+      toast.error('Ese archivo no es una imagen. Sube un JPG o un PNG.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error('La imagen supera los 10 MB. Prueba con una más ligera.');
+      return;
+    }
     setUploading(true);
     try {
       const { url } = await uploadImage(file);
@@ -439,7 +465,7 @@ export default function ProfilePage() {
             <Field label="Nombre público / de cuenta" hint="Cómo se te identifica en la plataforma">
               <input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Email">
+            <Field label="Email" hint="Es la dirección con la que inicias sesión: si la cambias, tendrás que usar la nueva para entrar.">
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Teléfono">
@@ -610,10 +636,12 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !form.email.trim()}
-            style={{ justifySelf: 'start', background: MPL.coral, color: '#fff', border: 0, borderRadius: 13, padding: '13px 22px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: saveMutation.isPending ? .7 : 1 }}
+            // Guardar mientras la foto sube descartaba la foto en silencio: el
+            // PATCH sale con el avatarUrl viejo. Mismo arreglo que en /pet.
+            disabled={saveMutation.isPending || uploading || !form.email.trim()}
+            style={{ justifySelf: 'start', background: MPL.coral, color: '#fff', border: 0, borderRadius: 13, padding: '13px 22px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: saveMutation.isPending || uploading ? .7 : 1 }}
           >
-            {saveMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+            {uploading ? 'Subiendo foto…' : saveMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
           </button>
         </div>
 

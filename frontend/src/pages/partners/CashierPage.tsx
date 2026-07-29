@@ -9,7 +9,7 @@ import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 // Modo Caja: el alta sin TPV. Pantalla única pensada para el móvil o tablet que
 // el partner ya tiene junto a la caja — escanear al cliente, ver sus cupones y
 // registrar la venta, sin integrar nada. La integración del TPV (API) es el
-// paso opcional de después, en el panel Patitas (/partner) → Conectar tu TPV.
+// paso opcional de después, desde Perfil → Conectar tu TPV.
 export default function CashierPage() {
   const { user } = useAuth();
   const meId = String(user?._id || '');
@@ -33,7 +33,7 @@ export default function CashierPage() {
 
       <p style={{ color: MPL.faint, fontSize: 12.5, margin: 0 }}>
         ¿Tu sistema de caja puede integrarse? Conéctalo desde{' '}
-        <Link to="/partner" style={{ color: MPL.tealDark, fontWeight: 800 }}>Patitas → Conectar tu TPV</Link>{' '}
+        <Link to="/profile" style={{ color: MPL.tealDark, fontWeight: 800 }}>Perfil → Conectar tu TPV</Link>{' '}
         y las ventas se registrarán solas.
       </p>
     </div>
