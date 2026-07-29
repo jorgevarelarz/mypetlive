@@ -203,6 +203,43 @@ está **congelado/oculto**, no borrado.
   el pasaporte público devolvía 200 para animales en `borrador` (ahora 404). Cierra el
   pendiente de 5.4.
 
+## 5.12 Hecho el 29 jul 2026 (rama `pulido/paneles-roles`, sin push)
+- [x] **Reserva de Patitas en citas del vet:** comprometer Patitas al pedir la cita las
+  **bloquea** en el acto (`User.patitasLocked`, helpers `lockPatitas`/`releasePatitas`/
+  `consumeLockedPatitas` en `utils/patitas.ts`). Antes solo se comprobaba el saldo al pedir
+  la cita y se debitaba al completarla: si se gastaba entre medias, el vet no cobraba y solo
+  quedaba un `logger.warn`. El resto de salidas de saldo miran ya el **disponible**
+  (canje en partner, QR del wallet, `transferPatitas`). Las citas anteriores al mecanismo
+  (`patitasReserved: false`) siguen con el débito directo y su fallo viaja al cliente en
+  `patitasSettlementFailed`. Tests en `vet.appointments.test.ts`.
+- [x] **Máquina de estados de la adopción (`utils/adoptionTransitions.ts`):** `setStatus`
+  no validaba transiciones, así que una adopción **aprobada** se podía pasar a `rechazada`
+  sin revertir el traspaso del animal. Ahora una transición ilegal responde **409**; los
+  estados finales no tienen salida y el admin no está exento. Las tres pantallas
+  (protectora, admin, `AdoptionDetail`) comparten el mapa. Tests en `adoption.transitions.test.ts`.
+  **Pendiente de producto:** si algún día se quiere deshacer una aprobación, es una función
+  aparte que además revierta la propiedad del animal.
+- [x] **Topes de importe (`utils/limits.ts`):** las donaciones no tenían tope y las ventas
+  cortaban en 100.000 €. Defaults 1 €–2.000 € por donación y 3.000 € por venta,
+  configurables (`DONATION_MIN_EUR`, `DONATION_MAX_EUR`, `SALE_MAX_EUR`, añadidas al
+  `docker-compose.deploy.yml` — **replicar en el compose del VPS**). Validado en las dos
+  puertas de venta (caja web y TPV). Tests en `sales.test.ts`, `pos.test.ts` y
+  `donations.limits.test.ts`.
+- [x] **Cambio de email con doble opt-in:** el PATCH del perfil escribía `user.email` sin
+  más, así que una sesión abierta movía la cuenta a otro buzón en silencio y desde ahí se
+  usaba "he olvidado mi contraseña". Ahora `pendingEmail` + token de 24 h, enlace a la
+  dirección nueva (`POST /api/users/email/confirm`, público a propósito) y aviso a la
+  antigua en los dos momentos. Página `/perfil/confirmar-email`. Tests en `email.change.test.ts`.
+  Ojo al gotcha que destapó: `select:false` no filtra los campos escritos en memoria, así
+  que el token volvía en la respuesta del PATCH.
+- [x] **Deuda técnica de paneles:** borrados `Layout.tsx`/`Sidebar.tsx` (código muerto);
+  `rbac.ui.test.tsx` reescrito contra la navegación viva (regla extraída a
+  `layout/navItems.ts`, que ahora comparten menú lateral y drawer); **aprobar cierra las
+  candidaturas hermanas** del mismo animal avisando por correo; `skipErrorToast` aplicado a
+  los endpoints de estos flujos y el 409 traducido.
+- **Rojo preexistente, ajeno a esto:** `rbac.test.ts`, `api.test.ts` y `security.test.ts`
+  (10 tests) fallan igual antes de estos cambios. El resto: 199 en verde.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.

@@ -381,7 +381,7 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
 
 ## Pendientes detectados de paso (para cuando toque su panel)
 
-- **Admin · adopciones sin máquina de estados:** `ADMIN_STATUSES.filter(s => s !== it.status)`
+- [RESUELTO EN PARTE 29 jul 2026 — el servidor ya bloquea; deshacer una aprobación sigue sin existir] **Admin · adopciones sin máquina de estados:** `ADMIN_STATUSES.filter(s => s !== it.status)`
   ofrece las siete transiciones siempre. Es la misma incoherencia ya anotada para
   `AdoptionDetail`, y aquí choca de frente con el agujero de `setStatus`: desde el panel
   de admin se puede pasar una adopción **ya aprobada** a `rechazada` sin revertir el
@@ -389,12 +389,12 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
 
 - **Perfil · sin aviso de cambios sin guardar:** es el formulario más largo de la app y
   navegar fuera lo pierde entero, sin preguntar.
-- **Perfil · cambiar el email no lo confirma en la nueva dirección** ni avisa a la
+- [RESUELTO 29 jul 2026 — doble opt-in] **Perfil · cambiar el email no lo confirma en la nueva dirección** ni avisa a la
   anterior. Con una sesión abierta se puede mover la cuenta a otro correo en silencio, y
   desde ahí usar "he olvidado mi contraseña". Necesita decisión de producto (¿doble
   opt-in?), es backend y toca auth.
 
-- **Citas · el vet puede quedarse sin cobrar en silencio (dinero, necesita decisión):**
+- [RESUELTO 29 jul 2026 — reserva de saldo + aviso al vet] **Citas · el vet puede quedarse sin cobrar en silencio (dinero, necesita decisión):**
   la protectora compromete Patitas al pedir la cita, pero el débito ocurre **al
   completarla** (`vetAppointment.controller.ts`, rama `status === 'completed'`). Si entre
   medias gastó ese saldo, el `findOneAndUpdate` condicionado no encuentra documento, se
@@ -403,19 +403,19 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
   tarjeta solo deja el rastro "🐾 N Patitas · pendiente". Opciones: reservar el saldo al
   crear la cita, o devolver el fallo al vet y avisar a la protectora.
 
-- **Venta sin tope realista:** el backend corta en 100 000 € (`registerSale`,
+- [RESUELTO 29 jul 2026 — utils/limits.ts] **Venta sin tope realista:** el backend corta en 100 000 € (`registerSale`,
   `patitas.controller.ts`), así que un dedazo (1000 en vez de 100) se registra y genera
   Patitas y comisión. Mismo caso que las donaciones: necesita decisión de negocio.
 - **La caja no tiene ni un test de UI.** `frontend/src/__tests__/` contiene un único
   fichero (`rbac.ui.test.tsx`, y encima cubre código muerto). Toda la pantalla por la que
   pasa el dinero del partner está sin cobertura de front.
 
-- **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
+- [RESUELTO 29 jul 2026 — máquina de estados en servidor] **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
   no hay guard de estado terminal, así que una adopción **ya aprobada** se puede pasar a
   `rechazada` — y el traspaso del animal no se revierte: se queda como mascota personal del
   adoptante con la solicitud marcada como rechazada. Verificado leyendo el controlador.
   Necesita decisión de producto (¿desaprobar revierte la propiedad?) antes de tocarlo.
-- **Protectora · detalle de solicitud sin máquina de estados:** `MANAGE_ACTIONS` en
+- [RESUELTO 29 jul 2026 — las tres pantallas comparten el mapa] **Protectora · detalle de solicitud sin máquina de estados:** `MANAGE_ACTIONS` en
   `AdoptionDetail.tsx` ofrece las 6 transiciones siempre, mientras el panel
   `landlord/AdoptionsPage.tsx` sí tiene mapa de transiciones válidas. Incoherencia entre
   las dos pantallas de la misma protectora.
@@ -428,20 +428,20 @@ o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
   portada (`/?donation=success|cancel`) y **nadie lee ese parámetro**, así que una
   donación cobrada no da ninguna confirmación. Es lógica de pago: necesita decisión
   (¿apuntar el retorno a `/donate` o tratarlo en la portada?).
-- **Donaciones · sin tope de importe** en ninguna capa: un dedazo (1000 en vez de 100)
+- [RESUELTO 29 jul 2026 — utils/limits.ts] **Donaciones · sin tope de importe** en ninguna capa: un dedazo (1000 en vez de 100)
   se cobra. En TEST es inocuo; antes de Stripe live hay que decidir el límite.
 - **Doble toast de error en más de 20 páginas:** el interceptor global y las páginas
   toastean lo mismo. Ya existe el opt-out `skipErrorToast`; queda aplicarlo panel a
   panel a medida que se recorran.
-- **Test previo en rojo, ajeno a este trabajo:** `frontend/src/__tests__/rbac.ui.test.tsx`
+- [RESUELTO 29 jul 2026 — reescrito contra AppShell/navItems] **Test previo en rojo, ajeno a este trabajo:** `frontend/src/__tests__/rbac.ui.test.tsx`
   busca el texto "Inicio" en el Sidebar, que ya no lo contiene. Esta rama no toca
   Sidebar.
-- **`Layout.tsx` y `Sidebar.tsx` son código muerto:** nadie importa `Layout`, y `Sidebar`
+- [RESUELTO 29 jul 2026 — borrados] **`Layout.tsx` y `Sidebar.tsx` son código muerto:** nadie importa `Layout`, y `Sidebar`
   solo lo importaba `Layout` (y su test). La navegación viva es `layout/AppShell.tsx`.
   El único test de RBAC de la UI (`rbac.ui.test.tsx`) cubre por tanto código muerto:
   queda un hueco real de cobertura sobre la navegación que sí se usa. Borrarlos o
   escribir el test contra `AppShell` es decisión del dueño del proyecto.
-- **Al aprobar no se cierran las candidaturas hermanas:** el resto de solicitudes del mismo
+- [RESUELTO 29 jul 2026 — se cierran y se avisa por correo] **Al aprobar no se cierran las candidaturas hermanas:** el resto de solicitudes del mismo
   animal quedan abiertas para siempre. Hoy solo se avisa en la UI; cerrarlas es backend.
 - **`cuestionario_pendiente` es un estado muerto:** está en el modelo y en el enum, pero
   nadie lo fija en todo `src/`.
