@@ -16,6 +16,7 @@ import {
   earnForUser,
   availablePatitas,
 } from '../utils/patitas';
+import { SALE_MAX_EUR, eurAmountError } from '../utils/limits';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
@@ -262,10 +263,11 @@ export async function registerSale(req: Request, res: Response) {
   const user = await User.findById(target).select('role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
+  // El tope anterior eran 100.000 €, que no es un tope: un dedazo (1000 en vez
+  // de 100) se registraba y generaba Patitas y comisión sobre dinero inexistente.
   const amountEur = Number(req.body?.amountEur);
-  if (!Number.isFinite(amountEur) || amountEur <= 0 || amountEur > 100000) {
-    return res.status(400).json({ error: 'invalid_amount' });
-  }
+  const amountError = eurAmountError(amountEur, { min: 0, max: SALE_MAX_EUR });
+  if (amountError) return res.status(400).json(amountError);
 
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
   const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);

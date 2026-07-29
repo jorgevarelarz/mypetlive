@@ -14,6 +14,8 @@ let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Coupon: any;
 let WelcomePlan: any;
+let Animal: any;
+let activateWelcomePlan: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -25,6 +27,8 @@ beforeAll(async () => {
   User = (await import('../models/user.model')).User;
   Coupon = (await import('../models/coupon.model')).Coupon;
   WelcomePlan = (await import('../models/welcomePlan.model')).WelcomePlan;
+  Animal = (await import('../models/animal.model')).Animal;
+  activateWelcomePlan = (await import('../utils/welcomePlan')).activateWelcomePlan;
 });
 
 afterAll(async () => {
@@ -67,16 +71,14 @@ async function publishAnimal() {
 
 async function approveAdoption(animalId: string) {
   const apply = await request(app).post('/api/adoptions').set(adopterH).send({ animalId }).expect(201);
-  await request(app)
-    .patch(`/api/adoptions/${apply.body.id}/status`)
-    .set(protectoraH)
-    .send({ status: 'preaprobada' })
-    .expect(200);
-  await request(app)
-    .patch(`/api/adoptions/${apply.body.id}/status`)
-    .set(protectoraH)
-    .send({ status: 'aprobada' })
-    .expect(200);
+  // Camino legal completo: 'recibida' no preaprueba de una vez (adoptionTransitions).
+  for (const status of ['en_revision', 'preaprobada', 'aprobada']) {
+    await request(app)
+      .patch(`/api/adoptions/${apply.body.id}/status`)
+      .set(protectoraH)
+      .send({ status })
+      .expect(200);
+  }
   return apply.body.id as string;
 }
 
@@ -111,11 +113,19 @@ describe('Plan de bienvenida post-adopción', () => {
   it('aprobar dos veces no duplica el plan', async () => {
     const animalId = await publishAnimal();
     const adoptionId = await approveAdoption(animalId);
+
+    // Desde que hay máquina de estados, reaprobar ni siquiera llega al plan: la
+    // adopción ya está cerrada.
     await request(app)
       .patch(`/api/adoptions/${adoptionId}/status`)
       .set(protectoraH)
       .send({ status: 'aprobada' })
-      .expect(200);
+      .expect(409);
+    expect(await WelcomePlan.countDocuments({ animalId })).toBe(1);
+
+    // El plan es idempotente por sí mismo, no solo porque el guard lo tape.
+    const animal: any = await Animal.findById(animalId).lean();
+    await activateWelcomePlan({ animal, adopterId, adoptionId });
     expect(await WelcomePlan.countDocuments({ animalId })).toBe(1);
   });
 

@@ -7,6 +7,7 @@ import { COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
 import { recordSale, recordIdentification, computeSaleFigures, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
 import { resolveUserFromBody } from './patitas.controller';
+import { SALE_MAX_EUR, eurAmountError } from '../utils/limits';
 
 const MAX_POS_KEYS = 5;
 
@@ -175,10 +176,11 @@ export async function posSale(req: Request, res: Response) {
   const user = await User.findById(userId).select('name');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
+  // Mismo tope que la caja web (`registerSale`): es la otra puerta de entrada de
+  // ventas y no tendría sentido que aceptara importes que la caja rechaza.
   const amountEur = Number(req.body?.amountEur);
-  if (!Number.isFinite(amountEur) || amountEur <= 0 || amountEur > 100000) {
-    return res.status(400).json({ error: 'invalid_amount' });
-  }
+  const amountError = eurAmountError(amountEur, { min: 0, max: SALE_MAX_EUR });
+  if (amountError) return res.status(400).json(amountError);
 
   // Sandbox: mismas validaciones y cálculo, cero efectos (ni venta, ni cupones,
   // ni Patitas). El integrador del TPV puede probar contra producción sin miedo.

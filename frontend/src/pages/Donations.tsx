@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Info } from 'lucide-react';
 import { createDonationSession, donationErrorMessage } from '../api/donations';
+import { DONATION_MIN_EUR, DONATION_MAX_EUR, formatEur } from '../utils/limits';
 import { getAnimal } from '../api/animals';
 import { listProtectoras } from '../api/patitas';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
@@ -51,7 +52,9 @@ export default function DonationsPage() {
   }, [sp]);
 
   const value = Number(amount);
-  const amountValid = Number.isFinite(value) && value > 0;
+  // El servidor tiene la última palabra sobre el tope; aquí solo se evita el
+  // viaje a Stripe con un importe que sabemos que va a rechazar.
+  const amountValid = Number.isFinite(value) && value >= DONATION_MIN_EUR && value <= DONATION_MAX_EUR;
   const recipientReady = animalId ? Boolean(animalShelterId) && animalShelterReady : Boolean(shelterId);
   const canDonate = amountValid && recipientReady && !submitting;
 
@@ -63,7 +66,8 @@ export default function DonationsPage() {
 
   const startDonation = async () => {
     setError(null);
-    if (!amountValid) { setError('Introduce un importe en euros mayor que cero.'); return; }
+    if (!Number.isFinite(value) || value < DONATION_MIN_EUR) { setError(`La donación mínima es de ${DONATION_MIN_EUR} €.`); return; }
+    if (value > DONATION_MAX_EUR) { setError(`El máximo por donación es de ${formatEur(DONATION_MAX_EUR)} €. Para donar más, escribe a la protectora.`); return; }
     if (!recipientReady) { setError('Elige a qué protectora quieres donar.'); return; }
     setSubmitting(true);
     try {
@@ -167,11 +171,11 @@ export default function DonationsPage() {
           </div>
 
           <label style={{ display: 'grid', gap: 6, fontSize: 13, color: MPL.muted, fontWeight: 600 }}>
-            Otro importe (EUR)
+            Otro importe (EUR) <span style={{ fontWeight: 500 }}>· máximo {formatEur(DONATION_MAX_EUR)} €</span>
             <input
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setError(null); }}
-              type="number" step="1" min="1"
+              type="number" step="1" min={DONATION_MIN_EUR} max={DONATION_MAX_EUR}
               style={{ width: '100%', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 15, fontFamily: MPL_FONT_BODY, color: MPL.ink, background: '#fff' }}
             />
           </label>

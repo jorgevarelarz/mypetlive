@@ -18,6 +18,8 @@ export async function createDonationSession(amountEUR: number, animalId?: string
 // mostrándole al donante `shelter_required`.
 const DONATION_ERROR_MESSAGE: Record<string, string> = {
   invalid_amount: 'El importe no es válido. Introduce una cantidad en euros mayor que cero.',
+  amount_too_small: 'El importe es demasiado pequeño.',
+  amount_too_large: 'El importe supera el máximo por donación.',
   payments_unavailable: 'Las donaciones están temporalmente desactivadas. Vuelve a intentarlo más tarde.',
   shelter_required: 'Elige a qué protectora quieres donar.',
   shelter_verification_required: 'Esta protectora todavía no está verificada para recibir donaciones.',
@@ -25,6 +27,15 @@ const DONATION_ERROR_MESSAGE: Record<string, string> = {
 };
 
 export function donationErrorMessage(error: any) {
-  const code = error?.response?.data?.error;
+  const body = error?.response?.data;
+  const code = body?.error;
+  // Los topes son configurables por entorno en el servidor, así que el límite lo
+  // dice la respuesta, no una constante del front.
+  if (code === 'amount_too_small' && Number.isFinite(body?.min)) {
+    return `La donación mínima es de ${body.min} €.`;
+  }
+  if (code === 'amount_too_large' && Number.isFinite(body?.max)) {
+    return `El máximo por donación es de ${Number(body.max).toLocaleString('es-ES')} €. Para donar más, escribe a la protectora.`;
+  }
   return DONATION_ERROR_MESSAGE[code] || 'No se pudo iniciar la donación. Vuelve a intentarlo.';
 }

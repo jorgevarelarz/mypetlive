@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { SALE_MAX_EUR } from '../utils/limits';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -160,6 +161,23 @@ describe('API POS del partner', () => {
     expect(again.usedAt).toBeTruthy();
     const res2 = await request(app).post('/api/pos/sales').set('X-Api-Key', key).send({ code, applyCoupons: true, amountEur: 10 }).expect(201);
     expect(res2.body.appliedCoupons).toHaveLength(0);
+  });
+
+  it('el TPV aplica el mismo tope que la caja web', async () => {
+    // Es la otra puerta de entrada de ventas: si aceptara lo que la caja
+    // rechaza, el tope no serviría de nada.
+    const key = await getPosKey();
+    const { code } = await getClientCode();
+    const res = await request(app)
+      .post('/api/pos/sales')
+      .set('X-Api-Key', key)
+      .send({ code, amountEur: SALE_MAX_EUR + 1 })
+      .expect(400);
+    expect(res.body.error).toBe('amount_too_large');
+    expect(res.body.max).toBe(SALE_MAX_EUR);
+
+    const ana: any = await User.findById(clientId).select('patitas').lean();
+    expect(ana.patitas).toBe(0);
   });
 
   it('sales respeta couponIds explícitos y applyCoupons:false', async () => {

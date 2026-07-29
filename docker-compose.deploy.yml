@@ -48,6 +48,11 @@ services:
       STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
       STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
       DONATION_FEE_PERCENT: "${DONATION_FEE_PERCENT}"
+      # Topes de importe (utils/limits.ts). Sin valor caen a los defaults del
+      # código: 1 €/2.000 € por donación y 3.000 € por venta.
+      DONATION_MIN_EUR: "${DONATION_MIN_EUR}"
+      DONATION_MAX_EUR: "${DONATION_MAX_EUR}"
+      SALE_MAX_EUR: "${SALE_MAX_EUR}"
       PATITA_VALUE_EUR: "${PATITA_VALUE_EUR}"
       VISIT_PATITAS_REWARD: "${VISIT_PATITAS_REWARD}"
       COUPON_PATITAS_REWARD_DEFAULT: "${COUPON_PATITAS_REWARD_DEFAULT}"

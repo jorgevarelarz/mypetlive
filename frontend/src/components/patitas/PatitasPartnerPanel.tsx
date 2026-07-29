@@ -9,6 +9,7 @@ import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus }
 import { getPartnerMetrics } from '../../api/metrics';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
+import { SALE_MAX_EUR, formatEur } from '../../utils/limits';
 
 // Carga diferida: html5-qrcode (zxing) es pesado y solo lo usan los partners al escanear.
 const QrScanner = React.lazy(() => import('./QrScanner'));
@@ -446,6 +447,8 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     if (!customer) return;
     const amount = Number(saleAmount);
     if (!Number.isFinite(amount) || amount <= 0) { toast.error('Introduce el importe del ticket'); return; }
+    // Un dedazo aquí genera Patitas y comisión sobre dinero que no existió.
+    if (amount > SALE_MAX_EUR) { toast.error(`El importe máximo por venta es de ${formatEur(SALE_MAX_EUR)} €. Revisa el ticket.`); return; }
     const items: SaleItemInput[] = saleItems
       .filter(i => i.name.trim())
       .map(i => ({
@@ -461,7 +464,13 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
       toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${couponNote}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
       reset();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error === 'invalid_amount' ? 'Importe no válido' : 'No se pudo registrar la venta');
+      const code = e?.response?.data?.error;
+      const max = e?.response?.data?.max;
+      toast.error(
+        code === 'amount_too_large' ? `El importe máximo por venta es de ${formatEur(Number(max) || SALE_MAX_EUR)} €. Revisa el ticket.`
+          : code === 'invalid_amount' ? 'Importe no válido'
+            : 'No se pudo registrar la venta',
+      );
     } finally { setBusy(false); }
   };
 
@@ -536,7 +545,7 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
             <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
               <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 13 }}>
                 Importe del ticket (€)
-                <input type="number" min={0} step="0.01" value={saleAmount} onChange={e => setSaleAmount(e.target.value)} placeholder="0.00" style={{ ...input, width: 140 }} />
+                <input type="number" min={0} max={SALE_MAX_EUR} step="0.01" value={saleAmount} onChange={e => setSaleAmount(e.target.value)} placeholder="0.00" style={{ ...input, width: 140 }} />
               </label>
               <button type="button" onClick={doSale} disabled={busy || !saleAmount} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.coral, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
                 {busy ? '…' : 'Registrar venta'}

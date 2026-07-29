@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { SALE_MAX_EUR } from '../utils/limits';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -84,6 +85,31 @@ describe('Ventas de partner con comisión', () => {
     await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: -5 }).expect(400);
     await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId }).expect(400);
     await request(app).post('/api/patitas/sales').set(clientH).send({ userId: clientId, amountEur: 10 }).expect(403);
+  });
+
+  it('un dedazo por encima del tope no genera venta, ni Patitas, ni comisión', async () => {
+    // 1000 en vez de 100: antes se colaba (el tope eran 100.000 €) y dejaba
+    // Patitas y comisión sobre dinero que nunca existió.
+    const res = await request(app)
+      .post('/api/patitas/sales')
+      .set(storeH)
+      .send({ userId: clientId, amountEur: SALE_MAX_EUR + 1 })
+      .expect(400);
+    expect(res.body.error).toBe('amount_too_large');
+    expect(res.body.max).toBe(SALE_MAX_EUR);
+
+    const ana: any = await User.findById(clientId).select('patitas').lean();
+    expect(ana.patitas).toBe(0);
+    const mine = await request(app).get('/api/patitas/sales/mine').set(storeH).expect(200);
+    expect(mine.body.items).toHaveLength(0);
+  });
+
+  it('justo en el tope sí pasa', async () => {
+    await request(app)
+      .post('/api/patitas/sales')
+      .set(storeH)
+      .send({ userId: clientId, amountEur: SALE_MAX_EUR })
+      .expect(201);
   });
 
   it('el partner ve sus ventas con totales y el admin los informes', async () => {
