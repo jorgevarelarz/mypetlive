@@ -28,6 +28,7 @@ import RedirectHome from "./pages/RedirectHome";
 import AuthLayout from "./layout/AuthLayout";
 import AdminHome from "./pages/admin/AdminHome";
 import ProfilePage from "./pages/profile/ProfilePage";
+import ConfirmEmailChange from "./pages/profile/ConfirmEmailChange";
 import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
 import MyAdoptions from "./pages/animals/MyAdoptions";
@@ -139,6 +140,9 @@ export default function AppRoutes() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset" element={<ResetPassword />} />
+              {/* Pública a propósito: se abre desde el buzón nuevo, donde puede
+                  no haber sesión. El token del enlace es la credencial. */}
+              <Route path="/perfil/confirmar-email" element={<ConfirmEmailChange />} />
               <Route path="/legal-consent" element={<ProtectedRoute><LegalConsentPage /></ProtectedRoute>} />
             </Route>
           </Routes>

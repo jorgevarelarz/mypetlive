@@ -113,6 +113,14 @@ const userSchema = new Schema(
     // en respuestas por defecto (p. ej. el listado de usuarios).
     resetToken: { type: String, select: false },
     resetTokenExp: { type: Date, select: false },
+    // Cambio de email pendiente de confirmar en la dirección nueva. El email es
+    // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
+    // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,
+    // `email` sigue siendo el de siempre y esto es solo una intención.
+    // select:false porque el token confirma un cambio de credencial.
+    pendingEmail: { type: String, select: false },
+    pendingEmailToken: { type: String, select: false, index: true },
+    pendingEmailExp: { type: Date, select: false },
     // Feed iCal de la agenda del vet: token-capability de la URL de suscripción (.ics).
     // select:false para que nunca viaje en respuestas por defecto (el directorio
     // público /api/vets hace select de profile.vet, no de este campo).

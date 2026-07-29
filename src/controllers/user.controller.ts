@@ -1,7 +1,92 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { User } from '../models/user.model';
 import getRequestLogger from '../utils/requestLogger';
 import { escapeRegex } from '../utils/regex';
+import { AppError, isAppError } from '../utils/errors';
+import { sendEmail } from '../utils/notification';
+import { confirmEmailChangeEmail, emailChangeNoticeEmail } from '../utils/emailTemplates';
+
+// Ventana de confirmación del cambio de email. Más larga que la de reseteo de
+// contraseña (60 min) a propósito: aquí no hay una urgencia que empuje a mirar
+// el buzón, la persona solo ha editado su perfil.
+const EMAIL_CHANGE_TTL_HOURS = 24;
+
+function buildEmailConfirmLink(token: string) {
+  const encoded = encodeURIComponent(token);
+  const base = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000';
+  return `${base.replace(/\/$/, '')}/perfil/confirmar-email?token=${encoded}`;
+}
+
+// Los avisos no pueden tumbar la operación: si el correo falla, el cambio sigue
+// su curso y queda el log.
+async function notifyOldAddress(oldEmail: string, newEmail: string, applied: boolean, req: Request) {
+  try {
+    const { text, html } = emailChangeNoticeEmail(newEmail, applied);
+    const subject = applied ? 'Tu correo de acceso ha cambiado — MyPetLive' : 'Alguien ha pedido cambiar tu correo — MyPetLive';
+    await sendEmail(oldEmail, subject, text, html);
+  } catch (error) {
+    getRequestLogger(req).error({ err: error }, 'No se pudo avisar a la dirección anterior del cambio de email');
+  }
+}
+
+/**
+ * Deja el cambio en estado pendiente y manda los dos correos: el enlace a la
+ * dirección nueva y el aviso a la antigua. No toca `user.email`.
+ */
+async function startEmailChange(user: any, nextEmail: string, req: Request) {
+  // Se comprueba aquí además del índice único, porque el índice no se dispara
+  // hasta que se confirma y para entonces ya sería tarde para avisar bien.
+  const taken = await User.findOne({ email: nextEmail }).select('_id').lean();
+  if (taken) throw new AppError('Ese email ya está en uso', { status: 409, code: 'email_taken' });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  user.set('pendingEmail', nextEmail);
+  user.set('pendingEmailToken', token);
+  user.set('pendingEmailExp', new Date(Date.now() + EMAIL_CHANGE_TTL_HOURS * 60 * 60 * 1000));
+
+  const { text, html } = confirmEmailChangeEmail(buildEmailConfirmLink(token), EMAIL_CHANGE_TTL_HOURS);
+  try {
+    await sendEmail(nextEmail, 'Confirma tu nueva dirección — MyPetLive', text, html);
+  } catch (error) {
+    getRequestLogger(req).error({ err: error }, 'No se pudo enviar la confirmación del cambio de email');
+  }
+  await notifyOldAddress(user.email, nextEmail, false, req);
+}
+
+/**
+ * Aplica un cambio de email pendiente. Público a propósito: quien pulsa el
+ * enlace desde el buzón nuevo puede no tener sesión abierta ahí, y el token ya
+ * demuestra que controla esa dirección.
+ */
+export const confirmEmailChange = async (req: Request, res: Response) => {
+  const token = String((req.body || {}).token || (req.query || {}).token || '');
+  if (!token) return res.status(400).json({ error: 'token_required' });
+
+  const user = await User.findOne({
+    pendingEmailToken: token,
+    pendingEmailExp: { $gt: new Date() },
+  }).select('+pendingEmail +pendingEmailToken +pendingEmailExp');
+
+  if (!user) return res.status(400).json({ error: 'token_invalid' });
+
+  const pending = String((user as any).get('pendingEmail') || '');
+  if (!pending) return res.status(400).json({ error: 'token_invalid' });
+
+  // Alguien pudo registrarse con esa dirección entre la petición y el clic.
+  const taken = await User.findOne({ email: pending, _id: { $ne: user._id } }).select('_id').lean();
+  if (taken) return res.status(409).json({ error: 'email_taken' });
+
+  const previous = user.email;
+  user.email = pending;
+  user.set('pendingEmail', undefined);
+  user.set('pendingEmailToken', undefined);
+  user.set('pendingEmailExp', undefined);
+  await user.save();
+
+  await notifyOldAddress(previous, pending, true, req);
+  res.json({ ok: true, email: user.email });
+};
 
 /**
  * Retrieve a list of all users. The password hash is excluded for security.
@@ -137,7 +222,26 @@ export const updateUser = async (req: Request, res: Response) => {
 
     const body: any = req.body || {};
     if (typeof body.name === 'string' && body.name.trim()) user.name = body.name.trim();
-    if (typeof body.email === 'string' && body.email.trim()) user.email = body.email.trim().toLowerCase();
+
+    // El email no se cambia aquí. Es la llave de la cuenta —desde él se recupera
+    // la contraseña—, así que una sesión abierta bastaba para llevarse la cuenta
+    // a otro buzón en silencio y desde ahí pedir "he olvidado mi contraseña".
+    // Ahora hay que confirmarlo en la dirección nueva; la antigua recibe aviso.
+    // Un admin sí puede cambiarlo a mano (soporte), y entonces se avisa igual.
+    let emailChangeRequested = false;
+    if (typeof body.email === 'string' && body.email.trim()) {
+      const nextEmail = body.email.trim().toLowerCase();
+      if (nextEmail !== user.email) {
+        if (isAdmin && requesterId !== String(id)) {
+          const previous = user.email;
+          user.email = nextEmail;
+          void notifyOldAddress(previous, nextEmail, true, req);
+        } else {
+          await startEmailChange(user, nextEmail, req);
+          emailChangeRequested = true;
+        }
+      }
+    }
 
     if (body.profile && typeof body.profile === 'object') {
       const current: any = (user.get('profile') as any) || {};
@@ -150,8 +254,19 @@ export const updateUser = async (req: Request, res: Response) => {
     await user.save();
     const safe = user.toObject();
     delete (safe as any).passwordHash;
-    res.json(safe);
+    // `select:false` solo filtra lecturas de la base: los campos que acabamos de
+    // escribir en memoria sí salen en toObject(). Sin esto el token de
+    // confirmación volvía en la respuesta del PATCH, así que una sesión
+    // secuestrada podía confirmar el cambio sin pisar el buzón nuevo — que es
+    // exactamente lo que este flujo existe para impedir.
+    delete (safe as any).pendingEmail;
+    delete (safe as any).pendingEmailToken;
+    delete (safe as any).pendingEmailExp;
+    res.json({ ...safe, ...(emailChangeRequested ? { emailChangePending: true } : {}) });
   } catch (error: any) {
+    if (isAppError(error)) {
+      return res.status(error.status).json({ error: error.message });
+    }
     if (error?.code === 11000) {
       return res.status(409).json({ error: 'Ese email ya está en uso' });
     }

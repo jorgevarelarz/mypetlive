@@ -401,7 +401,15 @@ export default function ProfilePage() {
     },
     onSuccess: updated => {
       updateUser(updated);
-      toast.success('Perfil actualizado');
+      // El email no cambia al guardar: hay que confirmarlo en la dirección nueva.
+      // Sin decirlo aquí, el formulario mostraría el correo nuevo y la cuenta
+      // seguiría usando el viejo, que es la peor combinación posible.
+      if (updated?.emailChangePending) {
+        setForm(f => ({ ...f, email: updated.email }));
+        toast.success('Perfil actualizado. Te hemos enviado un correo a la dirección nueva: tu email no cambiará hasta que lo confirmes ahí.', { duration: 9000 });
+      } else {
+        toast.success('Perfil actualizado');
+      }
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.error || 'No se pudo guardar el perfil');
@@ -465,7 +473,7 @@ export default function ProfilePage() {
             <Field label="Nombre público / de cuenta" hint="Cómo se te identifica en la plataforma">
               <input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Email" hint="Es la dirección con la que inicias sesión: si la cambias, tendrás que usar la nueva para entrar.">
+            <Field label="Email" hint="Es la dirección con la que inicias sesión. Si la cambias, te enviaremos un correo a la dirección nueva: hasta que lo confirmes ahí, seguirás entrando con la actual.">
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Teléfono">
