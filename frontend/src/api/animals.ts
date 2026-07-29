@@ -180,14 +180,54 @@ export async function updateAnimalStatus(id: string, status: AnimalStatus) {
   return data as { _id: string; status: AnimalStatus };
 }
 
-export async function markAnimalFeeding(id: string) {
-  const { data } = await client.post(`/api/animals/${id}/care/feed`);
-  return data as { ok: boolean; lastFeeding: string };
+export type CareEntry = {
+  _id: string;
+  type: 'feed' | 'litter' | 'walk';
+  actorName?: string;
+  foods?: string[];
+  litterType?: string;
+  walk?: { kind?: string; minutes?: number; distanceKm?: number; place?: string };
+  createdAt: string;
+};
+
+export type CarePantry = { foods: string[]; litters: string[] };
+
+export type CareSummary = {
+  feedings: number;
+  litterChanges: number;
+  walks: number;
+  walkKm: number;
+  walkMinutes: number;
+};
+
+// La despensa viaja en la respuesta de cada marca para que los chips de "lo de
+// siempre" se actualicen sin una segunda petición.
+export async function markAnimalFeeding(id: string, foods: string[] = []) {
+  const { data } = await client.post(`/api/animals/${id}/care/feed`, { foods });
+  return data as { ok: boolean; lastFeeding: string; entry: CareEntry; pantry: CarePantry };
 }
 
-export async function markAnimalLitter(id: string) {
-  const { data } = await client.post(`/api/animals/${id}/care/litter`);
-  return data as { ok: boolean; lastLitterChange: string };
+export async function markAnimalLitter(id: string, litterType?: string) {
+  const { data } = await client.post(`/api/animals/${id}/care/litter`, { litterType });
+  return data as { ok: boolean; lastLitterChange: string; entry: CareEntry; pantry: CarePantry };
+}
+
+export async function markAnimalWalk(
+  id: string,
+  walk: { kind: string; minutes?: number; distanceKm?: number; place?: string },
+) {
+  const { data } = await client.post(`/api/animals/${id}/care/walk`, walk);
+  return data as { ok: boolean; lastWalk: string; entry: CareEntry };
+}
+
+export async function getAnimalCare(id: string) {
+  const { data } = await client.get(`/api/animals/${id}/care`);
+  return data as {
+    items: CareEntry[];
+    summary: CareSummary;
+    pantry: CarePantry;
+    last: { feeding?: string; litterChange?: string; walk?: string };
+  };
 }
 
 export type UserPet = {

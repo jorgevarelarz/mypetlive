@@ -5,8 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import {
   listMyPets,
-  markAnimalFeeding,
-  markAnimalLitter,
   createPersonalPet,
   AnimalMood,
 } from '../../api/animals';
@@ -16,8 +14,9 @@ import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
+import DailyCareCard from '../../components/pet/DailyCareCard';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
-import { healthCategoryLabel, moodLabel, speciesLabel, usesLitter } from '../../styles/mypetlive';
+import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
 
 const MOOD_OPTIONS: Array<{ value: '' | AnimalMood; label: string }> = [
   { value: '', label: 'Sin especificar' },
@@ -192,47 +191,14 @@ export default function PetPage() {
     }
   };
 
-  const careMutation = useMutation<{ ok: boolean } | any, unknown, 'feed' | 'litter'>({
-    mutationFn: async type => {
-      if (!featuredAnimal) throw new Error('missing_animal');
-      const animalId = String(featuredAnimal._id || featuredAnimal.id || '');
-      if (!animalId) throw new Error('missing_animal');
-      if (type === 'feed') return markAnimalFeeding(animalId);
-      return markAnimalLitter(animalId);
-    },
-    onSuccess: (_data, type) => {
-      toast.success(type === 'feed' ? 'Gracias por cuidar de él 🌿' : 'Gracias por mantener su espacio limpio ✨');
-      queryClient.invalidateQueries({ queryKey: ['my-pets'] });
-      queryClient.invalidateQueries({ queryKey: ['pet-animal-fallback', selectedPetId || assignedAnimalId || 'auto'] });
-      // La home cachea el mismo animal 60 s: sin esto seguía diciendo que tocaba
-      // rellenar la comida justo después de marcarla aquí.
-      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.status === 403
-          ? 'No tienes permiso para registrar el cuidado de esta mascota'
-          : 'No se pudo registrar el cuidado',
-      );
-    },
-  });
-
-  const describeFeeding = () => {
-    if (!featuredAnimal?.lastFeeding) return 'Aún no registramos una comida.';
-    const last = new Date(featuredAnimal.lastFeeding);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 24 ? 'Ya comió hoy 🫶' : 'Puede que toque rellenar comida 🌿';
+  // El cuidado diario (marcas, detalle, resumen semanal) vive en DailyCareCard;
+  // aquí solo se refresca lo que cachea el mismo animal por su cuenta.
+  const invalidateAnimalCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ['pet-animal-fallback', selectedPetId || assignedAnimalId || 'auto'] });
+    // La home cachea el mismo animal 60 s: sin esto seguía diciendo que tocaba
+    // rellenar la comida justo después de marcarla aquí.
+    queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
   };
-
-  const describeLitter = () => {
-    if (!featuredAnimal?.lastLitterChange) return 'Aún no registramos un cambio de arena.';
-    const last = new Date(featuredAnimal.lastLitterChange);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 72 ? 'Arena en buen estado.' : 'Quizás convenga cambiar la arena pronto ✨';
-  };
-
-  // Solo los gatos usan arena: a un perro no se le ofrece "cambiar arena".
-  const showLitter = usesLitter(featuredAnimal?.species);
 
   const addRegisterImage = async (file?: File | null) => {
     if (!file) return;
@@ -471,21 +437,11 @@ export default function PetPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">Cuidado diario</h2>
-          <p>{describeFeeding()}</p>
-          {showLitter && <p>{describeLitter()}</p>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => careMutation.mutate('feed')} disabled={careMutation.isPending}>
-              Marcar comida
-            </button>
-            {showLitter && (
-              <button type="button" onClick={() => careMutation.mutate('litter')} disabled={careMutation.isPending}>
-                Cambiar arena
-              </button>
-            )}
-          </div>
-        </div>
+        <DailyCareCard
+          animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+          species={featuredAnimal.species}
+          onMarked={invalidateAnimalCaches}
+        />
 
         <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
           <h2 className="text-lg font-semibold">Cupones</h2>

@@ -13,6 +13,7 @@ export type AnimalDoc = {
   code?: string;
   lastFeeding?: string;
   lastLitterChange?: string;
+  lastWalk?: string;
   mood?: string | null;
   healthHistory?: Array<{
     date?: string;

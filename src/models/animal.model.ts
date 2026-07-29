@@ -92,8 +92,25 @@ const animalSchema = new Schema(
     likes: { type: [String], default: [] },
     environment: { type: [String], default: [] },
     mood: { type: String, enum: ['relajado', 'timido', 'energico', 'en_adaptacion', null], default: null },
+    // Caché del último cuidado de cada tipo: la verdad está en `CareLog`, pero la
+    // ficha y la home solo necesitan "cuándo fue la última vez" y no van a pagar
+    // una consulta al registro para pintar una frase.
     lastFeeding: { type: Date },
     lastLitterChange: { type: Date },
+    lastWalk: { type: Date },
+    // "Despensa": lo que de verdad usa esta mascota, aprendido de lo que se marca.
+    // Evita reescribir la marca del pienso tres veces al día y evita mantener un
+    // catálogo global de productos que nadie actualizaría.
+    carePantry: {
+      type: new Schema(
+        {
+          foods: { type: [{ type: String, trim: true, maxlength: 80 }], default: [] },
+          litters: { type: [{ type: String, trim: true, maxlength: 80 }], default: [] },
+        },
+        { _id: false },
+      ),
+      default: () => ({ foods: [], litters: [] }),
+    },
     code: { type: String, unique: true, uppercase: true, index: true },
     isPersonalPet: { type: Boolean, default: false, index: true },
     createdByRole: { type: String, enum: ['protectora', 'tenant'], required: true, index: true },

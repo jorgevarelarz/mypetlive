@@ -114,6 +114,26 @@ export const usesLitter = (species?: string) => {
   return canonical[String(species || '').trim().toLowerCase()] === 'cat';
 };
 
+// El simétrico del arenero: a un perro se le ofrece "marcar paseo" en el mismo
+// hueco en el que un gato tiene "cambiar arena". El resto de especies se quedan
+// solo con la comida, que es lo único común a todas.
+export const usesWalks = (species?: string) => {
+  const canonical: Record<string, string> = { dog: 'dog', perro: 'dog' };
+  return canonical[String(species || '').trim().toLowerCase()] === 'dog';
+};
+
+// Intensidad del paseo (`WALK_KINDS` del backend). El valor viaja en clave; el
+// icono y la etiqueta viven aquí porque son decisión de la interfaz.
+export const WALK_KIND_OPTIONS: Array<{ value: string; label: string; icon: string; hint: string }> = [
+  { value: 'suave', label: 'Paseo suave', icon: '🌿', hint: 'Tranquilo, para hacer sus cosas' },
+  { value: 'largo', label: 'Paseo largo', icon: '🚶', hint: 'Vuelta larga, sin prisa' },
+  { value: 'corriendo', label: 'Corriendo', icon: '💨', hint: 'A ritmo, para quemar energía' },
+  { value: 'senderismo', label: 'Senderismo', icon: '⛰️', hint: 'Ruta o monte' },
+];
+
+export const walkKindLabel = (value?: string) =>
+  WALK_KIND_OPTIONS.find(o => o.value === value)?.label || value || 'Paseo';
+
 // Categorías de `healthHistory[].type` (HEALTH_CATEGORIES del backend), que se
 // guardan en inglés y no pueden pintarse crudas en el historial de salud.
 export const healthCategoryLabel = (value?: string) => {

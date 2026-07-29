@@ -285,6 +285,32 @@ cerrarlas) y correo al adoptante.
   docroot idénticos a `HEAD`. No hizo falta tocar el `.env`: sin
   `ADOPTION_UNDO_WINDOW_HOURS` la ventana son 72 h.
 
+## 5.14 Cuidado diario con registro de verdad (29 jul 2026)
+Hasta ahora "marcar comida" escribía `animal.lastFeeding = new Date()` **encima del valor
+anterior**: dos comidas en un día eran una, no se sabía quién la había puesto y no había
+dónde guardar un detalle. Nace `CareLog` (`models/careLog.model.ts`), una entrada por gesto,
+con quién lo marcó congelado en el registro (importa con voluntarios turnándose).
+
+- **Paseo, el simétrico del arenero.** `POST /api/animals/:id/care/walk` con
+  `kind` (suave · largo · corriendo · senderismo, único obligatorio), `minutes`,
+  `distanceKm` y `place`. Antes al dueño de un perro simplemente le faltaba el botón de la
+  arena: no tenía sustituto.
+- **Comida** admite hasta dos productos; **arena**, el tipo usado.
+- **Despensa por mascota** (`animal.carePantry`): lo que se escribe una vez vuelve como chip
+  para marcarlo de un toque. Máximo 8 por tipo, sin duplicados ignorando mayúsculas. Sin
+  catálogo global que nadie mantendría.
+- **Resumen semanal** en `GET /api/animals/:id/care`: comidas, paseos, km y minutos de los
+  últimos 7 días, más las 20 últimas entradas. Es lo que da sentido a apuntar distancia.
+- **Especies:** el servidor solo bloquea lo seguro (`litter_not_applicable` para perros,
+  `walk_not_applicable` para gatos); un conejo sí puede usar arenero. La UI ofrece paseo solo
+  a perros, arena solo a gatos y comida a todos.
+- `animal.lastWalk` se suma a `lastFeeding`/`lastLitterChange` como **caché** para que la
+  ficha y la home sigan resolviéndose con una lectura.
+- UI: `components/pet/DailyCareCard.tsx` (ficha) y `components/pet/WalkSheet.tsx`, compartida
+  con la home para que las dos pantallas no diverjan. La home sigue siendo la superficie
+  rápida (comida y arena de un toque); el paseo abre la hoja porque exige tipo.
+- Tests: `animalCare.test.ts` (15) y `DailyCareCard.test.tsx` (6).
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
