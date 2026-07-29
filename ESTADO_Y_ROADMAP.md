@@ -203,7 +203,7 @@ está **congelado/oculto**, no borrado.
   el pasaporte público devolvía 200 para animales en `borrador` (ahora 404). Cierra el
   pendiente de 5.4.
 
-## 5.12 Hecho el 29 jul 2026 (rama `pulido/paneles-roles`, sin push)
+## 5.12 Hecho el 29 jul 2026 (rama `pulido/paneles-roles`, **desplegado y pusheado**)
 - [x] **Reserva de Patitas en citas del vet:** comprometer Patitas al pedir la cita las
   **bloquea** en el acto (`User.patitasLocked`, helpers `lockPatitas`/`releasePatitas`/
   `consumeLockedPatitas` en `utils/patitas.ts`). Antes solo se comprobaba el saldo al pedir
@@ -239,6 +239,26 @@ está **congelado/oculto**, no borrado.
   los endpoints de estos flujos y el 409 traducido.
 - **Rojo preexistente, ajeno a esto:** `rbac.test.ts`, `api.test.ts` y `security.test.ts`
   (10 tests) fallan igual antes de estos cambios. El resto: 199 en verde.
+
+### Deploy del 29 jul 2026 (tarde) — `deploy.sh api` + `deploy.sh web`
+Antes de desplegar se auditó el VPS fichero a fichero (hash git de los 214 de
+`/opt/mypetlive/src`): **cero ediciones a mano**, el servidor era un subconjunto estricto
+de la rama. Lo que corría era el deploy de las 02:41 de esa madrugada, hecho **desde el
+árbol sucio** con la reserva de Patitas sin commitear — por eso le faltaba `a71d092`
+(commiteado a las 03:12, media hora después). El deploy de la tarde añadió ese fix más los
+cinco bloques de arriba.
+
+- `.env` del VPS: añadidos `DONATION_MIN_EUR=1`, `DONATION_MAX_EUR=2000`, `SALE_MAX_EUR=3000`
+  (backup `.env.bak-2026-07-29`). Sin ellos el código cae a esos mismos defaults, pero
+  explícitos evitan los warnings de interpolación de compose.
+- `docker-compose.deploy.yml` del VPS sincronizado con el del repo (solo añadía esas tres
+  variables; backup `.bak-2026-07-29-limits`).
+- Verificado en vivo: `/api/animals?q=(perro` responde 200 (antes 500) y
+  `POST /api/donations/checkout-session` devuelve `amount_too_large`/`amount_too_small`
+  con `min:1, max:2000`. `src/` del VPS y docroot idénticos a `HEAD` y al build local.
+- **`DEPLOYED_COMMIT` estaba obsoleto** (decía `1dce308`, 20 commits atrás): `deploy.sh` no
+  lo escribe, se puso a mano. Si vuelve a desfasarse, no fiarse de él: la comprobación buena
+  es `rsync -azn -ii --delete src/ valeris-vps:/opt/mypetlive/src/`.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
