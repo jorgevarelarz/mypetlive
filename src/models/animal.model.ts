@@ -70,6 +70,9 @@ const supplySchema = new Schema(
     packSize: { type: Number, min: 0 },
     perUse: { type: Number, min: 0 },
     remaining: { type: Number, min: 0 },
+    // Cuándo se avisó de que se acababa. Existe para no repetir el aviso en cada
+    // pasada del cron; se borra al reponer, que es lo que rearma la alerta.
+    lowNotifiedAt: { type: Date },
     updatedAt: { type: Date },
   },
   { _id: false },

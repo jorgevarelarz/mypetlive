@@ -43,6 +43,7 @@ import Home from "./pages/home/Home";
 import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
 import CashierPage from "./pages/partners/CashierPage";
+import WhereToBuyPage from "./pages/shop/WhereToBuyPage";
 import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
@@ -89,6 +90,7 @@ export default function AppRoutes() {
               <Route path="/landlord/verificacion" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><ShelterVerificationPage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+              <Route path="/comprar" element={<ProtectedRoute><WhereToBuyPage /></ProtectedRoute>} />
               <Route path="/caja" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><CashierPage /></RoleGuard></ProtectedRoute>} />
               {/* Guía pública para proveedores de TPV (sin cuenta). */}
               <Route path="/developers/tpv" element={<TpvGuidePage />} />

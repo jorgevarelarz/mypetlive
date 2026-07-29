@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { upsertAnimalSupply, type CareSupply, type SupplyUnit } from '../../api/animals';
 import { describeSupply, formatQuantity, FOOD_UNITS, LITTER_UNITS } from '../../utils/supplies';
+import { Link } from 'react-router-dom';
 
 type Kind = 'food' | 'litter';
 
@@ -97,6 +98,17 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
                   >
                     Reponer
                   </button>
+                )}
+                {supply.runningLow && (
+                  // El enlace aparece justo cuando hace falta comprar, que es la
+                  // única razón por la que alguien mira esta lista.
+                  <Link
+                    to={`/comprar?producto=${encodeURIComponent(supply.name)}`}
+                    className="text-xs font-semibold"
+                    style={{ color: '#1F6F6F' }}
+                  >
+                    Dónde comprarlo
+                  </Link>
                 )}
                 <button
                   type="button"

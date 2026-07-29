@@ -332,6 +332,39 @@ ración** de lo que queda. `PUT /api/animals/:id/care/supplies` da de alta, edit
   modal de comida, que es donde se decide qué darle.
 - Tests: 8 más en `animalCare.test.ts` y 4 en `DailyCareCard.test.tsx`.
 
+## 5.15 Aviso de "se acaba" y primer peldaño del marketplace (29 jul 2026)
+`jobs/supplyAlerts.ts`, enganchado a la pasada de `startReminderJobs` (cada 15 min).
+
+- **Umbral en días, no en raciones** (`ALERT_DAYS = 3`): avisar cuando quedan dos comidas no
+  da tiempo a comprar nada, que es el único objetivo del aviso. Solo sin ritmo conocido se
+  cae a contar usos (`ALERT_USES = 3`).
+- **Idempotente** por `carePantry.*.lowNotifiedAt`; **se rearma al reponer** o al subir a mano
+  lo que queda. Sin eso se avisaría una vez en la vida del producto — o cada 15 minutos.
+- Email brandeado (Brevo) + push web (VAPID), al dueño o, si el animal sigue a cargo de la
+  protectora, a la protectora.
+- Gotcha caro que costó un rato: en `upsertSupply`, `next` y `existing` son **el mismo
+  objeto**, así que comparar contra `existing.remaining` después de escribir `next.remaining`
+  compara un valor contra sí mismo. Se guarda `previousRemaining` antes de tocar nada. Y el
+  `lowNotifiedAt` hay que **borrarlo con `delete`**: mongoose conserva el valor anterior de
+  una clave presente-pero-`undefined` al recastear el array.
+
+### Dónde comprarlo (`utils/shopping.ts`, `/api/shop`)
+Antes de montar marketplace, carrito, pagos y logística, **medir si alguien pincha**.
+
+- Los partners salen del catálogo que **ya** cargan para su TPV (`profile.itemCatalog`), con
+  precio y ciudad; casado laxo reutilizando `normalizeItemText` de las ofertas por items. Sin
+  catálogo global que mantener: si una tienda no lo cuida, no aparece.
+- `GET /api/shop/where-to-buy?product=` para la UI y `GET /api/shop/click/:partnerId` que
+  registra un `ShopClick` (usuario, producto, origen: email/ficha) y redirige a `/comprar`.
+  Nunca falla hacia el usuario: si el registro peta, redirige igual.
+- El aviso por correo lleva ese bloque con enlaces medidos; la ficha ofrece "Dónde comprarlo"
+  solo en los productos que se están acabando.
+- **La página `/comprar` es una lista a propósito**, no un carrito. La decisión de negocio
+  (comisión con Stripe Connect vs sobrecoste revendiendo) está en el chat del 29 jul: la
+  recomendación es comisión, porque el sobrecoste convierte a MyPetLive en vendedor con todo
+  lo que implica (facturación con Veri*factu, desistimiento a 14 días, garantía).
+- Tests: `supplyAlerts.test.ts` (9) y uno más en `DailyCareCard.test.tsx`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.

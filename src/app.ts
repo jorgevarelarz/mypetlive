@@ -49,6 +49,7 @@ import applicationRoutes from './routes/application.routes';
 import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
 import adoptionRoutes from './routes/adoption.routes';
+import shoppingRoutes from './routes/shopping.routes';
 import welcomeRoutes from './routes/welcome.routes';
 import donationsRoutes from './routes/donations.routes';
 import pushRoutes from './routes/push.routes';
@@ -256,6 +257,8 @@ app.use(seoRoutes);
 // Rental routes/UI preserved but hidden for tenants — kept for future reuse
 app.use('/api/animals', animalRoutes);
 app.use('/api/adoptions', adoptionRoutes);
+// "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
+app.use('/api/shop', shoppingRoutes);
 app.use('/api/welcome', welcomeRoutes);
 app.use('/api', donationsRoutes);
 app.use('/api', authenticate, pushRoutes);

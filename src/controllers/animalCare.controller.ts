@@ -262,6 +262,10 @@ export async function upsertSupply(req: Request, res: Response) {
 
   const next: any = existing || { name };
   next.name = name;
+  // `next` y `existing` son el mismo objeto, así que lo que queda AHORA hay que
+  // guardarlo antes de tocarlo: es contra esto contra lo que se decide si hay
+  // que rearmar el aviso de "se acaba".
+  const previousRemaining: number = existing?.remaining ?? 0;
 
   // Las unidades del paquete y de la ración pueden ser distintas (saco en kg,
   // ración en gramos) pero tienen que ser de la misma magnitud: descontar 80 ml
@@ -301,6 +305,14 @@ export async function upsertSupply(req: Request, res: Response) {
     // Producto nuevo con paquete y sin decir cuánto queda: se asume entero, que
     // es lo que pasa cuando se apunta al comprarlo.
     next.remaining = next.packSize;
+  }
+
+  // Reponer (o subir lo que queda a mano) rearma el aviso de "se acaba": si no,
+  // se avisaría una sola vez en la vida de ese producto.
+  // `delete` y no `= undefined`: al recastear el array, mongoose conserva el
+  // valor anterior de una clave presente-pero-undefined y el aviso no se rearmaba.
+  if (next.lowNotifiedAt && previousRemaining < (next.remaining ?? 0)) {
+    delete next.lowNotifiedAt;
   }
 
   next.updatedAt = new Date();

@@ -5,6 +5,7 @@ import { Animal } from '../models/animal.model';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
 import logger from '../utils/logger';
+import { sendSupplyAlerts } from './supplyAlerts';
 
 const H24_MS = 24 * 60 * 60 * 1000;
 const WELCOME_NUDGE_AFTER_DAYS = 3;
@@ -129,6 +130,7 @@ export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   const run = () => {
     sendAppointmentReminders().catch(err => logger.error({ err }, '[reminders] pasada de citas falló'));
     sendWelcomeReminders().catch(err => logger.error({ err }, '[reminders] pasada de bienvenida falló'));
+    sendSupplyAlerts().catch(err => logger.error({ err }, '[reminders] pasada de despensa falló'));
   };
   // Primera pasada poco después de arrancar (deja respirar la conexión a Mongo).
   setTimeout(run, 30_000);

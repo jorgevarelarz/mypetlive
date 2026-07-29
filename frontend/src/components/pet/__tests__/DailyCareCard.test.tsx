@@ -10,6 +10,12 @@ import * as animalsApi from '../../../api/animals';
 
 jest.mock('react-hot-toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+// react-router-dom v7 no resuelve bajo el jest de CRA (pide 'react-router/dom'),
+// y aquí solo hace falta que <Link> pinte un <a>.
+jest.mock('react-router-dom', () => ({
+  Link: ({ to, children, ...rest }: any) => <a href={to} {...rest}>{children}</a>,
+}), { virtual: true });
+
 /** Producto de despensa sin cuenta de existencias, que es el caso por defecto. */
 const supply = (name: string, extra: any = {}) => ({
   name, usesLeft: null, daysLeft: null, runningLow: false, ...extra,
@@ -174,5 +180,24 @@ describe('Existencias de la despensa', () => {
         perUseUnit: 'g',
       }),
     );
+  });
+});
+
+describe('Dónde comprarlo', () => {
+  it('ofrece dónde comprar solo cuando el producto se está acabando', async () => {
+    renderCard('gato', {
+      ...care,
+      pantry: {
+        foods: [
+          supply('Se acaba', { packSize: 6000, perUse: 80, remaining: 160, usesLeft: 2, runningLow: true }),
+          supply('Va sobrado', { packSize: 6000, perUse: 80, remaining: 5000, usesLeft: 62 }),
+        ],
+        litters: [],
+      },
+    });
+
+    const links = await screen.findAllByText('Dónde comprarlo');
+    expect(links).toHaveLength(1);
+    expect(links[0].closest('a')).toHaveAttribute('href', '/comprar?producto=Se%20acaba');
   });
 });

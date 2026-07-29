@@ -26,6 +26,7 @@ import postsignRoutes from './postsign';
 import proRoutes from './pro.routes';
 import propertyRoutes from './property.routes';
 import animalRoutes from './animal.routes';
+import shoppingRoutes from './shopping.routes';
 import adoptionRoutes from './adoption.routes';
 import couponRoutes from './coupon.routes';
 import couponAdminRoutes from './coupon.admin.routes';
@@ -80,6 +81,8 @@ router.use('/', questionnaireRoutes);
 router.use('/legal', legalRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/notify', notifyRoutes);
+// "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
+router.use('/shop', shoppingRoutes);
 router.use('/appointments', requireVerified, appointmentsRoutes);
 
 // [FROZEN RentalApp] Rutas de alquiler congeladas durante la migración a MyPetLive.
