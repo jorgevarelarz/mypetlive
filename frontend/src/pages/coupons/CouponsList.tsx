@@ -220,12 +220,19 @@ export default function CouponsList() {
       {selected && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(31,55,40,.42)', padding: 16 }}>
           <div style={{ width: '100%', maxWidth: 390, background: '#fff', borderRadius: 24, overflow: 'hidden', boxShadow: '0 24px 70px -34px rgba(31,55,40,.62)' }}>
+            {/* El aspa iba en blanco sobre un círculo blanco al 20% encima del
+                coral: 2,6:1 de contraste, por debajo del mínimo de 3:1 para un
+                control, y en un móvil a plena luz no se veía. Círculo blanco
+                sólido con el aspa en coral oscuro: 4,7:1. */}
             <div style={{ background: MPL.coral, padding: '26px 28px 22px', color: '#fff', position: 'relative' }}>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Cerrar cupón" style={{ position: 'absolute', top: 18, right: 18, width: 32, height: 32, borderRadius: 999, border: 'none', background: 'rgba(255,255,255,.2)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={16} />
+              <button type="button" onClick={() => setSelected(null)} aria-label="Cerrar cupón" style={{ position: 'absolute', top: 16, right: 16, width: 34, height: 34, borderRadius: 999, border: 'none', background: '#fff', color: MPL.coralDark, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(31,55,40,.2)' }}>
+                <X size={18} strokeWidth={2.5} />
               </button>
-              <div style={{ fontSize: 12, fontWeight: 800, opacity: .82, marginBottom: 8 }}>{categoryLabel(selected.partnerType)}</div>
-              <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.05 }}>{selected.copy || selected.title}</div>
+              {/* Hueco para el aspa: si no, un texto largo se le mete por debajo. */}
+              <div style={{ paddingRight: 34 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, opacity: .82, marginBottom: 8 }}>{categoryLabel(selected.partnerType)}</div>
+                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.05 }}>{selected.copy || selected.title}</div>
+              </div>
             </div>
             <div style={{ padding: '24px 28px 28px', textAlign: 'center' }}>
               <p style={{ fontSize: 13.5, color: MPL.muted, margin: '0 0 18px', lineHeight: 1.5 }}>{selected.description}</p>
