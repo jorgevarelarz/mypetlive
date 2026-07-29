@@ -36,6 +36,11 @@ export default function AppointmentsPage() {
         appointments={appointments}
         title={isVet ? 'Agenda mensual' : 'Mi calendario'}
         counterpartName={isVet ? vetTitle : ownerTitle}
+        // El calendario no puede pintar un fallo de red como un mes sin citas:
+        // para un vet eso es creer que hoy no tiene agenda.
+        isLoading={apptsQ.isLoading}
+        isError={apptsQ.isError}
+        onRetry={() => apptsQ.refetch()}
       />
 
       {isVet ? <VetAppointmentsPanel /> : <BookVetAppointment />}

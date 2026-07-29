@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { CalendarDays } from 'lucide-react';
 import { listMyVetAppointments, updateVetAppointmentStatus, type VetAppointment, type VetAppointmentStatus } from '../../api/vetAppointments';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
-import { STATUS_META, AppointmentCard } from './appointmentShared';
+import { STATUS_META, AppointmentCard, LoadError, promptCancelReason, datetimeLocalNow } from './appointmentShared';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 const inputStyle: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, borderRadius: 10, padding: '8px 10px', font: 'inherit', background: '#fff' };
@@ -19,8 +19,8 @@ export default function VetAppointmentsPanel() {
   const apptsQ = useQuery({ queryKey: ['vet-appointments'], queryFn: () => listMyVetAppointments() });
 
   const mut = useMutation({
-    mutationFn: (vars: { id: string; status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; addToHistory?: boolean }) =>
-      updateVetAppointmentStatus(vars.id, { status: vars.status, scheduledAt: vars.scheduledAt, vetNotes: vars.vetNotes, addToHistory: vars.addToHistory }),
+    mutationFn: (vars: { id: string; status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; cancelReason?: string; addToHistory?: boolean }) =>
+      updateVetAppointmentStatus(vars.id, { status: vars.status, scheduledAt: vars.scheduledAt, vetNotes: vars.vetNotes, cancelReason: vars.cancelReason, addToHistory: vars.addToHistory }),
     onSuccess: (data: any) => {
       toast.success(data?.clinicalRecordAdded ? 'Cita completada y añadida al pasaporte' : 'Cita actualizada');
       setReschedFor(null); setReschedAt('');
@@ -28,6 +28,13 @@ export default function VetAppointmentsPanel() {
     },
     onError: (e: any) => {
       const code = e?.response?.data?.error;
+      // Un 409 significa que la tarjeta está obsoleta (alguien cambió la cita
+      // por otro lado): decirlo y refrescar, en vez de un "no se pudo" a secas.
+      if (code === 'invalid_transition') {
+        toast.error('Esta cita ya ha cambiado de estado. Actualizamos la agenda.');
+        queryClient.invalidateQueries({ queryKey: ['vet-appointments'] });
+        return;
+      }
       toast.error(code === 'scheduled_at_required' ? 'Indica la nueva fecha' : 'No se pudo actualizar');
     },
   });
@@ -48,13 +55,20 @@ export default function VetAppointmentsPanel() {
   const active = all.filter(a => ACTIVE.includes(a.status));
   const past = all.filter(a => !ACTIVE.includes(a.status));
 
+  const cancel = (a: VetAppointment) => {
+    const extra = promptCancelReason(a.userId?.name || 'el cliente');
+    if (!extra) return;
+    mut.mutate({ id: a._id, status: 'cancelled', ...extra });
+  };
+
   const renderActions = (a: VetAppointment) => {
     if (!ACTIVE.includes(a.status)) return [];
+    if (mut.isPending) return [];
     const acts: any[] = [];
     if (a.status === 'requested') acts.push({ label: 'Confirmar', tone: 'primary', onClick: () => mut.mutate({ id: a._id, status: 'confirmed' }) });
     if (a.status === 'confirmed' || a.status === 'rescheduled') acts.push({ label: 'Marcar completada', tone: 'primary', onClick: () => complete(a) });
     acts.push({ label: reschedFor === a._id ? 'Cerrar' : 'Reprogramar', tone: 'neutral', onClick: () => { setReschedFor(reschedFor === a._id ? null : a._id); setReschedAt(''); } });
-    acts.push({ label: 'Cancelar', tone: 'danger', onClick: () => mut.mutate({ id: a._id, status: 'cancelled' }) });
+    acts.push({ label: 'Cancelar', tone: 'danger', onClick: () => cancel(a) });
     return acts;
   };
 
@@ -72,6 +86,14 @@ export default function VetAppointmentsPanel() {
 
       {apptsQ.isLoading ? (
         <div style={{ color: MPL.faint }}>Cargando…</div>
+      ) : apptsQ.isError ? (
+        // Sin esto, un fallo de red se leía como "no tienes solicitudes": el vet
+        // podía dejar peticiones de cita sin contestar creyendo que no había.
+        <LoadError
+          title="No hemos podido cargar tu agenda."
+          note="Puede ser un problema de conexión. No des por hecho que no tienes citas."
+          onRetry={() => apptsQ.refetch()}
+        />
       ) : all.length === 0 ? (
         <div style={{ color: MPL.faint, fontSize: 14 }}>Todavía no tienes solicitudes de cita.</div>
       ) : (
@@ -82,7 +104,7 @@ export default function VetAppointmentsPanel() {
                 <AppointmentCard key={a._id} title={a.userId?.name || 'Cliente'} appt={a} meta={STATUS_META} actions={renderActions(a)}>
                   {reschedFor === a._id && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: MPL.bg, borderRadius: 10, padding: 10 }}>
-                      <input type="datetime-local" value={reschedAt} onChange={e => setReschedAt(e.target.value)} style={inputStyle} />
+                      <input type="datetime-local" min={datetimeLocalNow()} value={reschedAt} onChange={e => setReschedAt(e.target.value)} style={inputStyle} />
                       <button type="button" disabled={!reschedAt || mut.isPending}
                         onClick={() => mut.mutate({ id: a._id, status: 'rescheduled', scheduledAt: new Date(reschedAt).toISOString() })}
                         style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 10, padding: '8px 14px', font: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: reschedAt ? 1 : .6 }}>

@@ -34,7 +34,7 @@ por panel (o por arreglo con entidad propia).
 | Adoptante | Favoritos | `/me/favorites` | ✅ hecho |
 | Adoptante | Alertas | `/me/alerts` | ✅ hecho |
 | Adoptante | Donaciones | `/donate` | ✅ hecho |
-| Adoptante | Citas (solo lectura) | `/citas` | ⏳ |
+| Adoptante | Citas (solo lectura) | `/citas` | ✅ hecho |
 | Protectora | Dashboard | `/landlord` | ✅ hecho |
 | Protectora | Animales | `/landlord/animals` | ✅ hecho |
 | Protectora | Solicitudes | `/landlord/adoptions` | ✅ hecho |
@@ -42,7 +42,7 @@ por panel (o por arreglo con entidad propia).
 | Protectora | Verificación | `/landlord/verificacion` | ✅ hecho |
 | Veterinario | Panel partner | `/partner` | ✅ hecho |
 | Veterinario | Caja | `/caja` | ✅ hecho |
-| Veterinario | Agenda / calendario | `/citas` | ⏳ |
+| Veterinario | Agenda / calendario | `/citas` | ✅ hecho |
 | Tienda | Panel partner | `/partner` | ✅ hecho |
 | Tienda | Caja | `/caja` | ✅ hecho |
 | Admin | Home | `/admin` | ⏳ |
@@ -277,7 +277,58 @@ solo su `GeneratePatitas`. Un mismo arreglo cubre por tanto las cuatro filas de 
   ya tenía `overflowX: auto` para móvil y el `busy` sí protegía del doble clic en venta,
   visita y canje.
 
+### Citas (`/citas`) — agenda del vet y vista del adoptante/protectora — hecho
+
+Una sola ruta para los tres roles (`RoleGuard roles={["tenant","landlord","vet"]}`):
+`AppointmentsPage` monta el calendario para todos y luego `VetAppointmentsPanel` (vet)
+o `BookVetAppointment` (dueño y protectora). Cubre las dos filas de la tabla.
+
+- **Bug real, simétrico al de la nota de la protectora:** el vet **nunca podía escribir
+  el motivo de cancelación**. El campo existe en el modelo (`cancelReason`), la API del
+  front ya lo aceptaba en su firma, el `AppointmentCard` lo pinta ("Motivo de
+  cancelación: …") y el email al otro lado lo incluye
+  (`vetAppointment.controller.ts:348`, `Motivo: ${appt.cancelReason}`) — pero ninguna
+  de las dos pantallas lo enviaba jamás. Estaba cableado de punta a punta y sin origen:
+  todas las cancelaciones salían mudas. Ahora se pide al cancelar, en ambos lados.
+- **Bug real:** cancelar era **irreversible y a un solo clic, sin confirmación**.
+  `cancelled` no tiene transiciones de salida en `VET_TRANSITIONS`, así que un clic de
+  más destruye la cita sin forma de reabrirla. El mismo `window.prompt` del motivo hace
+  ahora de confirmación (Cancelar aborta), que es el idiom que ya usaba `complete()`.
+- **Sin estado de error, en las cinco consultas de la pantalla:** la agenda del vet
+  ("Todavía no tienes solicitudes de cita"), las citas del dueño ("Aún no tienes citas"),
+  el **calendario** (mes en blanco, "Sin citas este día"), el **directorio de
+  veterinarios** (desplegable vacío, sin poder pedir cita y sin saber por qué) y la lista
+  de mascotas propias ("No tienes mascotas registradas"). El del vet es el peor: podía
+  dejar solicitudes sin contestar creyendo que no había ninguna.
+- **Bug real (calendario):** al cambiar de mes, el día seleccionado **no se movía**. La
+  cabecera decía "agosto" y el detalle de abajo seguía listando "29 de julio". Ahora
+  salta a hoy si vuelves al mes actual, o al día 1 en cualquier otro.
+- **Fechas pasadas:** ni el formulario de pedir cita ni el de reprogramar tenían `min` en
+  el `datetime-local`. Al crear, el backend sí corta (`date_in_past`), así que era un
+  viaje de ida y vuelta para nada; **al reprogramar no valida nada**, de modo que el vet
+  podía mover una cita al pasado y dejarla fuera del recordatorio de 24 h.
+- **409 `invalid_transition` tratado como error genérico:** significa que la tarjeta está
+  obsoleta (la cita cambió por otro lado). Ahora se dice y se refresca la lista, en vez
+  de un "No se pudo actualizar" que invita a reintentar sobre datos viejos.
+- Doble clic: los botones de la agenda no se bloqueaban con `mut.isPending`. El pago de
+  Patitas al completar **ya estaba protegido** por la máquina de estados del backend
+  (`VET_TRANSITIONS['completed']` no existe → 409), así que no había fuga de dinero; aun
+  así se bloquean para no soltar un error confuso.
+- Lo que ya estaba bien: `STATUS_META` cubre exactamente los cinco estados del enum del
+  backend (ningún crash por estado desconocido), `counterpartName` está bien cableado
+  pese al nombre confuso de sus dos helpers, el `RoleGuard` cuadra con los permisos del
+  controlador y la protectora sí debe ver `BookVetAppointment` (agenda pagando Patitas).
+
 ## Pendientes detectados de paso (para cuando toque su panel)
+
+- **Citas · el vet puede quedarse sin cobrar en silencio (dinero, necesita decisión):**
+  la protectora compromete Patitas al pedir la cita, pero el débito ocurre **al
+  completarla** (`vetAppointment.controller.ts`, rama `status === 'completed'`). Si entre
+  medias gastó ese saldo, el `findOneAndUpdate` condicionado no encuentra documento, se
+  registra un `logger.warn` y **ahí se acaba**: la cita se marca completada, el vet ve
+  "Cita actualizada" y nadie —ni vet ni protectora— se entera de que no hubo pago. La
+  tarjeta solo deja el rastro "🐾 N Patitas · pendiente". Opciones: reservar el saldo al
+  crear la cita, o devolver el fallo al vet y avisar a la protectora.
 
 - **Venta sin tope realista:** el backend corta en 100 000 € (`registerSale`,
   `patitas.controller.ts`), así que un dedazo (1000 en vez de 100) se registra y genera

@@ -11,6 +11,48 @@ export const STATUS_META: Record<VetAppointmentStatus, { label: string; bg: stri
   cancelled: { label: 'Cancelada', bg: MPL.coral100, color: MPL.coralDark },
 };
 
+// Un fallo de red no puede pintarse como "no tienes nada": se dice y se ofrece
+// reintentar. En una agenda esto importa el doble — dar por hecho que no hay
+// citas es dejar pacientes sin atender.
+export function LoadError({ title, note, onRetry }: { title: string; note?: string; onRetry: () => void }) {
+  return (
+    <div style={{ background: MPL.bg, borderRadius: 12, padding: 14, display: 'grid', gap: 8, justifyItems: 'start' }}>
+      <div style={{ fontWeight: 800, fontSize: 14 }}>{title}</div>
+      <div style={{ color: MPL.muted, fontSize: 13.5 }}>{note || 'Puede ser un problema de conexión. Vuelve a intentarlo en un momento.'}</div>
+      <button
+        type="button"
+        onClick={onRetry}
+        style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 11, padding: '8px 16px', font: 'inherit', fontSize: 13, fontWeight: 800, color: MPL.tealDark, cursor: 'pointer' }}
+      >
+        Reintentar
+      </button>
+    </div>
+  );
+}
+
+// Cancelar es irreversible: `cancelled` no tiene transiciones de salida en
+// VET_TRANSITIONS, así que un clic de más destruye la cita sin vuelta atrás.
+// Además el email que recibe la otra parte incluye el motivo si existe, y hasta
+// ahora ninguna pantalla lo escribía nunca. Devuelve undefined si se aborta.
+export function promptCancelReason(who: string): { cancelReason?: string } | undefined {
+  const reason = window.prompt(
+    `Vas a cancelar esta cita. Es definitivo: no se puede reabrir.\n\nEscribe el motivo (se lo enviamos a ${who} por email). Puedes dejarlo vacío.`,
+    '',
+  );
+  if (reason === null) return undefined;
+  const clean = reason.trim();
+  return clean ? { cancelReason: clean } : {};
+}
+
+// Mínimo para los <input type="datetime-local">: no tiene sentido proponer una
+// fecha pasada (el backend la rechaza al crear, y al reprogramar dejaría la cita
+// fuera del alcance del recordatorio de 24 h).
+export function datetimeLocalNow() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
 function fmt(d?: string) {
   if (!d) return '';
   const date = new Date(d);

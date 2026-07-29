@@ -13,7 +13,7 @@ import { getMyPatitas } from '../../api/patitas';
 import { listMyPets, searchAnimals } from '../../api/animals';
 import { useAuth } from '../../context/AuthContext';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
-import { STATUS_META, AppointmentCard } from './appointmentShared';
+import { STATUS_META, AppointmentCard, LoadError, promptCancelReason, datetimeLocalNow } from './appointmentShared';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 const inputStyle: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '11px 13px', font: 'inherit', width: '100%', boxSizing: 'border-box', background: '#fff' };
@@ -99,10 +99,23 @@ export default function BookVetAppointment() {
   });
 
   const cancelMut = useMutation({
-    mutationFn: (id: string) => updateVetAppointmentStatus(id, { status: 'cancelled' }),
+    mutationFn: (vars: { id: string; cancelReason?: string }) => updateVetAppointmentStatus(vars.id, { status: 'cancelled', cancelReason: vars.cancelReason }),
     onSuccess: () => { toast.success('Cita cancelada'); queryClient.invalidateQueries({ queryKey: ['my-vet-appointments'] }); },
-    onError: () => toast.error('No se pudo cancelar'),
+    onError: (e: any) => {
+      if (e?.response?.data?.error === 'invalid_transition') {
+        toast.error('Esta cita ya ha cambiado de estado. Actualizamos la lista.');
+        queryClient.invalidateQueries({ queryKey: ['my-vet-appointments'] });
+        return;
+      }
+      toast.error('No se pudo cancelar');
+    },
   });
+
+  const cancel = (id: string, vetName: string) => {
+    const extra = promptCancelReason(vetName);
+    if (!extra) return;
+    cancelMut.mutate({ id, ...extra });
+  };
 
   const appts = apptsQ.data?.items || [];
 
@@ -117,15 +130,23 @@ export default function BookVetAppointment() {
         </div>
 
         <div style={{ display: 'grid', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
-            Veterinario
-            <select value={vetId} onChange={e => { setVetId(e.target.value); setServiceName(''); }} style={inputStyle}>
-              <option value="">{vetsQ.isLoading ? 'Cargando…' : 'Elige un veterinario'}</option>
-              {vets.map(v => (
-                <option key={v._id} value={v._id}>{v.name}{v.city ? ` · ${v.city}` : ''}{v.emergency24h ? ' · Urgencias 24h' : ''}</option>
-              ))}
-            </select>
-          </label>
+          {/* Sin esto, un fallo de red dejaba el desplegable vacío y sin explicación:
+              el usuario no podía pedir cita y no sabía por qué. */}
+          {vetsQ.isError ? (
+            <LoadError title="No hemos podido cargar el listado de veterinarios." onRetry={() => vetsQ.refetch()} />
+          ) : (
+            <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
+              Veterinario
+              <select value={vetId} onChange={e => { setVetId(e.target.value); setServiceName(''); }} style={inputStyle}>
+                <option value="">
+                  {vetsQ.isLoading ? 'Cargando…' : vets.length === 0 ? 'Todavía no hay veterinarios disponibles' : 'Elige un veterinario'}
+                </option>
+                {vets.map(v => (
+                  <option key={v._id} value={v._id}>{v.name}{v.city ? ` · ${v.city}` : ''}{v.emergency24h ? ' · Urgencias 24h' : ''}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {selectedVet && (
             <div style={{ background: MPL.bg, borderRadius: 12, padding: 12, fontSize: 13, color: MPL.muted, display: 'grid', gap: 6 }}>
@@ -166,11 +187,14 @@ export default function BookVetAppointment() {
               <select
                 value={animalCode}
                 onChange={e => setAnimalCode(e.target.value)}
-                disabled={petsQ.isLoading || myPets.length === 0}
+                disabled={petsQ.isLoading || petsQ.isError || myPets.length === 0}
                 style={{ ...inputStyle, fontFamily: animalCode ? MPL_FONT_MONO : 'inherit' }}
               >
                 <option value="">
-                  {petsQ.isLoading ? 'Cargando…' : myPets.length === 0 ? 'No tienes mascotas registradas' : 'Sin especificar'}
+                  {petsQ.isLoading ? 'Cargando…'
+                    : petsQ.isError ? 'No se pudo cargar tu lista'
+                    : myPets.length === 0 ? 'No tienes mascotas registradas'
+                    : 'Sin especificar'}
                 </option>
                 {myPets.map(p => (
                   <option key={p.code} value={p.code}>{p.name}{p.code ? ` · ${p.code}` : ''}</option>
@@ -179,7 +203,7 @@ export default function BookVetAppointment() {
             </label>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
               Fecha y hora
-              <input type="datetime-local" value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
+              <input type="datetime-local" min={datetimeLocalNow()} value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
             </label>
           </div>
           <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
@@ -206,21 +230,26 @@ export default function BookVetAppointment() {
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 12px' }}>Mis citas</h3>
         {apptsQ.isLoading ? (
           <div style={{ color: MPL.faint }}>Cargando…</div>
+        ) : apptsQ.isError ? (
+          <LoadError title="No hemos podido cargar tus citas." onRetry={() => apptsQ.refetch()} />
         ) : appts.length === 0 ? (
           <div style={{ color: MPL.faint, fontSize: 14 }}>Aún no tienes citas. Pide una arriba 👆</div>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {appts.map(a => (
-              <AppointmentCard
-                key={a._id}
-                title={a.vetId?.profile?.orgName || a.vetId?.name || 'Veterinario'}
-                appt={a}
-                meta={STATUS_META}
-                actions={['requested', 'confirmed', 'rescheduled'].includes(a.status)
-                  ? [{ label: 'Cancelar', tone: 'danger', onClick: () => cancelMut.mutate(a._id) }]
-                  : []}
-              />
-            ))}
+            {appts.map(a => {
+              const vetName = a.vetId?.profile?.orgName || a.vetId?.name || 'Veterinario';
+              return (
+                <AppointmentCard
+                  key={a._id}
+                  title={vetName}
+                  appt={a}
+                  meta={STATUS_META}
+                  actions={['requested', 'confirmed', 'rescheduled'].includes(a.status) && !cancelMut.isPending
+                    ? [{ label: 'Cancelar', tone: 'danger', onClick: () => cancel(a._id, vetName) }]
+                    : []}
+                />
+              );
+            })}
           </div>
         )}
       </div>
