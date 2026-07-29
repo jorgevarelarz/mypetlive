@@ -18,8 +18,25 @@ const input: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, border
 
 type WalletRef = { walletToken?: string; code?: string };
 
+// Un fallo de red no puede pintarse como "no tienes nada": se dice y se ofrece reintentar.
+function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
+  return (
+    <div style={{ background: MPL.bg, borderRadius: 12, padding: 14, display: 'grid', gap: 8, justifyItems: 'start' }}>
+      <div style={{ fontWeight: 800, fontSize: 14 }}>{title}</div>
+      <div style={{ color: MPL.muted, fontSize: 13.5 }}>Puede ser un problema de conexión. Vuelve a intentarlo en un momento.</div>
+      <button
+        type="button"
+        onClick={onRetry}
+        style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 11, padding: '8px 16px', font: 'inherit', fontSize: 13, fontWeight: 800, color: MPL.tealDark, cursor: 'pointer' }}
+      >
+        Reintentar
+      </button>
+    </div>
+  );
+}
+
 // Tarjeta de onboarding Stripe del partner.
-function Metric({ value, label, note }: { value: React.ReactNode; label: string; note?: string }) {
+function Metric({ value, label, note }: { value: React.ReactNode; label: string; note?: React.ReactNode }) {
   return (
     <div style={{ border: `1px solid ${MPL.border}`, borderRadius: 14, padding: '14px 16px' }}>
       <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{value}</div>
@@ -33,29 +50,38 @@ function Metric({ value, label, note }: { value: React.ReactNode; label: string;
 function PartnerMetrics() {
   const metricsQ = useQuery({ queryKey: ['partner-metrics'], queryFn: getPartnerMetrics, staleTime: 60_000 });
   const m = metricsQ.data;
+  // Las notas al pie salen solo con datos: mientras carga o si falla, un
+  // "0 este mes · 0 creados" se lee como un dato real y no lo es.
+  const note = (text: string) => (m ? text : undefined);
+  const value = (render: () => React.ReactNode) => (metricsQ.isLoading ? '...' : metricsQ.isError ? '—' : render());
   return (
     <div style={card}>
       <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Tu actividad en MyPetLive</h3>
       <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Clientes, cupones y ventas generados a través de la plataforma.</p>
+      {metricsQ.isError && (
+        <div style={{ marginBottom: 14 }}>
+          <LoadError title="No hemos podido cargar tu actividad." onRetry={() => metricsQ.refetch()} />
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
         <Metric
-          value={metricsQ.isLoading ? '...' : m?.clientes.unicos ?? 0}
+          value={value(() => m?.clientes.unicos ?? 0)}
           label="clientes únicos"
         />
         <Metric
-          value={metricsQ.isLoading ? '...' : m?.cupones.usados ?? 0}
+          value={value(() => m?.cupones.usados ?? 0)}
           label="cupones usados"
-          note={`${m?.cupones.usadosEsteMes ?? 0} este mes · ${m?.cupones.total ?? 0} creados`}
+          note={note(`${m?.cupones.usadosEsteMes ?? 0} este mes · ${m?.cupones.total ?? 0} creados`)}
         />
         <Metric
-          value={metricsQ.isLoading ? '...' : `${m?.ventas.totalEur ?? 0} €`}
-          label={`ventas (${m?.ventas.numero ?? 0})`}
-          note={`${m?.ventas.esteMesEur ?? 0} € este mes`}
+          value={value(() => `${m?.ventas.totalEur ?? 0} €`)}
+          label={m ? `ventas (${m.ventas.numero})` : 'ventas'}
+          note={note(`${m?.ventas.esteMesEur ?? 0} € este mes`)}
         />
         <Metric
-          value={metricsQ.isLoading ? '...' : m?.patitas.recibidas ?? 0}
+          value={value(() => m?.patitas.recibidas ?? 0)}
           label="Patitas cobradas"
-          note={`${m?.patitas.valorEur ?? 0} € recibidos`}
+          note={note(`${m?.patitas.valorEur ?? 0} € recibidos`)}
         />
       </div>
     </div>
@@ -96,6 +122,10 @@ function PartnerStatements() {
       </div>
       {statementsQ.isLoading ? (
         <div style={{ color: MPL.faint }}>Cargando…</div>
+      ) : statementsQ.isError ? (
+        // Sin esto un fallo de red se leía como "no tienes ventas": el partner
+        // podía dar por bueno que no debe comisión de un mes que sí facturó.
+        <LoadError title="No hemos podido cargar tu extracto." onRetry={() => statementsQ.refetch()} />
       ) : items.length === 0 ? (
         <div style={{ color: MPL.faint, fontSize: 14 }}>Todavía no hay ventas registradas: cuando registres la primera, aquí verás tu extracto mensual.</div>
       ) : (
@@ -140,11 +170,22 @@ function PartnerPayout() {
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [linking, setLinking] = useState(false);
 
-  useEffect(() => {
-    getPartnerConnectStatus().then(setStatus).catch((e: any) => { if (e?.response?.status === 503) setUnavailable(true); }).finally(() => setLoading(false));
-  }, []);
+  // Cualquier error que no sea el 503 de "pagos aún no disponibles" hay que
+  // decirlo: antes se tragaba y se pintaba "Conectar cuenta de cobro" a un
+  // partner que podía tenerla ya conectada, invitándole a rehacer el KYC.
+  const load = () => {
+    setLoading(true);
+    setFailed(false);
+    getPartnerConnectStatus()
+      .then(s => { setStatus(s); setUnavailable(false); })
+      .catch((e: any) => { if (e?.response?.status === 503) setUnavailable(true); else setFailed(true); })
+      .finally(() => setLoading(false));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
 
   const connect = async () => {
     setLinking(true);
@@ -164,6 +205,7 @@ function PartnerPayout() {
       <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Recibir pagos</h3>
       <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Conecta tu cuenta para recibir el dinero de los canjes de Patitas que cobres.</p>
       {loading ? <div style={{ color: MPL.faint }}>Comprobando…</div> :
+        failed ? <LoadError title="No hemos podido comprobar tu cuenta de cobro." onRetry={load} /> :
         unavailable ? <div style={{ background: MPL.gold100, color: MPL.goldDark, borderRadius: 12, padding: 14, fontSize: 13.5, fontWeight: 700 }}>Se activará muy pronto. Vuelve más adelante para conectar tu cuenta.</div> :
         ready ? <div style={{ background: MPL.olive100, color: MPL.oliveDark, borderRadius: 12, padding: 14, fontWeight: 800 }}>✓ Cuenta lista para recibir pagos.</div> :
         <button type="button" onClick={connect} disabled={linking} style={{ background: MPL.teal, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
@@ -183,7 +225,11 @@ function PosIntegration() {
   const [testMode, setTestMode] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const reload = () => listPosKeys().then(r => setKeys(r.keys)).catch(() => {});
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // Si esto falla, `keys` se queda en null y los dos botones de generar clave
+  // quedan `disabled` para siempre: la pantalla se queda muda sin decir por qué.
+  const reload = () => listPosKeys().then(r => { setKeys(r.keys); setLoadFailed(false); }).catch(() => setLoadFailed(true));
   useEffect(() => { reload(); }, []);
 
   // Wizard "en 3 pasos": estado derivado de las claves. El semáforo del paso 3
@@ -248,6 +294,12 @@ function PosIntegration() {
         usa el <strong>Modo Caja</strong> del menú — no necesitas nada más. Tú no tienes que hacer
         nada técnico: reenvía la guía a tu proveedor de TPV y él se encarga.
       </p>
+
+      {loadFailed && (
+        <div style={{ marginBottom: 16 }}>
+          <LoadError title="No hemos podido cargar tus claves del TPV." onRetry={reload} />
+        </div>
+      )}
 
       {/* Conexión guiada en 3 pasos: clave de pruebas → enviar guía → semáforo. */}
       <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
@@ -362,6 +414,11 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
 
   const doVisit = async () => {
     if (!customer) return;
+    // Los cupones marcados solo se consumen dentro de registerSale: earnVisit no
+    // los aplica. Antes se descartaban en el reset() sin que la caja se enterase.
+    if (selectedCoupons.size > 0 && !window.confirm(
+      `Tienes ${selectedCoupons.size} cupón(es) marcado(s). Una visita sin compra no los consume: seguirán disponibles para el cliente. ¿Registrar solo la visita?`,
+    )) return;
     setBusy(true);
     try {
       const r = await earnVisit(customer.userId);
@@ -429,6 +486,8 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     const price = Number(it.priceEur);
     return sum + (qty > 0 && Number.isFinite(price) ? qty * price : 0);
   }, 0);
+
+  const amountMismatch = itemsTotal > 0 && Number(saleAmount) > 0 && Math.abs(Number(saleAmount) - itemsTotal) >= 0.01;
 
   const reset = () => { setCustomer(null); setCode(''); setScanning(false); setSaleAmount(''); setSaleItems([]); setSelectedCoupons(new Set()); onDone(); };
 
@@ -506,11 +565,20 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
                 </div>
               ))}
               {itemsTotal > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                  <span style={{ color: MPL.muted }}>Suma de productos: <strong style={{ color: MPL.ink }}>{itemsTotal.toFixed(2)} €</strong></span>
-                  <button type="button" onClick={() => setSaleAmount(itemsTotal.toFixed(2))} style={{ background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
-                    Usar este importe
-                  </button>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, flexWrap: 'wrap' }}>
+                    <span style={{ color: MPL.muted }}>Suma de productos: <strong style={{ color: MPL.ink }}>{itemsTotal.toFixed(2)} €</strong></span>
+                    <button type="button" onClick={() => setSaleAmount(itemsTotal.toFixed(2))} style={{ background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
+                      Usar este importe
+                    </button>
+                  </div>
+                  {/* Lo que se registra (y de lo que salen Patitas y comisión) es el
+                      importe del ticket, no las líneas: si no cuadran, se avisa. */}
+                  {amountMismatch && (
+                    <div style={{ background: MPL.gold100, color: MPL.goldDark, borderRadius: 10, padding: '8px 11px', fontSize: 12.5, fontWeight: 700 }}>
+                      El importe del ticket ({Number(saleAmount).toFixed(2)} €) no coincide con la suma de los productos. Se registrará el importe del ticket.
+                    </div>
+                  )}
                 </div>
               )}
               <button type="button" onClick={() => setSaleItems(items => [...items, { name: '', qty: '1', priceEur: '' }])} style={{ justifySelf: 'start', background: 'none', border: 0, color: MPL.tealDark, cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 13 }}>
@@ -534,7 +602,13 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
                   <div style={{ fontSize: 13, fontWeight: 800, color: MPL.muted, marginBottom: 4 }}>
                     {customer.coupons ? 'Cupones de este cliente en tu establecimiento' : 'O aplicar uno de tus cupones'}
                   </div>
-                  {applicable.length === 0 ? (
+                  {/* Solo se cae al listado propio cuando identify no trajo cupones;
+                      ahí un fallo de red se leía como "no tienes cupones activos". */}
+                  {!customer.coupons && couponsQ.isError ? (
+                    <LoadError title="No hemos podido cargar tus cupones." onRetry={() => couponsQ.refetch()} />
+                  ) : !customer.coupons && couponsQ.isLoading ? (
+                    <div style={{ color: MPL.faint, fontSize: 13 }}>Cargando cupones…</div>
+                  ) : applicable.length === 0 ? (
                     <div style={{ color: MPL.faint, fontSize: 13 }}>
                       {customer.coupons ? 'Este cliente no tiene cupones aplicables aquí.' : 'No tienes cupones activos.'}
                     </div>
@@ -709,7 +783,13 @@ export default function PatitasPartnerPanel() {
 
       <div style={card}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 14px' }}>Cobros recientes</h3>
-        <PatitasHistory items={meQ.data?.history || []} meId={meId} emptyText="Todavía no has cobrado ningún canje." />
+        {meQ.isLoading ? (
+          <div style={{ color: MPL.faint }}>Cargando…</div>
+        ) : meQ.isError ? (
+          <LoadError title="No hemos podido cargar tus cobros." onRetry={() => meQ.refetch()} />
+        ) : (
+          <PatitasHistory items={meQ.data?.history || []} meId={meId} emptyText="Todavía no has cobrado ningún canje." />
+        )}
       </div>
 
       {result && (

@@ -40,11 +40,11 @@ por panel (o por arreglo con entidad propia).
 | Protectora | Solicitudes | `/landlord/adoptions` | ✅ hecho |
 | Protectora | Cuestionario | `/landlord/questionnaire` | ✅ hecho |
 | Protectora | Verificación | `/landlord/verificacion` | ✅ hecho |
-| Veterinario | Panel partner | `/partner` | ⏳ |
-| Veterinario | Caja | `/caja` | ⏳ |
+| Veterinario | Panel partner | `/partner` | ✅ hecho |
+| Veterinario | Caja | `/caja` | ✅ hecho |
 | Veterinario | Agenda / calendario | `/citas` | ⏳ |
-| Tienda | Panel partner | `/partner` | ⏳ |
-| Tienda | Caja | `/caja` | ⏳ |
+| Tienda | Panel partner | `/partner` | ✅ hecho |
+| Tienda | Caja | `/caja` | ✅ hecho |
 | Admin | Home | `/admin` | ⏳ |
 | Admin | Usuarios | `/admin/users` | ⏳ |
 | Admin | Animales | `/admin/animals` | ⏳ |
@@ -233,7 +233,58 @@ por panel (o por arreglo con entidad propia).
   commit aparte (`9eb1788`) para poder revertirlo solo. Verificado contra el backend, `tsc`,
   las 4 suites y el build, pero **no auditado línea a línea**.
 
+### Partner (vet y tienda) · Panel `/partner` y Caja `/caja` — hecho
+
+Las dos rutas son envoltorios finos: el panel real es
+`components/patitas/PatitasPartnerPanel.tsx` (735 líneas, 6 tarjetas), y `/caja` monta
+solo su `GeneratePatitas`. Un mismo arreglo cubre por tanto las cuatro filas de la tabla
+(vet y tienda comparten pantalla; `RoleGuard roles={["store","vet"]}` cuadra con el
+`assertRole('store','vet','admin')` de las rutas del backend — verificado).
+
+- **Bug real:** "**Perfil → Conectar tu TPV**" no existe. La única UI de claves del TPV
+  (`PosIntegration`) vive en `/partner`, y `ProfilePage` no tiene ni una línea de TPV
+  (grep de `TPV|posKey` en el fichero: cero). Lo prometían dos sitios: el pie de la Caja
+  (`CashierPage.tsx`, con `<Link to="/profile">`) y la guía que el partner **reenvía a su
+  proveedor de TPV** (`TpvGuidePage.tsx`), o sea que el integrador externo también
+  buscaba la clave donde no está. Mismo patrón que el `/donate` sin camino de entrada.
+  Ahora ambos dicen "Patitas → Conectar tu TPV" y el enlace apunta a `/partner`.
+- **Sin estado de error, quinta y sexta vez, y esta vez sobre el dinero:** el **extracto
+  de liquidación** pintaba cualquier fallo de red como "Todavía no hay ventas
+  registradas" — el partner podía dar por bueno que no debía comisión de un mes que sí
+  facturó. Igual en **Cobros recientes** ("Todavía no has cobrado ningún canje") y en los
+  **cupones** de la caja ("No tienes cupones activos"). Los tres con `LoadError`+reintentar.
+- **Datos falsos en "Tu actividad en MyPetLive":** las notas al pie (`0 este mes · 0
+  creados`, `0 € este mes`, `0 € recibidos`) y el `label` de ventas (`ventas (0)`) se
+  pintaban **durante la carga y en error**, cuando los valores de arriba ya decían `...`.
+  Ahora las notas solo salen con datos y los valores caen a `—` en error, como en
+  ProtectoraDashboard.
+- **Bug real:** `PartnerPayout` solo trataba el 503 ("pagos aún no disponibles") y se
+  tragaba el resto. Un 500 o una red caída dejaba `status = null` y pintaba **"Conectar
+  cuenta de cobro" a un partner que ya podía tenerla conectada**, invitándole a rehacer el
+  onboarding KYC de Stripe.
+- **Bug real:** `PosIntegration.reload()` tenía `.catch(() => {})`. Al fallar, `keys` se
+  quedaba en `null` para siempre y **los dos botones de generar clave quedaban
+  `disabled` sin explicación** (`disabled={busy || !keys}`): la pantalla se quedaba muda.
+- **Bug real (caja):** los cupones marcados se **perdían en silencio** al pulsar "Solo
+  visita (sin compra)". Solo `registerSale` los consume; `earnVisit` no los recibe, y el
+  `reset()` posterior limpiaba la selección. Ahora se confirma y se aclara que siguen
+  disponibles para el cliente.
+- **Importe que no cuadra:** las líneas del ticket son informativas (alimentan las ofertas
+  por items); lo que se registra —y de lo que salen Patitas y comisión— es `amountEur`.
+  Teclear 20 € con 45 € en líneas se registraba a 20 € sin decir nada. Ahora avisa.
+- Lo que ya estaba bien: `payoutStatus === 'paid'` cuadra con el enum real del backend
+  (`none|pending_payout|paid`), el extracto formatea el mes en UTC correctamente, la tabla
+  ya tenía `overflowX: auto` para móvil y el `busy` sí protegía del doble clic en venta,
+  visita y canje.
+
 ## Pendientes detectados de paso (para cuando toque su panel)
+
+- **Venta sin tope realista:** el backend corta en 100 000 € (`registerSale`,
+  `patitas.controller.ts`), así que un dedazo (1000 en vez de 100) se registra y genera
+  Patitas y comisión. Mismo caso que las donaciones: necesita decisión de negocio.
+- **La caja no tiene ni un test de UI.** `frontend/src/__tests__/` contiene un único
+  fichero (`rbac.ui.test.tsx`, y encima cubre código muerto). Toda la pantalla por la que
+  pasa el dinero del partner está sin cobertura de front.
 
 - **Protectora · agujero de integridad en `setStatus`** (`src/controllers/adoption.controller.ts`):
   no hay guard de estado terminal, así que una adopción **ya aprobada** se puede pasar a
