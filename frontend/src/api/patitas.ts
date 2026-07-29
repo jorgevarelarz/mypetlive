@@ -125,7 +125,9 @@ export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
 export type AppliedSaleCoupon = { _id: string; title?: string; discount?: string; bonusPatitas: number; targetAnimalCode?: string | null };
 
 export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[]; couponIds?: string[]; applyCoupons?: boolean }) {
-  const { data } = await client.post('/api/patitas/sales', payload);
+  // La caja traduce sus códigos (amount_too_large, invalid_amount): sin esto
+  // el partner veía el código crudo además del mensaje bueno.
+  const { data } = await client.post('/api/patitas/sales', payload, { skipErrorToast: true } as any);
   return data as {
     ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number;
     appliedCoupons: AppliedSaleCoupon[]; balance?: number; autoDonated?: boolean;

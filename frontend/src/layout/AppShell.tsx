@@ -7,15 +7,13 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
-import navConfig from '../config/nav.config.json';
+import { navItemsForRole, generalItemsForRole, resolvePath, type NavItem } from './navItems';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
 import { getMyCode } from '../api/patitas';
 import { MPL, PawMark } from '../styles/mypetlive';
-
-type NavItem = { label: string; path?: string; to?: string };
 
 type IconType = React.ComponentType<{ size?: number; strokeWidth?: number }>;
 const iconFor: Record<string, IconType> = {
@@ -57,13 +55,6 @@ function NavRow({ to, label, badge }: { to: string; label: string; badge?: React
   );
 }
 
-const getGeneralItems = (role?: string): NavItem[] => {
-  const config: any = navConfig;
-  if (role === 'tenant' && Array.isArray(config.tenantGeneral)) return config.tenantGeneral as NavItem[];
-  return (config.general || []) as NavItem[];
-};
-
-const resolvePath = (item: NavItem) => item.path || item.to || '#';
 
 const labelFor: Record<string, string> = {
   tenant: 'Adoptante',
@@ -83,11 +74,9 @@ function Header() {
   const [myCode, setMyCode] = useState<{ token: string; code: string } | null>(null);
   const [loadingCode, setLoadingCode] = useState(false);
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
-  const generalItems = getGeneralItems(role);
-  // El drawer móvil replica el menú lateral de la web: sección del rol si existe,
-  // si no la general (mismo criterio que SideNav).
-  const roleItems = (role && (navConfig as any)[role] ? (navConfig as any)[role] : []) as NavItem[];
-  const drawerItems = roleItems.length > 0 ? roleItems : generalItems;
+  const generalItems = generalItemsForRole(role);
+  // El drawer móvil replica el menú lateral de la web: misma regla, misma función.
+  const drawerItems = navItemsForRole(role);
   const showInbox = generalItems.some(item => item.path === '/inbox');
 
   const loadCode = async () => {
@@ -340,7 +329,7 @@ function SideNav() {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
-  const generalItems = getGeneralItems(role);
+  const generalItems = generalItemsForRole(role);
   const showInbox = generalItems.some(item => item.path === '/inbox');
   useEffect(() => {
     let timer: any;
@@ -359,11 +348,7 @@ function SideNav() {
     }
     return () => {};
   }, [user?._id, showInbox]);
-  const roleItems = (role && (navConfig as any)[role] ? (navConfig as any)[role] : []) as NavItem[];
-  // Menú unificado: si el rol tiene su propia sección (protectora/admin/partner), ESA es la
-  // navegación — sin la sección "General" duplicada. Los roles sin sección propia (adoptante)
-  // usan su lista general como menú único.
-  const items = roleItems.length > 0 ? roleItems : generalItems;
+  const items = navItemsForRole(role);
   return (
     <aside className="hidden lg:flex w-60 shrink-0">
       <div

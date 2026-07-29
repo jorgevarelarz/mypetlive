@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getAdoption, setAdoptionStatus, cancelAdoption, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
+import { getAdoption, setAdoptionStatus, adoptionStatusErrorMessage, cancelAdoption, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
@@ -134,8 +134,8 @@ export default function AdoptionDetail() {
       await setAdoptionStatus(String(id), newStatus);
       toast.success('Estado actualizado');
       refetch();
-    } catch {
-      toast.error('Error actualizando');
+    } catch (e: any) {
+      toast.error(adoptionStatusErrorMessage(e));
     }
   };
 

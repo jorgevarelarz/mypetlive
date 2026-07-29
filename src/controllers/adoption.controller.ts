@@ -7,7 +7,8 @@ import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { activateWelcomePlan } from '../utils/welcomePlan';
-import { canTransitionAdoption, isTerminalAdoptionStatus, nextAdoptionStatuses } from '../utils/adoptionTransitions';
+import { canTransitionAdoption, isTerminalAdoptionStatus, nextAdoptionStatuses, TERMINAL_ADOPTION_STATUSES } from '../utils/adoptionTransitions';
+import logger from '../utils/logger';
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -208,6 +209,55 @@ async function findSimilarAnimals(animal: any, limit = 3) {
   return found;
 }
 
+/**
+ * Cierra el resto de candidaturas abiertas del mismo animal cuando una se
+ * aprueba. Sin esto quedaban vivas para siempre: contaban como "en proceso" en
+ * el panel de la protectora y esas personas nunca recibían una respuesta, aunque
+ * el animal ya tuviera hogar.
+ *
+ * Es best-effort a propósito: la adopción aprobada ya está guardada y el traspaso
+ * hecho, así que un fallo aquí no puede tumbar la respuesta.
+ */
+async function closeSiblingApplications(approved: any, animal: any, actorId: string) {
+  try {
+    const siblings = await Adoption.find({
+      animalId: String(animal._id),
+      _id: { $ne: approved._id },
+      status: { $nin: TERMINAL_ADOPTION_STATUSES },
+    });
+    if (!siblings.length) return;
+
+    const similars = await findSimilarAnimals(animal);
+    const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+    const suggestions = similars.length
+      ? `\n\nEstos compañeros parecidos siguen buscando hogar:\n` +
+        similars.map(s => `- ${s.name}${s.city ? ` (${s.city})` : ''}: ${baseUrl}/animals/${s._id}`).join('\n')
+      : '';
+
+    for (const sibling of siblings) {
+      sibling.status = 'rechazada';
+      sibling.history = sibling.history || [];
+      sibling.history.push({
+        ts: new Date(),
+        actorId,
+        action: 'status_change',
+        payload: { status: 'rechazada', reason: 'animal_adopted', adoptionId: String(approved._id) },
+      });
+      await sibling.save();
+
+      const adopter = await User.findById(sibling.adopterId).select('email').lean();
+      if (!adopter?.email) continue;
+      await sendEmail(
+        adopter.email,
+        'Tu solicitud de adopción se ha cerrado',
+        `${animal.name} ya ha encontrado hogar, así que cerramos tu solicitud. Gracias por querer adoptar.${suggestions}`,
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error, animalId: String(animal._id) }, '[adopciones] no se pudieron cerrar las candidaturas hermanas');
+  }
+}
+
 export async function setStatus(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
@@ -276,6 +326,13 @@ export async function setStatus(req: Request, res: Response) {
     animal.status = 'publicado';
     await animal.save();
     await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
+  }
+
+  // Al adjudicar el animal, el resto de candidaturas dejan de tener sentido:
+  // quedaban abiertas para siempre, contando como "en proceso" en el panel de la
+  // protectora y dejando a esas personas esperando una respuesta que no llegaba.
+  if (status === 'aprobada') {
+    await closeSiblingApplications(app, animal, String(userId));
   }
 
   try {

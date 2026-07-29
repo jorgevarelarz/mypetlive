@@ -122,6 +122,36 @@ describe('Máquina de estados de la adopción', () => {
     await setStatus(b.adoptionId, 'aprobada').expect(409);
   });
 
+  it('aprobar una candidatura cierra las demás del mismo animal', async () => {
+    const { animalId, adoptionId } = await newApplication();
+    // Un segundo adoptante sobre el mismo animal.
+    const otherId = new mongoose.Types.ObjectId().toHexString();
+    await User.create({ _id: otherId, name: 'Luis', email: 'luis@test.com', passwordHash: 'x', role: 'tenant' });
+    const otherH = { 'x-user-id': otherId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
+    const other = await request(app).post('/api/adoptions').set(otherH).send({ animalId }).expect(201);
+    await setStatus(other.body.id, 'en_revision').expect(200);
+
+    await setStatus(adoptionId, 'en_revision').expect(200);
+    await setStatus(adoptionId, 'preaprobada').expect(200);
+    await setStatus(adoptionId, 'aprobada').expect(200);
+
+    // Antes se quedaba abierta para siempre, con el adoptante esperando una
+    // respuesta que no iba a llegar.
+    const sibling = await request(app).get(`/api/adoptions/${other.body.id}`).set(protectoraH).expect(200);
+    expect(sibling.body.status).toBe('rechazada');
+  });
+
+  it('cerrar las hermanas no toca las de otros animales', async () => {
+    const a = await newApplication();
+    const b = await newApplication();
+    await setStatus(a.adoptionId, 'en_revision').expect(200);
+    await setStatus(a.adoptionId, 'preaprobada').expect(200);
+    await setStatus(a.adoptionId, 'aprobada').expect(200);
+
+    const untouched = await request(app).get(`/api/adoptions/${b.adoptionId}`).set(protectoraH).expect(200);
+    expect(untouched.body.status).toBe('recibida');
+  });
+
   it('rechazar libera el animal reservado, como antes', async () => {
     const { adoptionId, animalId } = await newApplication();
     await setStatus(adoptionId, 'en_revision').expect(200);

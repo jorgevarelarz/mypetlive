@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { adminListAdoptions, setAdoptionStatus, ADOPTION_STATUS_LABEL, type AdoptionShelterStatus } from '../../api/adoptions';
+import { adminListAdoptions, setAdoptionStatus, adoptionStatusErrorMessage, ADOPTION_STATUS_LABEL, type AdoptionShelterStatus } from '../../api/adoptions';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, statusLabel } from '../../styles/mypetlive';
 import { nextAdoptionStatuses, isTerminalAdoptionStatus } from '../../utils/adoptionTransitions';
 
@@ -32,7 +32,7 @@ export default function AdminAdoptionsPage() {
       toast.success('Estado actualizado');
       queryClient.invalidateQueries({ queryKey: ['admin-adoptions'] });
     },
-    onError: (error: any) => toast.error(error?.response?.data?.error || 'No se pudo actualizar el estado'),
+    onError: (error: any) => toast.error(adoptionStatusErrorMessage(error)),
   });
 
   const changeStatus = (id: string, status: AdoptionShelterStatus) => {

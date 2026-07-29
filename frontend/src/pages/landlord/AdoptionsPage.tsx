@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   listAllAdoptionsForMyAnimals,
   setAdoptionStatus,
+  adoptionStatusErrorMessage,
   ADOPTION_STATUS_LABEL,
   AdoptionShelterStatus,
 } from '../../api/adoptions';
@@ -62,12 +63,12 @@ export default function AdoptionsPage() {
       toast(`La nota se ha recortado a ${NOTE_MAX_LENGTH} caracteres, que es el máximo que acepta el servidor.`);
     }
     // Aprobar traspasa el animal al adoptante y el panel ya no ofrece marcha atrás:
-    // confirmación explícita y sin prometer que se cierran las demás candidaturas
-    // (el backend no las toca).
+    // confirmación explícita. El backend cierra además el resto de candidaturas
+    // del mismo animal, así que se avisa de las dos cosas.
     if (
       status === 'aprobada' &&
       !window.confirm(
-        `¿Aprobar la adopción de ${animalName || 'este animal'}? El animal pasará a ser del adoptante y no podrás deshacerlo.`,
+        `¿Aprobar la adopción de ${animalName || 'este animal'}? El animal pasará a ser del adoptante, se cerrarán el resto de solicitudes para él y no podrás deshacerlo.`,
       )
     ) {
       return;
@@ -83,7 +84,7 @@ export default function AdoptionsPage() {
       qc.invalidateQueries({ queryKey: ['shelter-metrics'] });
       if (status === 'aprobada') qc.invalidateQueries({ queryKey: ['shelter-animals-count'] });
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'No se pudo actualizar');
+      toast.error(adoptionStatusErrorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -168,8 +169,9 @@ export default function AdoptionsPage() {
           {items.map((it: any) => {
             const id = it.id || it._id;
             const actions = nextAdoptionStatuses(it.status);
-            // Al aprobar una candidatura el animal se traspasa, pero el backend no
-            // cierra las demás: avisamos para que no se queden abiertas para siempre.
+            // Desde que aprobar cierra las candidaturas hermanas, esto solo salta
+            // con las que quedaron huérfanas antes de ese cambio. Se mantiene para
+            // que la protectora pueda cerrarlas a mano.
             const animalAlreadyAdopted = it.animal?.status === 'adoptado' && OPEN_STATES.includes(it.status);
             return (
               <div

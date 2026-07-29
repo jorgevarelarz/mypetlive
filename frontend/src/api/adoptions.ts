@@ -66,9 +66,32 @@ export async function adminListAdoptions(params: { status?: string; page?: numbe
   return data as { items: any[]; page: number; limit: number; total: number };
 }
 
+// Las tres pantallas que la llaman ya toastean su propio error (y traducen el
+// 409 de transición ilegal); sin `skipErrorToast` salían dos avisos, uno de
+// ellos con el código crudo del backend.
 export async function setAdoptionStatus(id: string, status: AdoptionShelterStatus, note?: string) {
-  const { data } = await client.patch(`/api/adoptions/${id}/status`, { status, note });
+  const { data } = await client.patch(
+    `/api/adoptions/${id}/status`,
+    { status, note },
+    { skipErrorToast: true } as any,
+  );
   return data as { ok: boolean; id: string; status: AdoptionStatus };
+}
+
+/**
+ * Traduce los errores de `setAdoptionStatus`. El servidor responde 409 cuando la
+ * transición no es legal; sin esto la UI pintaba el código crudo
+ * (`adoption_already_closed`) en un toast.
+ */
+export function adoptionStatusErrorMessage(error: any): string {
+  const code = error?.response?.data?.error;
+  if (code === 'adoption_already_closed') {
+    return 'Este proceso ya está cerrado y no admite más cambios de estado.';
+  }
+  if (code === 'invalid_transition') {
+    return 'Ese cambio de estado no es posible desde la situación actual. Recarga la página para ver el estado real.';
+  }
+  return 'No se pudo actualizar el estado.';
 }
 
 export async function getAdoption(id: string) {
