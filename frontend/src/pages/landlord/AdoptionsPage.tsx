@@ -9,35 +9,7 @@ import {
 } from '../../api/adoptions';
 import { speciesLabel, statusLabel } from '../../styles/mypetlive';
 import { toast } from 'react-hot-toast';
-
-// Transiciones que ofrece el panel según el estado actual de la solicitud (dossier p.9).
-// El backend (`setStatus`) no valida transiciones: acepta cualquiera de los siete
-// estados del `adoptionStatusSchema` desde cualquier otro, así que esta tabla es la
-// única barrera. Por eso los estados terminales quedan vacíos a propósito: desde
-// `aprobada` el animal ya se ha traspasado al adoptante y pasarla a `rechazada` no
-// revertiría el traspaso, así que no ofrecemos esa salida.
-const NEXT_ACTIONS: Record<string, AdoptionShelterStatus[]> = {
-  recibida: ['en_revision', 'info_adicional', 'rechazada'],
-  cuestionario_pendiente: ['en_revision', 'info_adicional', 'rechazada'],
-  en_revision: ['cita_propuesta', 'info_adicional', 'preaprobada', 'rechazada'],
-  info_adicional: ['en_revision', 'cita_propuesta', 'rechazada'],
-  cita_propuesta: ['preaprobada', 'rechazada', 'cancelada'],
-  preaprobada: ['aprobada', 'rechazada', 'cancelada'],
-  aprobada: [],
-  rechazada: [],
-  cancelada: [],
-};
-
-// Los botones son acciones, no estados: "Rechazar", no "Rechazada".
-const ACTION_LABEL: Record<AdoptionShelterStatus, string> = {
-  en_revision: 'Pasar a revisión',
-  info_adicional: 'Pedir información',
-  cita_propuesta: 'Proponer cita',
-  preaprobada: 'Preaprobar',
-  aprobada: 'Aprobar adopción',
-  rechazada: 'Rechazar',
-  cancelada: 'Cancelar proceso',
-};
+import { nextAdoptionStatuses, ADOPTION_ACTION_LABEL as ACTION_LABEL } from '../../utils/adoptionTransitions';
 
 const STATUS_TONE: Record<string, string> = {
   aprobada: '#2F855A',
@@ -195,7 +167,7 @@ export default function AdoptionsPage() {
         <div className="grid gap-3">
           {items.map((it: any) => {
             const id = it.id || it._id;
-            const actions = NEXT_ACTIONS[it.status] || [];
+            const actions = nextAdoptionStatuses(it.status);
             // Al aprobar una candidatura el animal se traspasa, pero el backend no
             // cierra las demás: avisamos para que no se queden abiertas para siempre.
             const animalAlreadyAdopted = it.animal?.status === 'adoptado' && OPEN_STATES.includes(it.status);

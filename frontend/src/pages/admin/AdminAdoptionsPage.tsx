@@ -3,12 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { adminListAdoptions, setAdoptionStatus, ADOPTION_STATUS_LABEL, type AdoptionShelterStatus } from '../../api/adoptions';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, statusLabel } from '../../styles/mypetlive';
+import { nextAdoptionStatuses, isTerminalAdoptionStatus } from '../../utils/adoptionTransitions';
 
 const th: React.CSSProperties = { padding: '10px 12px', textAlign: 'left', fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em', color: MPL.muted, fontWeight: 700 };
 const td: React.CSSProperties = { padding: '10px 12px', fontSize: 14, color: MPL.ink, borderTop: `1px solid ${MPL.border}` };
 
-// Estados que el admin puede fijar a mano (los mismos que la protectora).
-const ADMIN_STATUSES: AdoptionShelterStatus[] = ['en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada', 'cancelada'];
 // Estados con efectos definitivos: piden confirmación.
 const FINAL_STATUSES = new Set<AdoptionShelterStatus>(['aprobada', 'rechazada', 'cancelada']);
 
@@ -107,17 +106,26 @@ export default function AdminAdoptionsPage() {
                     </td>
                     <td style={{ ...td, color: MPL.muted, fontSize: 13 }}>{it.createdAt ? new Date(it.createdAt).toLocaleDateString() : ''}</td>
                     <td style={td}>
-                      <select
-                        value=""
-                        disabled={statusMutation.isPending}
-                        onChange={e => { const v = e.target.value as AdoptionShelterStatus; if (v) changeStatus(String(it._id || it.id), v); e.target.value = ''; }}
-                        style={{ border: `1px solid ${MPL.border}`, borderRadius: 9, padding: '6px 10px', fontFamily: MPL_FONT_BODY, fontSize: 13, color: MPL.ink, background: '#fff' }}
-                      >
-                        <option value="">Cambiar estado…</option>
-                        {ADMIN_STATUSES.filter(s => s !== it.status).map(s => (
-                          <option key={s} value={s}>{ADOPTION_STATUS_LABEL[s]}</option>
-                        ))}
-                      </select>
+                      {/* Solo las transiciones legales desde el estado actual. Antes se
+                          ofrecían las siete siempre, así que desde aquí se podía pasar una
+                          adopción ya aprobada a "rechazada" y el animal se quedaba con el
+                          adoptante. El servidor ahora responde 409, pero tampoco tiene
+                          sentido enseñar el botón. */}
+                      {isTerminalAdoptionStatus(it.status) ? (
+                        <span style={{ color: MPL.muted, fontSize: 13 }}>Proceso cerrado</span>
+                      ) : (
+                        <select
+                          value=""
+                          disabled={statusMutation.isPending}
+                          onChange={e => { const v = e.target.value as AdoptionShelterStatus; if (v) changeStatus(String(it._id || it.id), v); e.target.value = ''; }}
+                          style={{ border: `1px solid ${MPL.border}`, borderRadius: 9, padding: '6px 10px', fontFamily: MPL_FONT_BODY, fontSize: 13, color: MPL.ink, background: '#fff' }}
+                        >
+                          <option value="">Cambiar estado…</option>
+                          {nextAdoptionStatuses(it.status).map(s => (
+                            <option key={s} value={s}>{ADOPTION_STATUS_LABEL[s]}</option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                   </tr>
                 ))}

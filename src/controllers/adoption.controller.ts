@@ -7,6 +7,7 @@ import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { activateWelcomePlan } from '../utils/welcomePlan';
+import { canTransitionAdoption, isTerminalAdoptionStatus, nextAdoptionStatuses } from '../utils/adoptionTransitions';
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -223,6 +224,19 @@ export async function setStatus(req: Request, res: Response) {
   const isAdmin = user?.role === 'admin';
   if (!isAdmin && String(animal.shelter) !== String(userId)) {
     return res.status(403).json({ error: 'forbidden' });
+  }
+
+  // La transición tiene que ser legal. Antes se aceptaba cualquier estado del
+  // enum viniera de donde viniera, así que una adopción ya aprobada se podía
+  // pasar a 'rechazada' sin deshacer el traspaso del animal. El admin no está
+  // exento: el destrozo en los datos es el mismo desde su panel.
+  if (!canTransitionAdoption(app.status, status)) {
+    return res.status(409).json({
+      error: isTerminalAdoptionStatus(app.status) ? 'adoption_already_closed' : 'invalid_transition',
+      from: app.status,
+      to: status,
+      allowed: nextAdoptionStatuses(app.status),
+    });
   }
 
   app.status = status;

@@ -7,8 +7,7 @@ import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
 import ChatPanel from '../../components/chat/ChatPanel';
 import { speciesLabel } from '../../styles/mypetlive';
-
-const MANAGE_ACTIONS: AdoptionShelterStatus[] = ['en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada'];
+import { nextAdoptionStatuses, isTerminalAdoptionStatus, ADOPTION_ACTION_LABEL } from '../../utils/adoptionTransitions';
 
 const STATUS_TONE: Record<string, { bg: string; border: string; text: string }> = {
   recibida: { bg: '#F6F3EC', border: '#D7D0C2', text: '#3F4A3C' },
@@ -126,7 +125,7 @@ export default function AdoptionDetail() {
   const status = adoption.status as AdoptionStatus;
   const animal = adoption.animal || {};
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
-  const isTerminal = ['aprobada', 'rechazada', 'cancelada'].includes(status);
+  const isTerminal = isTerminalAdoptionStatus(status);
   const image = Array.isArray(animal.images) ? animal.images[0] : undefined;
   const lastShelterNote = findLastShelterNote(adoption.history);
 
@@ -301,20 +300,28 @@ export default function AdoptionDetail() {
       {canManage && (
         <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
           <h2 className="text-lg font-semibold">Gestionar estado</h2>
-          <div className="flex flex-wrap gap-2">
-            {MANAGE_ACTIONS.map((newStatus) => (
-              <button
-                key={newStatus}
-                type="button"
-                className="border px-3 py-2 text-sm font-medium disabled:opacity-50"
-                style={{ borderColor: '#D7D0C2', borderRadius: 8 }}
-                onClick={() => decide(newStatus)}
-                disabled={newStatus === status}
-              >
-                {statusLabel(newStatus)}
-              </button>
-            ))}
-          </div>
+          {/* Solo las transiciones legales desde el estado actual, igual que el panel
+              de la protectora. Esta pantalla ofrecía las seis siempre, así que las dos
+              pantallas de la misma protectora no decían lo mismo. */}
+          {isTerminal ? (
+            <p className="text-sm" style={{ color: '#7A8273' }}>
+              Este proceso está cerrado ({statusLabel(status)}) y ya no admite cambios de estado.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {nextAdoptionStatuses(status).map((newStatus) => (
+                <button
+                  key={newStatus}
+                  type="button"
+                  className="border px-3 py-2 text-sm font-medium disabled:opacity-50"
+                  style={{ borderColor: '#D7D0C2', borderRadius: 8 }}
+                  onClick={() => decide(newStatus)}
+                >
+                  {ADOPTION_ACTION_LABEL[newStatus]}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
