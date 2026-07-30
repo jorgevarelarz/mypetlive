@@ -191,6 +191,22 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
             sponsorPaymentRef: (session.payment_intent as string) || session.id,
           });
         }
+      } else if (session.metadata?.marketplaceOrderId) {
+        // Pedido del marketplace: hasta aquí no hay venta, solo una intención.
+        // `fulfillPaidOrder` es idempotente porque Stripe reintenta y descontar
+        // el stock dos veces dejaría sin producto a alguien que sí lo tenía.
+        const { fulfillPaidOrder } = await import('../controllers/marketplace.controller');
+        const paymentRef = (session.payment_intent as string) || session.id;
+        const fulfilled = await fulfillPaidOrder(session.metadata.marketplaceOrderId, paymentRef);
+        if (!fulfilled) {
+          // No es un error: es el reintento de un pedido ya cobrado, o uno que
+          // alguien canceló antes. Se registra para no confundirlo con un cobro
+          // perdido si algún día falta un pedido.
+          logger.info(
+            { sessionId: session.id, orderId: session.metadata.marketplaceOrderId },
+            'Webhook de marketplace sin efecto (pedido ya procesado o no pendiente)',
+          );
+        }
       } else if (session.metadata?.deposit === 'true') {
         const contractId = session.metadata?.contractId;
         if (contractId) {

@@ -189,6 +189,23 @@ function sanitizeProfile(input: any): Record<string, any> {
       .filter(Boolean)
       .slice(0, 60);
   }
+  // Portes del marketplace. La lista es blanca, así que sin este bloque los
+  // portes de una tienda se perderían en silencio al guardar el perfil.
+  if (input.marketplace && typeof input.marketplace === 'object') {
+    const m: Record<string, any> = {};
+    const shipping = Number(input.marketplace.shippingEur);
+    if (Number.isFinite(shipping) && shipping >= 0 && shipping <= 100) {
+      m.shippingEur = Math.round(shipping * 100) / 100;
+    }
+    const freeFrom = Number(input.marketplace.freeFromEur);
+    if (Number.isFinite(freeFrom) && freeFrom >= 0 && freeFrom <= 1000) {
+      m.freeFromEur = Math.round(freeFrom * 100) / 100;
+    } else if (input.marketplace.freeFromEur === null || input.marketplace.freeFromEur === '') {
+      // Sin umbral no hay envío gratis nunca, que es una decisión válida.
+      m.freeFromEur = undefined;
+    }
+    out.marketplace = m;
+  }
   if (input.autoDonate && typeof input.autoDonate === 'object') {
     const ad: Record<string, any> = { enabled: !!input.autoDonate.enabled };
     if (input.autoDonate.shelterId && /^[a-f\d]{24}$/i.test(String(input.autoDonate.shelterId))) {

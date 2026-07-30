@@ -50,6 +50,7 @@ import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
 import adoptionRoutes from './routes/adoption.routes';
 import shoppingRoutes from './routes/shopping.routes';
+import marketplaceRoutes from './routes/marketplace.routes';
 import welcomeRoutes from './routes/welcome.routes';
 import donationsRoutes from './routes/donations.routes';
 import pushRoutes from './routes/push.routes';
@@ -218,6 +219,15 @@ const posLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Checkout del marketplace: se puede pedir sin cuenta, así que lo único que hay
+// entre un bot y una tabla de pedidos llena de basura es este límite por IP.
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.get('/health', (_req, res) =>
   res.json({ ok: true, env: process.env.NODE_ENV, mongo: { state: mongoose.connection.readyState } }),
 );
@@ -259,6 +269,9 @@ app.use('/api/animals', animalRoutes);
 app.use('/api/adoptions', adoptionRoutes);
 // "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
 app.use('/api/shop', shoppingRoutes);
+// Marketplace: catálogo, checkout y pedidos. El limitador solo cubre el cobro.
+app.use('/api/marketplace/checkout', checkoutLimiter);
+app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/welcome', welcomeRoutes);
 app.use('/api', donationsRoutes);
 app.use('/api', authenticate, pushRoutes);
