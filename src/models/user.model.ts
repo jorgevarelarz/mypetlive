@@ -194,6 +194,18 @@ const profileSchema = new Schema(
     // Partner (tienda/vet): % de comisión de plataforma sobre sus ventas.
     // Si falta, aplica el default global (PLATFORM_SALE_COMMISSION_PCT).
     commissionPct: { type: Number, min: 0, max: 100 },
+    // Marketplace: portes que cobra esta tienda y umbral de envío gratis. Sin
+    // esto no se puede vender con envío, así que el panel lo pide al listar el
+    // primer producto.
+    marketplace: {
+      type: new Schema(
+        {
+          shippingEur: { type: Number, min: 0, max: 100 },
+          freeFromEur: { type: Number, min: 0, max: 1000 },
+        },
+        { _id: false },
+      ),
+    },
     // Veterinario: datos de la clínica/profesional.
     vet: {
       type: new Schema(
