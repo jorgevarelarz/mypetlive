@@ -6,6 +6,7 @@ import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
 import PublicHeader from '../../components/PublicHeader';
+import CountUp from '../../components/CountUp';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
@@ -206,19 +207,19 @@ export default function Landing() {
             </div>
             <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
               <div style={{ background: C.teal, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}>85</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}><CountUp to={85} /></div>
                 <div style={{ fontSize: 14, color: 'rgba(255,255,255,.85)', marginTop: 8 }}>protectoras activas</div>
               </div>
               <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}>1.247</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}><CountUp to={1247} /></div>
                 <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>adopciones completadas</div>
               </div>
               <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}>€38.200</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}><CountUp to={38200} prefix="€" /></div>
                 <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>donados a protectoras</div>
               </div>
               <div style={{ background: C.gold, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}>126k</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}><CountUp to={126} suffix="k" /></div>
                 <div style={{ fontSize: 14, color: 'rgba(255,255,255,.9)', marginTop: 8 }}>Patitas generadas</div>
               </div>
             </div>

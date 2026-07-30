@@ -560,6 +560,34 @@ del footer, que es un ancla nativa y también pasa por el componente.
 Deploy: `./scripts/deploy.sh web` (solo frontend, `main.9abfcd6b.js`). Copia previa del
 docroot en el VPS: `httpdocs.bak.hashscroll-1785434252.tgz`.
 
+## 5.19 Los números de impacto suben desde 0 (30 jul 2026)
+
+`frontend/src/components/CountUp.tsx`, usado en las cuatro tarjetas de `#impacto`.
+Arranca con `IntersectionObserver` (al 40% visible), no al montar: la sección está muy
+abajo y contar al cargar significaría que el usuario llega siempre a números quietos.
+Una sola vez — repetir cada vez que la sección vuelve a entrar marea. `easeOutExpo`,
+1,6s, y `prefers-reduced-motion` salta directo a la cifra final.
+
+Dos detalles del formato:
+
+- **`toLocaleString('es-ES')` NO vale.** El español de CLDR no agrupa los números de
+  cuatro dígitos (`minimumGroupingDigits: 2`), así que dejaba **`1247` donde el diseño
+  pone `1.247`** — mientras que `38.200`, de cinco dígitos, sí salía bien. Se agrupa a
+  mano con un regex. Ojo si aparecen más contadores en otras pantallas.
+- **`tabular-nums`**: sin eso el número baila de ancho a cada frame, porque los dígitos
+  de la tipografía de display no miden lo mismo.
+
+No interfiere con `HashScroll` (5.18): la animación cambia el ancho del número pero no
+la altura de la tarjeta, así que no mueve el layout. Verificado en producción, el ancla
+sigue aterrizando a 75,5px.
+
+**Las cuatro cifras siguen siendo inventadas** (`85`, `1.247`, `€38.200`, `126k`, escritas
+a mano en `Landing.tsx`). En producción `orders`, `products` y `shopclicks` están a 0. Animarlas
+las hace más visibles, no más ciertas: cuando haya datos reales conviene enchufarlas a
+`/api/admin/metrics` o bajarlas a lo que se pueda sostener.
+
+Deploy: `./scripts/deploy.sh web`, smoke verde. Copia previa: `httpdocs.bak.countup-1785435402.tgz`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
