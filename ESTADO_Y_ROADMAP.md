@@ -589,7 +589,14 @@ las hace más visibles, no más ciertas: cuando haya datos reales conviene enchu
 Deploy: `./scripts/deploy.sh web`, smoke verde. Copia previa: `httpdocs.bak.countup-1785435402.tgz`.
 
 ## 6. Operativa / notas de mantenimiento
-- **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
+- **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es / **demo.tienda@mypetlive.es** (Demo1234!).
+  La tienda (rol `store`, "Pet Market Centro") ya existía sembrada pero sin contraseña conocida y sin
+  `isVerified`; el 30 jul 2026 se le puso `Demo1234!` para poder probar el marketplace. **Los roles
+  profesionales no se pueden auto-registrar** (`professional_onboarding_required` en
+  `auth.controller.ts`): se activan a mano en Mongo. **Stripe en producción es `sk_test_`**, así que
+  se puede probar el checkout sin mover dinero real. Para cobrar en modo `partner` falta el
+  onboarding de Connect (`/partner` → "Conectar cuenta de cobro"); sin `stripeAccountId` el checkout
+  responde 409 `seller_payouts_not_ready`.
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
 - **GOTCHA Docker+firewall:** `plesk ext firewall --apply` borra las reglas de red de Docker → `systemctl restart docker` para recuperarlas.
 - **GOTCHA Plesk:** regenera los vhost.conf si se reconfigura el dominio → reaplicar las directivas custom (redirect 301, RewriteRule de bots sociales).
