@@ -1,6 +1,7 @@
 {
   "general": [
     { "label": "Compañeros", "path": "/animals" },
+    { "label": "Tienda", "path": "/tienda" },
     { "label": "Cupones", "path": "/coupons" },
     { "label": "Donar", "path": "/donate" }
   ],
@@ -9,6 +10,8 @@
     { "label": "Compañeros", "path": "/animals", "to": "/animals" },
     { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
     { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
+    { "label": "Tienda", "path": "/tienda", "to": "/tienda" },
+    { "label": "Mis pedidos", "path": "/mis-pedidos", "to": "/mis-pedidos" },
     { "label": "Citas vet", "path": "/citas", "to": "/citas" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
   ],
@@ -34,6 +37,8 @@
     { "label": "Adopciones", "path": "/admin/adoptions" },
     { "label": "Verificaciones", "path": "/admin/verifications" },
     { "label": "Cupones", "path": "/admin/coupons" },
+    { "label": "Productos", "path": "/admin/productos" },
+    { "label": "Pedidos", "path": "/admin/pedidos" },
     { "label": "Reportes", "path": "/admin/reports" },
     { "label": "Ajustes", "path": "/admin/settings" },
     { "label": "Perfil y cuenta", "path": "/profile" }
@@ -41,8 +46,11 @@
   "store": [
     { "label": "Inicio", "path": "/partner" },
     { "label": "Caja", "path": "/caja" },
+    { "label": "Mis productos", "path": "/partner/productos" },
+    { "label": "Pedidos por preparar", "path": "/partner/pedidos" },
     { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" }
+    { "label": "Patitas pendientes", "path": "/partner" },
+    { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },

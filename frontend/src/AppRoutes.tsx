@@ -44,6 +44,13 @@ import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
 import CashierPage from "./pages/partners/CashierPage";
 import WhereToBuyPage from "./pages/shop/WhereToBuyPage";
+import StorePage from "./pages/shop/StorePage";
+import ProductPage from "./pages/shop/ProductPage";
+import CartPage from "./pages/shop/CartPage";
+import OrderPage from "./pages/shop/OrderPage";
+import MyOrdersPage from "./pages/shop/MyOrdersPage";
+import StoreProductsPage from "./pages/partners/StoreProductsPage";
+import StoreOrdersPage from "./pages/partners/StoreOrdersPage";
 import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
@@ -78,6 +85,15 @@ export default function AppRoutes() {
               <Route path="/coupons" element={<CouponsList />} />
               <Route path="/donate" element={<ProtectedRoute><DonationsPage /></ProtectedRoute>} />
 
+              {/* Marketplace. Catálogo, carrito y pedido son públicos a propósito:
+                  se puede comprar sin cuenta, y el invitado vuelve de Stripe a
+                  /pedido/:id con el token que le da acceso. */}
+              <Route path="/tienda" element={<StorePage />} />
+              <Route path="/tienda/:id" element={<ProductPage />} />
+              <Route path="/carrito" element={<CartPage />} />
+              <Route path="/pedido/:id" element={<OrderPage />} />
+              <Route path="/mis-pedidos" element={<ProtectedRoute><MyOrdersPage /></ProtectedRoute>} />
+
               <Route path="/home" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><Home /></RoleGuard></ProtectedRoute>} />
               <Route path="/pet" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><PetPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/adoptions/mine" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><MyAdoptions /></RoleGuard></ProtectedRoute>} />
@@ -92,6 +108,8 @@ export default function AppRoutes() {
               <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
               <Route path="/comprar" element={<ProtectedRoute><WhereToBuyPage /></ProtectedRoute>} />
               <Route path="/caja" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><CashierPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/partner/productos" element={<ProtectedRoute><RoleGuard roles={["store"]}><StoreProductsPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/partner/pedidos" element={<ProtectedRoute><RoleGuard roles={["store"]}><StoreOrdersPage /></RoleGuard></ProtectedRoute>} />
               {/* Guía pública para proveedores de TPV (sin cuenta). */}
               <Route path="/developers/tpv" element={<TpvGuidePage />} />
 
@@ -104,6 +122,10 @@ export default function AppRoutes() {
               <Route path="/admin/coupons" element={<ProtectedRoute><RoleGuard roles={["admin"]}><CouponsAdminPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/verifications" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminVerificationsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/settlements" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettlementsPage /></RoleGuard></ProtectedRoute>} />
+              {/* Misma pantalla que la tienda: el trabajo es el mismo y para el
+                  admin añade el coste de proveedor de lo que vendemos nosotros. */}
+              <Route path="/admin/productos" element={<ProtectedRoute><RoleGuard roles={["admin"]}><StoreProductsPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/admin/pedidos" element={<ProtectedRoute><RoleGuard roles={["admin"]}><StoreOrdersPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/reports" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminReports /></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/settings" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettings /></RoleGuard></ProtectedRoute>} />
 

@@ -6,7 +6,18 @@
 export const DONATION_MIN_EUR = 1;
 export const DONATION_MAX_EUR = 2000;
 export const SALE_MAX_EUR = 3000;
+export const ORDER_MAX_EUR = 1500;
 
 export function formatEur(n: number): string {
   return n.toLocaleString('es-ES');
+}
+
+/**
+ * Precio con sus dos decimales y el símbolo: "23,50 €".
+ *
+ * Existe aparte de `formatEur` porque un precio con céntimos escrito "23,5 €"
+ * parece un error de la tienda, y en un carrito eso cuesta ventas.
+ */
+export function formatPriceEur(n: number): string {
+  return `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
