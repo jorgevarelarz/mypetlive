@@ -397,6 +397,83 @@ invisible: el alias manda, no existe allí y cae al `FallbackResource`. Los icon
 llevaban así desde que se subieron. Renombrado a `/pwa-icons/`. Verificado en vivo: sirve
 `image/webp`.
 
+## 5.17 Marketplace con envío (30 jul 2026)
+Segundo peldaño después de "dónde comprarlo" (5.15): catálogo propio, carrito, cobro y
+logística. **Conviven dos modos que no se mezclan nunca en un mismo pedido**, porque no son
+lo mismo ni fiscal ni legalmente (`utils/marketplace.ts`):
+
+- **`partner`** — lista una tienda con su precio. **Vende ella**: el cobro va a su cuenta por
+  destination charge y retenemos comisión (8% por defecto, o el `commissionPct` del partner).
+  Factura la tienda al cliente; nosotros le facturamos la comisión.
+- **`platform`** — lo listamos nosotros con sobrecoste sobre el precio de proveedor (15% por
+  defecto). Aquí **el vendedor somos nosotros**: factura con IVA, desistimiento a 14 días y
+  garantía. Solo el admin puede dar de alta en este modo.
+
+El `listedBy` viaja **congelado en cada pedido**, igual que el nombre y precio de cada línea y
+el % de comisión: cambiar el modo de un producto mañana no puede reescribir lo que pasó ayer.
+
+**Un pedido, un vendedor** (`mixed_sellers`, y la misma regla en el carrito del navegador). No
+es una limitación técnica: con envío, dos tiendas son dos paquetes, dos portes y dos
+responsables, y juntarlos solo sirve para que nadie sepa a quién reclamar.
+
+### Decisiones que no son obvias
+- **Comisión sobre el producto, nunca sobre el envío.** El porte es del transportista, no
+  margen de la tienda; cobrar comisión sobre él sería cobrar por su trabajo.
+- **Se puede comprar sin cuenta.** Obligar a registrarse para gastar dinero es la forma más
+  rápida de perder un pedido ya decidido. El invitado recibe un `guestToken` que es su única
+  credencial para ver el pedido después (`select: false`, y nunca se devuelve en la respuesta).
+- **Si la tienda no puede cobrar, no se cobra** (409 `seller_payouts_not_ready`, mismo criterio
+  que las donaciones): sin `stripeAccountId` con `charges_enabled` el pago entraría íntegro en
+  nuestra cuenta por una venta que no es nuestra, y quedaríamos debiéndole el importe sin
+  rastro de cuánto. Por eso `store` tiene ya entrada a **Perfil** en su menú: es donde conecta
+  Stripe.
+- **Los portes se ven en la ficha**, no solo al final: enterarse del envío en el último paso es
+  la primera causa de carrito abandonado.
+- **Sin Stripe configurado el pedido queda creado** y devuelve 503 con su `orderId`: es
+  preferible a fingir que no ha pasado nada cuando alguien ya ha rellenado su dirección. La
+  UI le lleva a su pedido en vez de perder los datos.
+- **Un producto vendido no se borra, se retira** (`active: false`): un hueco en la base
+  convierte un pedido antiguo en un misterio.
+- Referencia legible `MP-260729-4821`, porque un `_id` de Mongo no se puede dictar por
+  teléfono y un pedido con envío se acaba hablando por teléfono.
+
+### Gotchas que costaron un rato
+- **El JWT solo lleva `_id` y `role`**: fiarse de `req.user.email` daba `email_required` a un
+  comprador con sesión. El email y el nombre se leen de la cuenta (y no del body, que
+  permitiría poner el pedido de otro a nombre propio).
+- **`sanitizeProfile` es lista blanca**: sin añadir el bloque `marketplace`, los portes de la
+  tienda se perdían en silencio al guardar el perfil.
+- **Líneas repetidas**: comprobar el stock línea a línea dejaba pasar 2×8 unidades de un
+  producto con 10 en almacén… y con 8. Se agrupan por producto antes de mirar nada.
+- **`normalizeSpecies` devuelve `undefined`** con entrada vacía: metía huecos en el array de
+  especies y `{species: undefined}` en el filtro. El catálogo filtra por `speciesVariants`
+  (casa `cat`/`gato`, como el alta histórica) y respeta lo genérico (`species: []`).
+- **Stripe redirige antes de que llegue su propio webhook**: sin refresco automático el pedido
+  se queda en "pendiente de pago" a la vista de quien acaba de pagar. `/pedido/:id` repregunta
+  cada 3 s mientras siga pendiente.
+
+### Qué hay
+- Backend: `models/product.model.ts`, `models/order.model.ts`, `utils/marketplace.ts`,
+  `controllers/marketplace.controller.ts`, `routes/marketplace.routes.ts` (montado en
+  `/api/marketplace`, con `checkoutLimiter` de 30/15min por IP solo sobre el cobro, que es lo
+  único que puede pedir un anónimo). `fulfillPaidOrder` engancha en la rama
+  `marketplaceOrderId` de `checkout.session.completed` y es **idempotente**: Stripe reintenta,
+  y descontar el stock dos veces deja sin producto a alguien que sí lo tenía.
+- Frontend: `/tienda`, `/tienda/:id`, `/carrito`, `/pedido/:id`, `/mis-pedidos`;
+  `/partner/productos` y `/partner/pedidos` para la tienda; `/admin/productos` y
+  `/admin/pedidos` (misma pantalla, más el coste de proveedor). Carrito en `utils/cart.ts` +
+  `hooks/useCart.ts`, en localStorage porque un carrito de invitado necesitaría una sesión
+  anónima que no existe.
+- Env vars (todas con default, ninguna obligatoria): `MARKETPLACE_COMMISSION_PCT` (8),
+  `MARKETPLACE_MARKUP_PCT` (15), `MARKETPLACE_SHIPPING_EUR` (4,9),
+  `MARKETPLACE_FREE_SHIPPING_FROM_EUR` (49), `MARKETPLACE_ORDER_MAX_EUR` (1500).
+- Tests: `marketplace.test.ts` (30), `utils/__tests__/cart.test.ts` (10) y
+  `pages/shop/__tests__/CartPage.test.tsx` (5).
+
+**PENDIENTE DE DESPLIEGUE.** Y el aviso de 5.15 sigue en pie: `profile.itemCatalog` está vacío
+en producción, así que todavía no hay dato de si alguien pincha en "dónde comprarlo". Esto se
+ha construido antes de tener esa medida.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
