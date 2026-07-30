@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AuthModalProvider } from "./context/AuthModalContext";
 import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
+import HashScroll from "./components/HashScroll";
 import Landing from "./pages/home/Landing";
 import Sistema from "./pages/Sistema";
 import AnimalPassport from "./pages/passport/AnimalPassport";
@@ -72,6 +73,7 @@ export default function AppRoutes() {
     <AuthProvider>
       <AuthModalProvider>
         <BrowserRouter>
+          <HashScroll />
           <Routes>
             <Route path="/" element={<HomeGate />} />
             <Route path="/sistema" element={<Sistema />} />

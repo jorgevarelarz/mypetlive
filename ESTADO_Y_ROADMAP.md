@@ -532,6 +532,34 @@ Verificado en vivo, no solo el smoke del script:
 - **Producción sigue limpia**: `shopclicks`, `products` y `orders` a 0. Las pruebas fueron todas
   de lectura a propósito, para no ensuciar la métrica que este trabajo existe para poder medir.
 
+## 5.18 Los anclas del header no llevaban a ninguna parte (30 jul 2026)
+
+"Impacto" y "Cómo funciona" de `PublicHeader` cambiaban la URL a `/#impacto` y `/#como`
+y dejaban la página exactamente donde estaba. No es un bug de la landing: las secciones
+existen y tienen su `id`. Es que **React Router no hace scroll al ancla**, ni al navegar
+ni al cargar `https://mypetlive.es/#impacto` en frío (cuando el navegador intentaría
+saltar, el árbol de React todavía no está montado).
+
+Nuevo `frontend/src/components/HashScroll.tsx`, montado dentro de `<BrowserRouter>` en
+`AppRoutes.tsx`. Hace el scroll a mano, con dos detalles que no son opcionales:
+
+- **Offset de 76px**: la cabecera es `sticky`, y sin margen la sección aterriza debajo.
+- **Vigila 2,5s que la sección no se mueva.** Un único scroll dejaba `#impacto` 245px
+  descolocado *en producción pero no en local*: las estadísticas y las fotos llegan
+  después del primer render y empujan el layout. Se recoloca solo cuando la página está
+  quieta (si `scrollY` no cambió desde el tick anterior, el scroll suave ya terminó), y
+  se cancela al primer `wheel`/`touchstart`/`keydown` para no mover la página bajo los
+  pies del usuario.
+
+Verificado en vivo (Playwright contra `https://mypetlive.es`), los cuatro caminos dejan
+la sección a ~76px del borde: clic estando en la landing, clic en "Cómo funciona", carga
+directa de `/#impacto`, y volver a la landing desde `/animals`. También a 390px de ancho
+(el nav se oculta, pero la URL con ancla sigue entrando bien) y con el `<a href="#como">`
+del footer, que es un ancla nativa y también pasa por el componente.
+
+Deploy: `./scripts/deploy.sh web` (solo frontend, `main.9abfcd6b.js`). Copia previa del
+docroot en el VPS: `httpdocs.bak.hashscroll-1785434252.tgz`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
 - **Email:** Brevo requiere autorizar la IP de salida del VPS + dominio autenticado.
