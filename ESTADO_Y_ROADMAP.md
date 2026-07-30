@@ -508,11 +508,29 @@ de barrio que no vende online. Y una tienda que lo tiene en los dos sitios sale 
   dos secciones.
 - Tests: `supplyAlerts.test.ts` pasa de 9 a 17.
 
-**PENDIENTE DE DESPLIEGUE.** Con esto la medida ya puede existir, pero **sigue necesitando que
-haya algo que ofrecer**: mientras no demos de alta productos (nuestros o de la tienda que ya
-está registrada), "dónde comprarlo" seguirá saliendo vacío y el contador seguirá sin decir nada.
-La diferencia es que ahora depende de dar de alta un producto —cosa nuestra— y no de que una
-tienda mantenga una lista que no usa para nada.
+Con esto la medida ya puede existir, pero **sigue necesitando que haya algo que ofrecer**:
+mientras no demos de alta productos (nuestros o de la tienda que ya está registrada), "dónde
+comprarlo" seguirá saliendo vacío y el contador seguirá sin decir nada. La diferencia es que
+ahora depende de dar de alta un producto —cosa nuestra, desde `/admin/productos`— y no de que
+una tienda mantenga una lista que no usa para nada.
+
+### Deploy del 30 jul 2026
+`./scripts/deploy.sh all`, sin tocar el compose ni el `.env` del VPS (todas las
+`MARKETPLACE_*` tienen default, y declararlas sin valor era justo el bug de arriba).
+Rama `pulido/paneles-roles` pusheada a `mypetlive` (6 commits, `4a6700b..4d03716`).
+
+Verificado en vivo, no solo el smoke del script:
+
+- `src/` del VPS **idéntico a HEAD**, comprobado con `rsync -azn -ii --delete` filtrando por
+  `^(>|<|\*deleting|c)` — vacío. (`DEPLOYED_COMMIT` sigue mintiendo: no lo escribe nadie.)
+- Catálogo público 200 con `{items:[],total:0}`; ficha inexistente 404; `checkout` vacío 400
+  `empty_cart`; `/api/marketplace/orders` y el alta de productos 401 sin sesión.
+- `/api/shop/click/product/no-es-un-id` → 302 a `/comprar` (el caso de id inválido).
+- `where-to-buy` con JWT forjado: 200 con `options: []`, y 400 `product_required` sin producto.
+- `/tienda`, `/carrito` y `/mis-pedidos` sirven 200.
+- Sin errores en el log del contenedor tras el arranque.
+- **Producción sigue limpia**: `shopclicks`, `products` y `orders` a 0. Las pruebas fueron todas
+  de lectura a propósito, para no ensuciar la métrica que este trabajo existe para poder medir.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).
