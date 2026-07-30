@@ -8,7 +8,10 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IShopClick extends Document {
   userId?: Types.ObjectId;
-  partnerId: Types.ObjectId;
+  /** Ausente en un producto que vendemos nosotros: no hay tienda detrás. */
+  partnerId?: Types.ObjectId;
+  /** Presente cuando el clic va a un producto comprable del marketplace. */
+  productId?: Types.ObjectId;
   animalId?: Types.ObjectId;
   product: string;
   /** De dónde venía el clic: el aviso por correo, la ficha, el push. */
@@ -19,7 +22,11 @@ export interface IShopClick extends Document {
 const schema = new Schema<IShopClick>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
-    partnerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    // Dejó de ser obligatorio al entrar el marketplace: un producto nuestro no
+    // tiene partner. Lo que un clic siempre tiene es destino, y ese destino es
+    // `partnerId` o `productId` — nunca ninguno de los dos.
+    partnerId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    productId: { type: Schema.Types.ObjectId, ref: 'Product', index: true },
     animalId: { type: Schema.Types.ObjectId, ref: 'Animal' },
     product: { type: String, trim: true, maxlength: 120 },
     source: { type: String, trim: true, maxlength: 40, default: 'unknown', index: true },

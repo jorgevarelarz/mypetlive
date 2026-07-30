@@ -477,9 +477,42 @@ responsables, y juntarlos solo sirve para que nadie sepa a quién reclamar.
 - Tests: `marketplace.test.ts` (30), `utils/__tests__/cart.test.ts` (10) y
   `pages/shop/__tests__/CartPage.test.tsx` (5).
 
-**PENDIENTE DE DESPLIEGUE.** Y el aviso de 5.15 sigue en pie: `profile.itemCatalog` está vacío
-en producción, así que todavía no hay dato de si alguien pincha en "dónde comprarlo". Esto se
-ha construido antes de tener esa medida.
+### "Dónde comprarlo" pasa a mirar el catálogo real
+El termómetro de 5.15 nunca se metió en el agua. Comprobado en producción el 30 jul:
+**1 tienda, 1 vet, 0 con `itemCatalog` cargado y 0 `ShopClick`**. Con la única fuente vacía, el
+aviso siempre mostraba "todavía ninguna tienda tiene ese producto", así que el cero no
+significaba "no interesa" sino "nunca se mostró nada que pinchar".
+
+`findWhereToBuy` tiene ahora **dos fuentes** (`utils/shopping.ts`):
+
+- `marketplace` — productos de `products`, activos y con stock: se pueden **comprar ya**.
+- `catalog` — `profile.itemCatalog`, que solo dice "esto lo tengo". Ni stock ni compra.
+
+Lo comprable va primero **aunque sea más caro**. No es un favor a nuestro marketplace: el
+producto se acaba hoy, y una lista de tiendas que quizá lo tengan es peor respuesta que un
+botón que lo trae a casa. Las opciones de catálogo siguen debajo — es lo que cubre a la tienda
+de barrio que no vende online. Y una tienda que lo tiene en los dos sitios sale **una sola vez**.
+
+- **Bug de rol arreglado:** la consulta miraba `store` y `pro` (rol legado de RentalApp) pero
+  **no `vet`**, mientras el editor del perfil sí le ofrecía cargar el catálogo a la clínica. Una
+  clínica que lo rellenara no aparecía nunca. Ahora `store`, `vet` y `pro`.
+- **Clic de producto medido aparte:** `GET /api/shop/click/product/:productId` guarda
+  `ShopClick.productId` (y el `partnerId` del vendedor, que sirve para las dos preguntas) y
+  redirige a `/tienda/:id`. Vale más como señal que el clic a una lista: es intención de compra,
+  no curiosidad. `partnerId` dejó de ser obligatorio en `ShopClick` porque un producto nuestro
+  no tiene tienda detrás.
+- **El destino se construye en el servidor** a partir del id, nunca se acepta una URL por query:
+  este enlace viaja en correos, y un redirector que obedece al parámetro que le manden es un
+  redirect abierto con nuestro dominio delante.
+- El correo del aviso enlaza a la ficha y lo anuncia ("se envía a casa"); `/comprar` separa las
+  dos secciones.
+- Tests: `supplyAlerts.test.ts` pasa de 9 a 17.
+
+**PENDIENTE DE DESPLIEGUE.** Con esto la medida ya puede existir, pero **sigue necesitando que
+haya algo que ofrecer**: mientras no demos de alta productos (nuestros o de la tienda que ya
+está registrada), "dónde comprarlo" seguirá saliendo vacío y el contador seguirá sin decir nada.
+La diferencia es que ahora depende de dar de alta un producto —cosa nuestra— y no de que una
+tienda mantenga una lista que no usa para nada.
 
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es (Demo1234!).

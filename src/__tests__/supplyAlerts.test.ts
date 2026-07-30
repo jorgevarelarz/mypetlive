@@ -13,6 +13,7 @@ let mongo: MongoMemoryServer | undefined;
 let Animal: any;
 let User: any;
 let ShopClick: any;
+let Product: any;
 let sendSupplyAlerts: any;
 
 // El prefijo `mock` es lo que deja a jest referenciarla desde la factoría.
@@ -35,6 +36,7 @@ beforeAll(async () => {
   Animal = (await import('../models/animal.model')).Animal;
   User = (await import('../models/user.model')).User;
   ShopClick = (await import('../models/shopClick.model')).ShopClick;
+  Product = (await import('../models/product.model')).Product;
   sendSupplyAlerts = (await import('../jobs/supplyAlerts')).sendSupplyAlerts;
 });
 
@@ -197,5 +199,157 @@ describe('dónde comprarlo', () => {
   it('un partner desconocido no rompe la redirección ni cuenta como clic', async () => {
     await request(app).get('/api/shop/click/no-es-un-id').expect(302);
     expect(await ShopClick.countDocuments()).toBe(0);
+  });
+});
+
+// Lo que se puede comprar de verdad manda sobre lo que una tienda dice tener.
+//
+// Mientras "dónde comprarlo" solo mirase `profile.itemCatalog`, el contador de
+// clics no medía nada: en producción no había ni una tienda con catálogo cargado,
+// así que la lista salía vacía y el cero no significaba "no interesa" sino "nunca
+// se mostró nada".
+describe('dónde comprarlo con el catálogo del marketplace', () => {
+  const vetId = new mongoose.Types.ObjectId().toHexString();
+
+  it('lo comprable sale primero, y anuncia que se envía', async () => {
+    await Product.create({
+      listedBy: 'partner',
+      sellerId: storeId,
+      name: 'Acana Adult 6kg',
+      priceEur: 59.9, // más caro que el del catálogo: aun así va primero
+      stock: 4,
+    });
+
+    const res = await request(app)
+      .get('/api/shop/where-to-buy')
+      .query({ product: 'Acana Adult' })
+      .set(ownerH)
+      .expect(200);
+
+    expect(res.body.options[0]).toMatchObject({
+      source: 'marketplace',
+      partnerName: 'Tienda Central',
+      priceEur: 59.9,
+    });
+    expect(res.body.options[0].productId).toBeTruthy();
+  });
+
+  it('la misma tienda no sale dos veces por tenerlo en los dos sitios', async () => {
+    await Product.create({
+      listedBy: 'partner',
+      sellerId: storeId,
+      name: 'Acana Adult 6kg',
+      priceEur: 59.9,
+      stock: 4,
+    });
+
+    const res = await request(app)
+      .get('/api/shop/where-to-buy')
+      .query({ product: 'Acana Adult' })
+      .set(ownerH)
+      .expect(200);
+
+    expect(res.body.options).toHaveLength(1);
+  });
+
+  it('no ofrece lo agotado ni lo retirado', async () => {
+    await Product.create([
+      { listedBy: 'partner', sellerId: storeId, name: 'Acana Adult agotado', priceEur: 59.9, stock: 0 },
+      { listedBy: 'partner', sellerId: storeId, name: 'Acana Adult retirado', priceEur: 59.9, stock: 5, active: false },
+    ]);
+
+    const res = await request(app)
+      .get('/api/shop/where-to-buy')
+      .query({ product: 'Acana Adult' })
+      .set(ownerH)
+      .expect(200);
+
+    // Solo queda la opción de catálogo de la tienda.
+    expect(res.body.options.every((o: any) => o.source === 'catalog')).toBe(true);
+  });
+
+  it('lo que vendemos nosotros aparece sin tienda detrás', async () => {
+    await Product.create({
+      listedBy: 'platform',
+      name: 'Acana Adult 6kg',
+      priceEur: 57,
+      costEur: 45,
+      stock: 3,
+    });
+
+    const res = await request(app)
+      .get('/api/shop/where-to-buy')
+      .query({ product: 'Acana Adult' })
+      .set(ownerH)
+      .expect(200);
+
+    const nuestro = res.body.options.find((o: any) => o.source === 'marketplace');
+    expect(nuestro.partnerName).toBe('MyPetLive');
+    expect(nuestro.partnerId).toBeUndefined();
+  });
+
+  it('un veterinario con catálogo también aparece', async () => {
+    // Estaba fuera de la consulta mientras el perfil SÍ le ofrecía cargarlo.
+    await User.create({
+      _id: vetId,
+      name: 'Clínica Sur',
+      email: 'vet@alerts.test',
+      passwordHash: 'x',
+      role: 'vet',
+      profile: { address: { city: 'Oleiros' }, itemCatalog: [{ name: 'Acana Adult 6kg', priceEur: 56 }] },
+    });
+
+    const res = await request(app)
+      .get('/api/shop/where-to-buy')
+      .query({ product: 'Acana Adult' })
+      .set(ownerH)
+      .expect(200);
+
+    expect(res.body.options.map((o: any) => o.partnerName)).toContain('Clínica Sur');
+  });
+
+  it('el clic a un producto se registra aparte y lleva a su ficha', async () => {
+    const product: any = await Product.create({
+      listedBy: 'partner',
+      sellerId: storeId,
+      name: 'Acana Adult 6kg',
+      priceEur: 59.9,
+      stock: 4,
+    });
+
+    const res = await request(app)
+      .get(`/api/shop/click/product/${product._id}`)
+      .query({ product: 'Acana Adult', src: 'email' })
+      .expect(302);
+
+    expect(res.headers.location).toContain(`/tienda/${product._id}`);
+
+    const clicks = await ShopClick.find().lean();
+    expect(clicks).toHaveLength(1);
+    // Se guarda el producto y también la tienda: sirve para las dos preguntas.
+    expect(String(clicks[0].productId)).toBe(String(product._id));
+    expect(String(clicks[0].partnerId)).toBe(storeId);
+    expect(clicks[0].source).toBe('email');
+  });
+
+  it('un producto desconocido cae a la lista sin romper ni contar', async () => {
+    const res = await request(app).get('/api/shop/click/product/no-es-un-id').expect(302);
+    expect(res.headers.location).toContain('/comprar');
+    expect(await ShopClick.countDocuments()).toBe(0);
+  });
+
+  it('el correo enlaza a la ficha del producto comprable', async () => {
+    const product: any = await Product.create({
+      listedBy: 'partner',
+      sellerId: storeId,
+      name: 'Acana Adult 6kg',
+      priceEur: 59.9,
+      stock: 4,
+    });
+    await petWithFood(200);
+    await sendSupplyAlerts();
+
+    expect(sent[0].body).toContain(`/api/shop/click/product/${product._id}`);
+    expect(sent[0].body).toContain('se envía a casa');
   });
 });

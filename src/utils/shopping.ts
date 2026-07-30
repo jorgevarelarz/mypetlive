@@ -1,21 +1,34 @@
 import { User } from '../models/user.model';
 import { Coupon } from '../models/coupon.model';
+import { Product } from '../models/product.model';
 import { normalizeItemText } from './purchases';
 
-// "Dónde comprarlo": qué partners tienen en su catálogo el producto que se le
-// está acabando a una mascota, y a qué precio.
+// "Dónde comprarlo": dónde conseguir el producto que se le está acabando a una
+// mascota, y a qué precio.
 //
-// No hay catálogo global que mantener: se usa el que las tiendas **ya** cargan
-// para su TPV (`profile.itemCatalog`). Si una tienda no lo mantiene, no aparece,
-// que es el incentivo correcto.
+// Hay **dos fuentes**, y la diferencia entre ellas es la que le importa a quien
+// se ha quedado sin pienso:
 //
-// Esto es el primer peldaño del marketplace: antes de montar carrito, pagos y
-// logística, mide si alguien pincha. El casado es el mismo que el de las ofertas
-// por items (minúsculas, sin acentos, por subcadena) para que "pienso" case con
-// "Pienso cachorro 3 kg".
+//   - `marketplace` — productos del catálogo real (`products`). Tienen stock y
+//     se pueden **comprar ahora mismo**, con envío.
+//   - `catalog` — la lista que las tiendas cargan para su TPV
+//     (`profile.itemCatalog`). Solo dice "esto lo tengo": ni stock ni compra.
+//
+// Lo comprable va primero a propósito. No es un favor a nuestro marketplace: el
+// producto se está acabando HOY, y una lista de tiendas que quizá lo tengan es
+// peor respuesta que un botón que lo trae a casa. Las opciones de catálogo
+// siguen apareciendo debajo, que es lo que cubre a la tienda de barrio.
+//
+// El casado es el mismo que el de las ofertas por items (minúsculas, sin
+// acentos, por subcadena) para que "pienso" case con "Pienso cachorro 3 kg".
 
 export type ShopOption = {
-  partnerId: string;
+  /** Comprable aquí mismo, o solo informativo. */
+  source: 'marketplace' | 'catalog';
+  /** Solo en `marketplace`: el producto que se puede comprar. */
+  productId?: string;
+  /** Ausente cuando el producto lo vendemos nosotros (no hay tienda detrás). */
+  partnerId?: string;
   partnerName: string;
   city?: string;
   item: string;
@@ -35,18 +48,48 @@ function matchesProduct(itemName: string, product: string): boolean {
   return brand.length >= 4 && item.includes(brand);
 }
 
-/**
- * Partners que venden `product`, ordenados por precio (los que no lo publican,
- * al final: un precio conocido vale más que uno por preguntar).
- */
-export async function findWhereToBuy(product: string, limit = 5): Promise<ShopOption[]> {
-  const wanted = normalizeItemText(product);
-  if (!wanted) return [];
+/** Productos del marketplace que casan y se pueden comprar ya (activos y con stock). */
+async function marketplaceOptions(product: string): Promise<ShopOption[]> {
+  const products = await Product.find({ active: true, stock: { $gt: 0 } })
+    .select('name priceEur sellerId listedBy')
+    .limit(200)
+    .lean();
 
+  const matching = (products as any[]).filter(p => matchesProduct(p.name || '', product));
+  if (!matching.length) return [];
+
+  const sellerIds = matching.map(p => p.sellerId).filter(Boolean);
+  const sellers = sellerIds.length
+    ? await User.find({ _id: { $in: sellerIds } }).select('name profile.address.city').lean()
+    : [];
+  const byId = new Map((sellers as any[]).map(s => [String(s._id), s]));
+
+  return matching.map(p => {
+    const seller = p.sellerId ? byId.get(String(p.sellerId)) : undefined;
+    return {
+      source: 'marketplace' as const,
+      productId: String(p._id),
+      // Lo que listamos nosotros no tiene tienda detrás: el vendedor somos
+      // nosotros, y decir otra cosa sería mentir sobre quién factura.
+      ...(seller ? { partnerId: String(p.sellerId), city: seller.profile?.address?.city } : {}),
+      partnerName: seller ? seller.name : 'MyPetLive',
+      item: p.name,
+      priceEur: typeof p.priceEur === 'number' ? p.priceEur : undefined,
+    };
+  });
+}
+
+/** Partners que dicen tener `product` en el catálogo de su TPV. Informativo. */
+async function catalogOptions(product: string): Promise<ShopOption[]> {
   // El filtro fino se hace en memoria porque el casado es laxo; el grueso
   // —tener catálogo— lo hace Mongo para no traerse todos los usuarios.
+  //
+  // `vet` estaba fuera de esta lista mientras el editor del perfil SÍ le ofrecía
+  // cargar el catálogo: una clínica que lo rellenara no aparecía nunca aquí.
+  // `pro` es un rol legado de RentalApp; se mantiene para no quitar de golpe algo
+  // que pudiera estar en uso, pero no se le da de alta a nadie nuevo.
   const partners = await User.find({
-    role: { $in: ['store', 'pro'] },
+    role: { $in: ['store', 'vet', 'pro'] },
     'profile.itemCatalog.0': { $exists: true },
   })
     .select('name profile.itemCatalog profile.address.city')
@@ -58,6 +101,7 @@ export async function findWhereToBuy(product: string, limit = 5): Promise<ShopOp
     const item = (partner.profile?.itemCatalog || []).find((entry: any) => matchesProduct(entry?.name || '', product));
     if (!item) continue;
     options.push({
+      source: 'catalog',
       partnerId: String(partner._id),
       partnerName: partner.name,
       city: partner.profile?.address?.city,
@@ -65,24 +109,48 @@ export async function findWhereToBuy(product: string, limit = 5): Promise<ShopOp
       priceEur: typeof item.priceEur === 'number' ? item.priceEur : undefined,
     });
   }
+  return options;
+}
 
-  options.sort((a, b) => {
+/**
+ * Dónde conseguir `product`: primero lo que se puede comprar ya, después lo que
+ * una tienda dice tener. Dentro de cada grupo, por precio, y los que no publican
+ * precio al final (un precio conocido vale más que uno por preguntar).
+ */
+export async function findWhereToBuy(product: string, limit = 5): Promise<ShopOption[]> {
+  const wanted = normalizeItemText(product);
+  if (!wanted) return [];
+
+  const [buyable, listed] = await Promise.all([marketplaceOptions(product), catalogOptions(product)]);
+
+  // Una tienda que tiene el producto a la venta de verdad no necesita salir
+  // además como "dice tenerlo": sería la misma tienda dos veces.
+  const sellingAlready = new Set(buyable.map(option => option.partnerId).filter(Boolean));
+
+  const byPrice = (a: ShopOption, b: ShopOption) => {
     if (a.priceEur === undefined) return 1;
     if (b.priceEur === undefined) return -1;
     return a.priceEur - b.priceEur;
-  });
+  };
+
+  const options = [
+    ...buyable.sort(byPrice),
+    ...listed.filter(option => !sellingAlready.has(option.partnerId)).sort(byPrice),
+  ];
 
   const top = options.slice(0, limit);
   if (!top.length) return top;
 
   // Un cupón del mismo partner que case con el producto hace la diferencia entre
-  // "aquí lo tienen" y "aquí te sale más barato".
-  const coupons = await Coupon.find({
-    partnerId: { $in: top.map(o => o.partnerId) },
-    active: true,
-  })
-    .select('partnerId title discount targetItems')
-    .lean();
+  // "aquí lo tienen" y "aquí te sale más barato". Los productos nuestros no
+  // llevan partnerId, así que hay que sacarlos de la consulta: un `undefined`
+  // dentro de un `$in` no filtra lo que uno cree.
+  const partnerIds = top.map(o => o.partnerId).filter(Boolean);
+  const coupons = partnerIds.length
+    ? await Coupon.find({ partnerId: { $in: partnerIds }, active: true })
+        .select('partnerId title discount targetItems')
+        .lean()
+    : [];
 
   for (const option of top) {
     const coupon = (coupons as any[]).find(

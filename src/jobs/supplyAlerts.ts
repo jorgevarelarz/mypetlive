@@ -5,7 +5,7 @@ import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
 import { sendPushToUser } from '../utils/push';
 import { supplyForecast, formatBase, type SupplyUnit } from '../utils/supplies';
-import { findWhereToBuy } from '../utils/shopping';
+import { findWhereToBuy, type ShopOption } from '../utils/shopping';
 import logger from '../utils/logger';
 
 // Aviso de "se acaba el pienso".
@@ -65,30 +65,38 @@ function recipientIdOf(animal: any): string | undefined {
 }
 
 /**
- * Bloque "dónde comprarlo" con los partners que tienen ese producto en su
- * catálogo. Los enlaces pasan por `/api/shop/click/:partnerId` para poder medir
- * si esto le sirve a alguien antes de construir un marketplace encima.
+ * Bloque "dónde comprarlo". Los enlaces pasan por el redirector medido para
+ * saber si esto le sirve a alguien: es el dato que justifica el marketplace.
+ *
+ * Un producto comprable lleva a su ficha (`/click/product/:id`) y se anuncia como
+ * tal; el resto sigue llevando a la lista de tiendas. La diferencia importa: el
+ * correo llega justo cuando se está acabando el pienso, y un enlace que lo trae
+ * a casa no es lo mismo que uno que enumera sitios donde quizá lo haya.
  */
 async function whereToBuyBlock(product: string, animalId: string): Promise<{ text: string; html: string }> {
   const options = await findWhereToBuy(product, 3);
   if (!options.length) return { text: '', html: '' };
 
-  const link = (partnerId: string) =>
-    `${FRONTEND_URL()}/api/shop/click/${partnerId}?product=${encodeURIComponent(product)}&src=email&animal=${animalId}`;
+  const query = `product=${encodeURIComponent(product)}&src=email&animal=${animalId}`;
+  const link = (option: ShopOption) =>
+    option.source === 'marketplace'
+      ? `${FRONTEND_URL()}/api/shop/click/product/${option.productId}?${query}`
+      : `${FRONTEND_URL()}/api/shop/click/${option.partnerId}?${query}`;
 
   const lines = options.map(option => {
     const price = option.priceEur !== undefined ? ` — ${option.priceEur.toFixed(2)} €` : '';
     const city = option.city ? ` (${option.city})` : '';
     const coupon = option.coupon ? ` · cupón: ${option.coupon.discount}` : '';
-    return { option, label: `${option.partnerName}${city}${price}${coupon}` };
+    const buyable = option.source === 'marketplace' ? ' · se envía a casa' : '';
+    return { option, label: `${option.partnerName}${city}${price}${coupon}${buyable}` };
   });
 
   return {
-    text: `\n\nDónde comprarlo:\n${lines.map(l => `- ${l.label}: ${link(l.option.partnerId)}`).join('\n')}`,
+    text: `\n\nDónde comprarlo:\n${lines.map(l => `- ${l.label}: ${link(l.option)}`).join('\n')}`,
     html:
       `<p style="margin:16px 0 8px"><strong>Dónde comprarlo</strong></p><ul style="margin:0;padding-left:18px">` +
       lines
-        .map(l => `<li style="margin-bottom:6px"><a href="${link(l.option.partnerId)}">${l.label}</a></li>`)
+        .map(l => `<li style="margin-bottom:6px"><a href="${link(l.option)}">${l.label}</a></li>`)
         .join('') +
       `</ul>`,
   };
