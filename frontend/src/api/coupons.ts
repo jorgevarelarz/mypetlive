@@ -35,6 +35,33 @@ export async function sponsorCoupon(couponId: string) {
   return data as SponsorResult;
 }
 
+// Lo que el partner puede decidir de un cupón suyo. Ni partnerId ni sponsored:
+// el primero sale del token en el servidor y el segundo se paga aparte.
+export type PartnerCouponInput = {
+  title: string;
+  description?: string;
+  discount: string;
+  bonusPatitas?: number;
+  targetAnimalCode?: string | null;
+  expiresAt?: string | null;
+  active?: boolean;
+};
+
+export async function listMyCoupons() {
+  const { data } = await client.get('/api/coupons/mine');
+  return data as { items: Coupon[] };
+}
+
+export async function createMyCoupon(payload: PartnerCouponInput) {
+  const { data } = await client.post('/api/coupons/mine', payload);
+  return data as Coupon;
+}
+
+export async function updateMyCoupon(couponId: string, payload: Partial<PartnerCouponInput>) {
+  const { data } = await client.patch(`/api/coupons/mine/${couponId}`, payload);
+  return data as Coupon;
+}
+
 export async function listCoupons() {
   const { data } = await client.get('/api/coupons');
   return data as { items: Coupon[] };

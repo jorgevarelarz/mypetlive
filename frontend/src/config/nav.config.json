@@ -48,16 +48,16 @@
     { "label": "Caja", "path": "/caja" },
     { "label": "Mis productos", "path": "/partner/productos" },
     { "label": "Pedidos por preparar", "path": "/partner/pedidos" },
-    { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" },
+    { "label": "Mis cupones", "path": "/partner/cupones" },
+    { "label": "Patitas pendientes", "path": "/partner/patitas" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
     { "label": "Caja", "path": "/caja" },
     { "label": "Agenda de citas", "path": "/citas" },
-    { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" },
+    { "label": "Mis cupones", "path": "/partner/cupones" },
+    { "label": "Patitas pendientes", "path": "/partner/patitas" },
     { "label": "Perfil y cuenta", "path": "/profile" }
   ]
 }

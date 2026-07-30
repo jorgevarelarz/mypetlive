@@ -21,7 +21,9 @@ export default function HashScroll() {
   const { hash, key } = useLocation();
 
   useEffect(() => {
-    const id = decodeURIComponent(hash.replace('#', ''));
+    // `hash` viene siempre del router de verdad, pero no de un useLocation
+    // mockeado en tests: sin el fallback, montar la app los rompía.
+    const id = decodeURIComponent((hash || '').replace('#', ''));
     if (!id) return;
 
     let cancelled = false;

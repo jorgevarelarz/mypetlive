@@ -43,6 +43,8 @@ import DonationsPage from "./pages/Donations";
 import Home from "./pages/home/Home";
 import CouponsList from "./pages/coupons/CouponsList";
 import PatitasPending from "./pages/partners/PatitasPending";
+import PartnerHome from "./pages/partners/PartnerHome";
+import PartnerCouponsPage from "./pages/partners/PartnerCouponsPage";
 import CashierPage from "./pages/partners/CashierPage";
 import WhereToBuyPage from "./pages/shop/WhereToBuyPage";
 import StorePage from "./pages/shop/StorePage";
@@ -107,7 +109,9 @@ export default function AppRoutes() {
               <Route path="/landlord/questionnaire" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><QuestionnairePage /></RoleGuard></ProtectedRoute>} />
               <Route path="/landlord/verificacion" element={<ProtectedRoute><RoleGuard roles={["landlord"]}><ShelterVerificationPage /></RoleGuard></ProtectedRoute>} />
 
-              <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+              <Route path="/partner" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PartnerHome /></RoleGuard></ProtectedRoute>} />
+              <Route path="/partner/patitas" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PatitasPending /></RoleGuard></ProtectedRoute>} />
+              <Route path="/partner/cupones" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><PartnerCouponsPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/comprar" element={<ProtectedRoute><WhereToBuyPage /></ProtectedRoute>} />
               <Route path="/caja" element={<ProtectedRoute><RoleGuard roles={["store", "vet"]}><CashierPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/partner/productos" element={<ProtectedRoute><RoleGuard roles={["store"]}><StoreProductsPage /></RoleGuard></ProtectedRoute>} />

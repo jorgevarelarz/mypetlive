@@ -659,7 +659,12 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
   );
 }
 
-export default function PatitasPartnerPanel() {
+/**
+ * Cobrar canjes de Patitas de las protectoras. Vive en su propia página
+ * (`/partner/patitas`) porque es una tarea con su propio flujo —escanear,
+ * confirmar, cobrar—, no una tarjeta más del resumen.
+ */
+export function RedeemFromShelter() {
   const { user } = useAuth();
   const meId = String(user?._id || '');
   const qc = useQueryClient();
@@ -712,16 +717,6 @@ export default function PatitasPartnerPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <PartnerMetrics />
-
-      <PartnerStatements />
-
-      <PartnerPayout />
-
-      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} catalog={user?.profile?.itemCatalog || []} />
-
-      <PosIntegration />
-
       <div style={card}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 4px' }}>Cobrar con Patitas</h3>
         <p style={{ color: MPL.muted, fontSize: 13.5, margin: '0 0 14px' }}>Escanea el QR de la protectora o introduce su código de canje.</p>
@@ -819,6 +814,32 @@ export default function PatitasPartnerPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inicio del panel del partner: el resumen de su cuenta.
+ *
+ * El canje de Patitas de protectoras salió de aquí a `/partner/patitas`: el menú
+ * tenía "Inicio" y "Patitas pendientes" apuntando los dos a esta misma pantalla.
+ */
+export default function PatitasPartnerPanel() {
+  const { user } = useAuth();
+  const meId = String(user?._id || '');
+  const qc = useQueryClient();
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <PartnerMetrics />
+
+      <PartnerStatements />
+
+      <PartnerPayout />
+
+      <GeneratePatitas meId={meId} onDone={() => qc.invalidateQueries({ queryKey: ['patitas-me'] })} catalog={user?.profile?.itemCatalog || []} />
+
+      <PosIntegration />
     </div>
   );
 }

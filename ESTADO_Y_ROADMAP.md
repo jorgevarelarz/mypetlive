@@ -588,6 +588,54 @@ las hace más visibles, no más ciertas: cuando haya datos reales conviene enchu
 
 Deploy: `./scripts/deploy.sh web`, smoke verde. Copia previa: `httpdocs.bak.countup-1785435402.tgz`.
 
+## 5.20 El menú del partner mentía en dos entradas (30 jul 2026)
+
+Dos entradas del nav de `store`/`vet` (`config/nav.config.json`) no llevaban donde decían:
+
+- **"Validar cupones" → `/coupons`**, que es el catálogo público del adoptante. Los cupones
+  se validan en **Caja** (`applyCouponToCustomer`, `PatitasPartnerPanel.tsx`), no ahí.
+- **"Patitas pendientes" → `/partner`**, exactamente la misma pantalla que "Inicio".
+
+En vez de solo renombrarlas, las dos entradas pasan a tener contenido propio:
+
+### Cupones del partner (autoservicio)
+Crear cupones era **solo de admin**, así que una tienda dependía de que se los dieran de alta
+a mano. Nuevos endpoints en `coupon.routes.ts`, montados ANTES de `/coupons/:id` (si no, `:id`
+se come "mine"): `GET/POST /coupons/mine` y `PATCH /coupons/mine/:id`, rol `store`/`vet`.
+Página nueva `/partner/cupones` (`PartnerCouponsPage`).
+
+**Lo que no es negociable en el servidor:**
+- `partnerId` y `partnerType` salen del token, **nunca del body**. Sin eso una tienda podría
+  publicar cupones a nombre de la clínica de al lado. Hay test, y se comprobó en producción:
+  mandar un `partnerId` ajeno se ignora y el cupón sale a nombre de quien llama.
+- **`COUPON_BONUS_MAX_PATITAS` (200 por defecto, `utils/limits.ts`).** `bonusPatitas` no es
+  decorativo: `useCoupon()` llama a `earnForUser()` con ese número, o sea **acuña moneda de
+  impacto**. Mientras crear cupones fue de admin daba igual; en autoservicio, sin tope, es
+  una impresora. El admin sigue sin tope.
+- No se edita un cupón ya canjeado (409), y tocar el de otro partner da **404, no 403**:
+  quién tiene qué cupón no es asunto de nadie más.
+
+**Limitación heredada que ahora se ve:** un cupón es de **un solo uso global** (`usedAt` está en
+el documento del cupón, no por usuario). El primer cliente que lo canjea lo consume para todos.
+La página lo avisa en un banner. Si se quiere una oferta permanente, hay que rediseñar el modelo.
+
+### Inicio y Patitas pendientes, separados
+`PatitasPartnerPanel` se partió en dos: `RedeemFromShelter` (cobrar canjes de protectoras) vive
+ahora en `/partner/patitas`, y el default export queda como resumen de Inicio (métricas,
+extracto, cobros, TPV). Páginas `PartnerHome` y `PatitasPending`.
+
+### Verificado
+10 tests nuevos (`coupons.partner.test.ts`) + las suites de cupones y métricas en verde, y los
+44 tests del frontend. En producción: menú correcto, las tres rutas con su `h1` propio, cupón
+creado desde la UI, tope y suplantación rechazados. **Los cupones de prueba se borraron**:
+`coupons` vuelve a tener los 4 sembrados, y `orders`/`products` siguen a 0.
+
+**Bug propio arreglado de paso:** `HashScroll` (5.18) asumía que `hash` siempre existe y rompía
+`App.test.tsx`, que mockea `useLocation` sin él. No lo detecté entonces porque compilé y
+desplegué sin correr la suite del frontend.
+
+Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es / **demo.tienda@mypetlive.es** (Demo1234!).
   La tienda (rol `store`, "Pet Market Centro") ya existía sembrada pero sin contraseña conocida y sin

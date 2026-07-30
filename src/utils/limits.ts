@@ -24,6 +24,13 @@ export const DONATION_MAX_EUR = envNumber('DONATION_MAX_EUR', 2000);
 // Ticket de una tienda o clínica veterinaria.
 export const SALE_MAX_EUR = envNumber('SALE_MAX_EUR', 3000);
 
+// Patitas de regalo que un partner puede poner en un cupón que crea él mismo.
+// `bonusPatitas` no es decorativo: al canjear el cupón, useCoupon() llama a
+// earnForUser() con ese número, así que ACUÑA moneda de impacto. Mientras crear
+// cupones fue solo de admin daba igual; en autoservicio, sin tope, sería una
+// impresora de billetes en manos del partner. El admin sigue sin tope.
+export const COUPON_BONUS_MAX_PATITAS = envNumber('COUPON_BONUS_MAX_PATITAS', 200);
+
 export function eurAmountError(
   amountEur: number,
   { min, max }: { min: number; max: number },
