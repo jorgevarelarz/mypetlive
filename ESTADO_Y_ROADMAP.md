@@ -467,6 +467,13 @@ responsables, y juntarlos solo sirve para que nadie sepa a quién reclamar.
 - Env vars (todas con default, ninguna obligatoria): `MARKETPLACE_COMMISSION_PCT` (8),
   `MARKETPLACE_MARKUP_PCT` (15), `MARKETPLACE_SHIPPING_EUR` (4,9),
   `MARKETPLACE_FREE_SHIPPING_FROM_EUR` (49), `MARKETPLACE_ORDER_MAX_EUR` (1500).
+  **NO hace falta tocar el compose del VPS**, y conviene no hacerlo: el compose declara las
+  env vars como `"${VAR}"`, así que una que no esté en el `.env` llega **vacía**, no ausente.
+  Aquí el 0 es un valor legítimo (portes gratis, comisión 0% en promoción), así que el truco de
+  `utils/limits.ts` (exigir `> 0`) no sirve; `envNumber` corta explícitamente en cadena vacía.
+  Sin eso, declararlas en el compose sin ponerlas en el `.env` habría dejado la comisión y los
+  portes a cero y el tope por pedido en 0 €, que **rechaza cualquier compra** — y sin un solo
+  error en el log. Cubierto por `__tests__/utils/marketplaceEnv.test.ts` (6).
 - Tests: `marketplace.test.ts` (30), `utils/__tests__/cart.test.ts` (10) y
   `pages/shop/__tests__/CartPage.test.tsx` (5).
 

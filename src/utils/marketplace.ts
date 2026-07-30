@@ -19,8 +19,16 @@
 export type ListedBy = 'partner' | 'platform';
 
 function envNumber(name: string, fallback: number): number {
-  const raw = Number(process.env[name]);
-  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+  const raw = process.env[name];
+  // Una variable **declarada pero vacía** llega como '' y `Number('')` es 0, que
+  // aquí es un valor legítimo (portes gratis, comisión 0% en una promoción), así
+  // que no basta con exigir > 0 como en `utils/limits.ts`. El caso no es
+  // hipotético: el compose del VPS declara las env vars como "${VAR}", y si el
+  // .env no la trae, llega vacía. Sin este corte, la comisión y los portes se
+  // irían a cero en silencio y el tope por pedido a 0 € bloquearía toda compra.
+  if (raw === undefined || String(raw).trim() === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 /** Comisión por pedido sobre productos de tienda. */
