@@ -4,6 +4,7 @@ import { Animal } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
 import { Donation } from '../models/donation.model';
 import { PatitaTxn } from '../models/patitaTxn.model';
+import { canReceiveDonations } from '../utils/shelterVerification';
 import asyncHandler from '../utils/asyncHandler';
 
 const router = Router();
@@ -19,8 +20,8 @@ const router = Router();
 router.get(
   '/stats/public',
   asyncHandler(async (_req: Request, res: Response) => {
-    const [protectoras, animales, adopciones, donacionRows, patitaRows] = await Promise.all([
-      User.countDocuments({ role: { $in: ['landlord', 'protectora'] } }),
+    const [shelterIds, animales, adopciones, donacionRows, patitaRows] = await Promise.all([
+      User.find({ role: { $in: ['landlord', 'protectora'] } }).select('_id').lean(),
       Animal.countDocuments({ isPersonalPet: { $ne: true }, status: 'publicado' }),
       Adoption.countDocuments({ status: 'aprobada' }),
       Donation.aggregate([
@@ -32,6 +33,12 @@ router.get(
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
     ]);
+
+    // Mismo criterio que el directorio público (`listProtectoras`): si un
+    // visitante no puede encontrarla, no cuenta. Contar todas las cuentas con
+    // rol de protectora decía 4 mientras el directorio solo enseñaba 1.
+    const verificadas = await Promise.all(shelterIds.map(s => canReceiveDonations(String(s._id))));
+    const protectoras = verificadas.filter(Boolean).length;
 
     res.set('Cache-Control', 'public, max-age=300');
     res.json({
