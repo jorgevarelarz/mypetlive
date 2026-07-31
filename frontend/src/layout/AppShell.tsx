@@ -390,12 +390,37 @@ function SideNav() {
   );
 }
 
+function LegalLinks() {
+  return (
+    <footer
+      style={{
+        borderTop: '1px solid rgba(63,74,60,.12)',
+        marginTop: 32,
+        padding: '20px 16px 28px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 16,
+        justifyContent: 'center',
+        fontSize: 13,
+        color: '#6B7566',
+      }}
+    >
+      <Link to="/legal/legal-notice">Aviso legal</Link>
+      <Link to="/legal/privacy">Privacidad</Link>
+      <Link to="/legal/terms">Términos</Link>
+      <Link to="/legal/cookies">Cookies</Link>
+    </footer>
+  );
+}
+
 export default function AppShell() {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const isPublicCatalog = pathname === '/animals';
   const hasAnimalDetailCta = /^\/animals\/[^/]+$/.test(pathname);
   const isFavoritesPage = pathname === '/me/favorites' || pathname === '/me/alerts';
+  // Los textos legales tienen que ser alcanzables desde cualquier página
+  // pública, no solo desde la portada.
   const isPublicAnimalPage = isPublicCatalog || hasAnimalDetailCta || isFavoritesPage;
   const showMobileBottomNav = user?.role === 'tenant' && !isPublicAnimalPage;
 
@@ -403,7 +428,10 @@ export default function AppShell() {
     <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
       {!isPublicAnimalPage && <Header />}
       {isPublicAnimalPage ? (
-        <Outlet />
+        <>
+          <Outlet />
+          <LegalLinks />
+        </>
       ) : (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />

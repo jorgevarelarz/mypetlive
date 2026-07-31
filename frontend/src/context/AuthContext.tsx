@@ -21,6 +21,7 @@ type AuthCtx = {
   hasRole: (...roles: User["role"][]) => boolean;
   legalStatus: LegalStatus | null;
   legalStatusLoading: boolean;
+  legalStatusError: boolean;
   refreshLegalStatus: () => Promise<void>;
   acceptLegal: (slug: "terms" | "privacy", version: string) => Promise<void>;
 };
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(getStoredUser());
   const [legalStatus, setLegalStatus] = useState<LegalStatus | null>(null);
   const [legalStatusLoading, setLegalStatusLoading] = useState(false);
+  const [legalStatusError, setLegalStatusError] = useState(false);
 
   const refreshLegalStatus = useCallback(async () => {
     if (!user?.token) {
@@ -41,8 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLegalStatusLoading(true);
       const status = await getLegalStatus();
       setLegalStatus(status);
+      setLegalStatusError(false);
     } catch (error) {
+      // Falla EN CERRADO: si no sabemos si aceptó, no se le deja pasar. Antes
+      // el error se tragaba aquí, legalStatus quedaba null y la comprobación
+      // de ProtectedRoute lo interpretaba como "no hay nada pendiente".
       console.error("Error fetching legal status", error);
+      setLegalStatus(null);
+      setLegalStatusError(true);
     } finally {
       setLegalStatusLoading(false);
     }
@@ -105,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasRole,
         legalStatus,
         legalStatusLoading,
+        legalStatusError,
         refreshLegalStatus,
         acceptLegal,
       }}

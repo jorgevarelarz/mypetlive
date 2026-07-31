@@ -14,6 +14,7 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import RegisterPage from "./pages/auth/RegisterPage";
 import LegalConsentPage from "./pages/auth/LegalConsentPage";
+import LegalDocPage from "./pages/legal/LegalDocPage";
 import ForbiddenPage from "./pages/system/ForbiddenPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import RoleGuard from "./components/auth/RoleGuard";
@@ -174,6 +175,9 @@ export default function AppRoutes() {
                   no haber sesión. El token del enlace es la credencial. */}
               <Route path="/perfil/confirmar-email" element={<ConfirmEmailChange />} />
               <Route path="/legal-consent" element={<ProtectedRoute><LegalConsentPage /></ProtectedRoute>} />
+              {/* Públicas a propósito: los textos legales tienen que poder
+                  leerse ANTES de registrarse y sin sesión. */}
+              <Route path="/legal/:slug" element={<LegalDocPage />} />
             </Route>
           </Routes>
           <AuthModal />
