@@ -21,6 +21,28 @@ function escapeHtml(input = ''): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Los buscadores que INDEXAN necesitan un trato distinto al de los scrapers
+ * sociales. A un scraper le basta el <head> y la redirección le da igual porque
+ * nunca la sigue. A Googlebot esa misma redirección le manda de vuelta a la
+ * URL canónica, que Apache vuelve a enrutar aquí: bucle, y encima con el body
+ * vacío (contenido escaso). A estos se les sirve contenido real y sin redirigir.
+ */
+const INDEXING_BOTS = /(Googlebot|Google-InspectionTool|Storebot-Google|bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot)/i;
+
+function isIndexingBot(req: Request): boolean {
+  return INDEXING_BOTS.test(req.header('user-agent') || '');
+}
+
+/** Redirección para scrapers; para un indexador se omite a propósito. */
+function redirectBlock(canonical: string, indexing: boolean): { head: string; body: string } {
+  if (indexing) return { head: '', body: '' };
+  return {
+    head: `<meta http-equiv="refresh" content="0; url=${canonical}">`,
+    body: `<script>window.location.replace(${JSON.stringify(canonical)});</script>`,
+  };
+}
+
 function buildDescription(a: any): string {
   if (a.description && a.description.trim()) return a.description.trim();
   const parts = [
@@ -71,6 +93,34 @@ router.get(
         })
       : null;
 
+    const indexing = isIndexingBot(req);
+    const redirect = redirectBlock(canonical, indexing);
+
+    // Contenido legible equivalente al de la ficha: sin esto el indexador ve
+    // una página vacía y la descarta por contenido escaso.
+    const facts = animal
+      ? [
+          ['Especie', SPECIES_LABEL[animal.species] || animal.species],
+          ['Raza', animal.breed],
+          ['Sexo', animal.sex ? SEX_LABEL[animal.sex] : null],
+          ['Tamaño', animal.size ? SIZE_LABEL[animal.size] || animal.size : null],
+          ['Edad', animal.age],
+          ['Localidad', animal.city],
+        ].filter(([, v]) => v)
+      : [];
+
+    const articleBody = animal
+      ? `<article>
+<h1>${escapeHtml(animal.name)} en adopción</h1>
+${animal.images?.[0] ? `<img src="${escapeHtml(animal.images[0])}" alt="${escapeHtml(animal.name)}" width="600">` : ''}
+<p>${escapeHtml(description)}</p>
+<dl>
+${facts.map(([k, v]) => `<dt>${escapeHtml(String(k))}</dt><dd>${escapeHtml(String(v))}</dd>`).join('\n')}
+</dl>
+<p><a href="${canonical}">Ver la ficha completa de ${escapeHtml(animal.name)} en MyPetLive</a></p>
+</article>`
+      : `<p><a href="${canonical}">Adopción responsable en MyPetLive</a></p>`;
+
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -90,11 +140,11 @@ router.get(
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${escapeHtml(image)}">
 ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ''}
-<meta http-equiv="refresh" content="0; url=${canonical}">
+${redirect.head}
 </head>
 <body>
-<p>Redirigiendo a <a href="${canonical}">${escapeHtml(title)}</a>…</p>
-<script>window.location.replace(${JSON.stringify(canonical)});</script>
+${articleBody}
+${redirect.body}
 </body>
 </html>`);
   }),
@@ -116,6 +166,8 @@ router.get(
     const description = animal ? buildDescription(animal) : 'Pasaporte digital de mascota en MyPetLive.';
     const image = (animal && Array.isArray(animal.images) && animal.images[0]) || `${SITE_URL}/logo512.png`;
 
+    const redirect = redirectBlock(canonical, isIndexingBot(req));
+
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -133,9 +185,17 @@ router.get(
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:image" content="${escapeHtml(image)}">
-<meta http-equiv="refresh" content="0; url=${canonical}">
+${redirect.head}
 </head>
-<body><script>window.location.replace(${JSON.stringify(canonical)});</script></body>
+<body>
+<article>
+<h1>${escapeHtml(title)}</h1>
+${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(animal?.name || 'Mascota')}" width="600">` : ''}
+<p>${escapeHtml(description)}</p>
+<p><a href="${canonical}">Ver el pasaporte en MyPetLive</a></p>
+</article>
+${redirect.body}
+</body>
 </html>`);
   }),
 );

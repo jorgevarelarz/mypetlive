@@ -274,7 +274,11 @@ app.use('/api/marketplace/checkout', checkoutLimiter);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/welcome', welcomeRoutes);
 app.use('/api', donationsRoutes);
-app.use('/api', authenticate, pushRoutes);
+// El guard va acotado a /api/push: montado como app.use('/api', authenticate, …)
+// se ejecutaba para CUALQUIER /api/*, dejando tras el login todo lo montado
+// debajo (protectoras, cupones, vets…). Las URLs no cambian.
+app.use('/api/push', authenticate);
+app.use('/api', pushRoutes);
 app.use('/api', patitasRoutes);
 app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);

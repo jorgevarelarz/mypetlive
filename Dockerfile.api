@@ -13,5 +13,8 @@ ENV PORT=3000
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
+# Los textos legales se leen en runtime desde process.cwd()/legal. Sin esta
+# copia la imagen no los tiene y /api/legal/terms responde 404.
+COPY --from=builder /app/legal ./legal
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

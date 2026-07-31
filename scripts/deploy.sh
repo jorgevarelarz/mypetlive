@@ -19,6 +19,8 @@ MODE="${1:-all}"
 deploy_api() {
   echo "==> Backend: rsync src/ → $HOST:$REMOTE_APP/src/"
   rsync -az --delete "$ROOT/src/" "$HOST:$REMOTE_APP/src/"
+  echo "==> Backend: rsync legal/ → $HOST:$REMOTE_APP/legal/"
+  rsync -az --delete "$ROOT/legal/" "$HOST:$REMOTE_APP/legal/"
   echo "==> Backend: rebuild + recreate del contenedor api"
   ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api"
   echo "==> Backend: health check"

@@ -4,6 +4,7 @@ import path from 'path';
 import { body, param } from 'express-validator';
 import logger from '../utils/logger';
 import { LegalDocument, LegalSlug } from '../models/legalDocument.model';
+import { LegalAcceptance } from '../models/legalAcceptance.model';
 import asyncHandler from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireVerified } from '../middleware/requireVerified';
@@ -14,17 +15,24 @@ import { User } from '../models/user.model';
 
 const router = Router();
 
-const termsVersion = process.env.TERMS_VERSION || 'v1';
-const privacyVersion = process.env.PRIVACY_VERSION || 'v1';
+// v2 son los primeros textos propios de MyPetLive: los v1 eran plantillas
+// heredadas de RentalApp que además nunca llegaron a servirse (la imagen no
+// copiaba legal/), así que ninguna aceptación previa de "v1" es válida.
+const termsVersion = process.env.TERMS_VERSION || 'v2';
+const privacyVersion = process.env.PRIVACY_VERSION || 'v2';
 const tenantProConsentVersion = process.env.TENANT_PRO_CONSENT_VERSION || 'v1';
+const legalNoticeVersion = process.env.LEGAL_NOTICE_VERSION || 'v1';
+const cookiesVersion = process.env.COOKIES_VERSION || 'v1';
 
 const fallbackVersions: Record<LegalSlug, string> = {
   terms: termsVersion,
   privacy: privacyVersion,
   'tenant-pro-consent': tenantProConsentVersion,
+  'legal-notice': legalNoticeVersion,
+  cookies: cookiesVersion,
 };
 
-const legalSlugs: LegalSlug[] = ['terms', 'privacy', 'tenant-pro-consent'];
+const legalSlugs: LegalSlug[] = ['terms', 'privacy', 'tenant-pro-consent', 'legal-notice', 'cookies'];
 
 function readLegalDocument(slug: LegalSlug, version: string) {
   const filePath = path.resolve(process.cwd(), `legal/${slug}_${version}.md`);
@@ -56,22 +64,11 @@ function getAcceptanceFields(slug: LegalSlug) {
   return null;
 }
 
-router.get(
-  '/legal/:slug',
-  [param('slug').isIn(legalSlugs).withMessage('slug_invalid')],
-  validate,
-  asyncHandler(async (req: Request, res: Response) => {
-    const slug = req.params.slug as LegalSlug;
-    const doc = await getLatestLegalDoc(slug);
-    if (!doc) {
-      return res.status(404).json({ error: 'legal-text-unavailable', slug });
-    }
-    res.json(doc);
-  }),
-);
-
 router.use('/legal/admin', authenticate as any, requireVerified as any, requireAdmin as any);
 
+// OJO AL ORDEN: '/legal/status' y '/legal/admin/*' tienen que declararse ANTES
+// que '/legal/:slug'. Si no, la ruta dinámica captura "status" como slug, el
+// validador isIn(legalSlugs) lo rechaza y /api/legal/status responde 400.
 router.get(
   '/legal/status',
   authenticate as any,
@@ -156,8 +153,9 @@ router.post(
       return res.status(400).json({ error: 'unsupported_slug' });
     }
 
+    const acceptedAt = new Date();
     const update: Record<string, any> = {
-      [fields.acceptedAtField]: new Date(),
+      [fields.acceptedAtField]: acceptedAt,
       [fields.versionField]: version,
     };
     if (fields.legalVersion) {
@@ -166,7 +164,33 @@ router.post(
 
     await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
 
+    // Prueba del consentimiento, aparte del usuario: aquí no se pisa nada.
+    await LegalAcceptance.create({
+      userId,
+      slug,
+      version,
+      acceptedAt,
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+    });
+
     res.json({ ok: true, slug, version });
+  }),
+);
+
+// Va la ÚLTIMA a propósito: es la ruta comodín de /legal/* y taparía a
+// '/legal/status' y '/legal/admin/:slug' si se declarase antes.
+router.get(
+  '/legal/:slug',
+  [param('slug').isIn(legalSlugs).withMessage('slug_invalid')],
+  validate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = req.params.slug as LegalSlug;
+    const doc = await getLatestLegalDoc(slug);
+    if (!doc) {
+      return res.status(404).json({ error: 'legal-text-unavailable', slug });
+    }
+    res.json(doc);
   }),
 );
 
