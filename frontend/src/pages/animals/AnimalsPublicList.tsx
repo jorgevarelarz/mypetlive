@@ -95,6 +95,25 @@ export default function AnimalsPublicList() {
     setSp(next, { replace: false });
   };
 
+  // El buscador era un input NO controlado que solo aplicaba al pulsar Enter.
+  // Ahora escribe en la URL con retardo, así se busca al teclear y borrar el
+  // texto limpia el filtro sin tener que acordarse de "Limpiar".
+  const [queryDraft, setQueryDraft] = useState(q || '');
+
+  React.useEffect(() => {
+    setQueryDraft(q || '');
+  }, [q]);
+
+  React.useEffect(() => {
+    const draft = queryDraft.trim();
+    if (draft === (q || '')) return;
+    const timer = setTimeout(() => setFilter('q', draft), 350);
+    return () => clearTimeout(timer);
+    // setFilter se reconstruye en cada render; depender de él relanzaría el
+    // temporizador en bucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryDraft, q]);
+
   const clearFilters = () => {
     setSp({ page: '1', limit: String(limit) }, { replace: false });
   };
@@ -203,12 +222,24 @@ export default function AnimalsPublicList() {
               <input
                 aria-label="Buscar animales"
                 placeholder="Busca por nombre, raza o ciudad"
-                defaultValue={q || ''}
+                value={queryDraft}
+                onChange={e => setQueryDraft(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') setFilter('q', (e.target as HTMLInputElement).value.trim());
+                  if (e.key === 'Enter') setFilter('q', queryDraft.trim());
+                  if (e.key === 'Escape') setQueryDraft('');
                 }}
                 style={{ flex: 1, minWidth: 0, height: 46, border: 0, outline: 0, font: 'inherit', color: MPL.ink, background: 'transparent' }}
               />
+              {queryDraft && (
+                <button
+                  type="button"
+                  onClick={() => setQueryDraft('')}
+                  aria-label="Borrar búsqueda"
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', color: MPL.faint, display: 'flex', padding: 4 }}
+                >
+                  <X size={16} />
+                </button>
+              )}
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 14, padding: '0 14px', fontSize: 14.5, fontWeight: 700 }}>
               <span className="sr-only">Ordenar</span>

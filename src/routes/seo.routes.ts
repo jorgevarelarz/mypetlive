@@ -8,7 +8,20 @@ const SITE_URL = (process.env.FRONTEND_URL || process.env.APP_URL || 'https://my
 // Estados visibles públicamente (coinciden con la visibilidad del catálogo).
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
 
-const SPECIES_LABEL: Record<string, string> = { perro: 'Perro', gato: 'Gato', otro: 'Animal' };
+// El vocabulario canónico que guarda normalizeSpecies es INGLÉS (cat/dog); con
+// solo las claves en español el mapa fallaba y se colaba "cat" tal cual en el
+// título, la descripción y el JSON-LD que lee Google. Se mantienen ambas por
+// los datos legados.
+const SPECIES_LABEL: Record<string, string> = {
+  dog: 'Perro',
+  perro: 'Perro',
+  cat: 'Gato',
+  gato: 'Gato',
+  rabbit: 'Conejo',
+  bird: 'Ave',
+  other: 'Animal',
+  otro: 'Animal',
+};
 const SIZE_LABEL: Record<string, string> = { small: 'pequeño', medium: 'mediano', large: 'grande' };
 const SEX_LABEL: Record<string, string> = { male: 'macho', female: 'hembra' };
 

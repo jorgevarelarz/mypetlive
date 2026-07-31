@@ -20,6 +20,7 @@ beforeAll(async () => {
   mongo = await startMongoMemoryServer();
   process.env.MONGO_URL = mongo.getUri();
   process.env.NODE_ENV = 'test';
+  process.env.ALLOW_UNVERIFIED = 'true';
   process.env.FRONTEND_URL = 'https://mypetlive.es';
   const mod = await import('../app');
   app = mod.app || mod.default;
@@ -59,6 +60,27 @@ describe('Las rutas de push siguen protegidas', () => {
       .set('Authorization', BAD_TOKEN)
       .send({});
     expect(res.status).toBe(401);
+  });
+});
+
+describe('El relay de notificaciones es solo para admin', () => {
+  // En NODE_ENV=test, sin token `authenticate` inyecta un usuario 'landlord';
+  // basta para comprobar que un no-admin no puede enviar correo.
+  it('POST /api/notify/email con un rol no admin responde 403', async () => {
+    const res = await request(app)
+      .post('/api/notify/email')
+      .send({ to: 'a@b.es', subject: 'hola', body: 'texto' });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('Cifras públicas de la portada', () => {
+  it('GET /api/stats/public responde sin sesión y con números', async () => {
+    const res = await request(app).get('/api/stats/public').set('Authorization', BAD_TOKEN);
+    expect(res.status).toBe(200);
+    for (const k of ['protectoras', 'animales', 'adopciones', 'donadoEur', 'patitas']) {
+      expect(typeof res.body[k]).toBe('number');
+    }
   });
 });
 

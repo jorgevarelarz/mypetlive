@@ -76,6 +76,14 @@ export default function AnimalDetail() {
     return value;
   }, [data?.shelter]);
 
+  // Quien mantiene la ficha: la protectora dueña o un admin.
+  const canManageAnimal = useMemo(() => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    const me = String((user as any)._id || (user as any).id || '');
+    return Boolean(me && shelterId && String(shelterId) === me);
+  }, [user, shelterId]);
+
   const { data: questionnaireData } = useQuery({
     queryKey: ['questionnaire', shelterId],
     queryFn: () => getQuestionnaireByProtectora(String(shelterId)),
@@ -280,9 +288,14 @@ export default function AnimalDetail() {
                   <button type="button" onClick={handleFavoriteClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                     <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
                   </button>
-                  <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha">
-                    <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
-                  </button>
+                  {/* Recargar la ficha solo le sirve a quien la mantiene. Para
+                      un visitante era un botón que aparentaba hacer algo y no
+                      cambiaba nada en pantalla. */}
+                  {canManageAnimal && (
+                    <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha" title="Actualizar ficha">
+                      <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                 </div>
               </div>
 

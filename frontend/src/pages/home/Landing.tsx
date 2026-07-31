@@ -7,6 +7,7 @@ import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
 import PublicHeader from '../../components/PublicHeader';
 import CountUp from '../../components/CountUp';
+import { getPublicStats } from '../../api/publicStats';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
@@ -46,8 +47,24 @@ export default function Landing() {
     queryFn: () => searchAnimals({ limit: 4, page: 1, sort: 'createdAt', dir: 'desc' }),
     staleTime: 60_000,
   });
+  // Cifras reales. Antes estaban cableadas (85 protectoras, 1.247 adopciones,
+  // 38.200 € donados, 126k Patitas) con la base de datos casi a cero.
+  const { data: stats } = useQuery({
+    queryKey: ['public-stats'],
+    queryFn: getPublicStats,
+    staleTime: 300_000,
+  });
   const pets = (data?.items || []).slice(0, 4);
   const heroImg = pets.find((p: any) => Array.isArray(p.images) && p.images[0]);
+
+  // Solo se enseña lo que existe de verdad: una tarjeta a cero no aporta y
+  // enseñar un número inventado es peor.
+  const impactCards = [
+    { key: 'protectoras', value: stats?.protectoras ?? 0, label: 'protectoras', highlight: 'teal' as const },
+    { key: 'adopciones', value: stats?.adopciones ?? 0, label: 'adopciones completadas' },
+    { key: 'donado', value: stats?.donadoEur ?? 0, label: 'donados a protectoras', prefix: '€' },
+    { key: 'patitas', value: stats?.patitas ?? 0, label: 'Patitas generadas', highlight: 'gold' as const },
+  ].filter(c => c.value > 0);
 
   return (
     <div style={{ fontFamily: FONT_BODY, color: C.ink, background: C.bg, minHeight: '100vh' }}>
@@ -103,12 +120,18 @@ export default function Landing() {
               <p style={{ fontSize: 19, lineHeight: 1.55, color: C.muted, margin: '0 0 32px', maxWidth: 480 }}>Adopción responsable, simple y transparente. Conectamos protectoras y familias, y acompañamos cada paso después de adoptar.</p>
               <div className="lp-actions" style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
                 <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
-                <a className="lp-cta" href="mailto:soporte@mypetlive.es?subject=Alta%20de%20protectora%20en%20MyPetLive" style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14 }}>Soy protectora</a>
+                {/* No promete "crear cuenta": las cuentas profesionales las
+                    activamos a mano, y el botón solo abre el correo. */}
+                <a className="lp-cta" href="mailto:soporte@mypetlive.es?subject=Alta%20de%20protectora%20en%20MyPetLive" title="Te contactamos para verificar la entidad y activarte la cuenta" style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14 }}>Solicitar alta de protectora</a>
               </div>
               <div className="lp-stats" style={{ display: 'flex', gap: 32 }}>
                 <div><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{data?.total ?? '—'}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>animales</div></div>
-                <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>+85</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>protectoras</div></div>
-                <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.gold }}>126k</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Patitas generadas</div></div>
+                {(stats?.protectoras ?? 0) > 0 && (
+                  <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{stats!.protectoras}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>protectoras</div></div>
+                )}
+                {(stats?.patitas ?? 0) > 0 && (
+                  <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.gold }}>{stats!.patitas.toLocaleString('es-ES')}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Patitas generadas</div></div>
+                )}
               </div>
             </div>
             {/* hero visual */}
@@ -205,24 +228,39 @@ export default function Landing() {
               <p style={{ fontSize: 17, lineHeight: 1.6, color: C.muted, margin: '0 0 24px' }}>Las <strong style={{ color: '#A77B1C' }}>Patitas</strong> son nuestra moneda de impacto: cada compra con cupón, donación o campaña genera valor que financia directamente a las protectoras.</p>
               <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Empieza a sumar Patitas →</Link>
             </div>
-            <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-              <div style={{ background: C.teal, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}><CountUp to={85} /></div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,.85)', marginTop: 8 }}>protectoras activas</div>
+            {impactCards.length > 0 ? (
+              <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                {impactCards.map(card => {
+                  const dark = card.highlight === 'teal' || card.highlight === 'gold';
+                  return (
+                    <div
+                      key={card.key}
+                      style={{
+                        background: card.highlight === 'teal' ? C.teal : card.highlight === 'gold' ? C.gold : '#fff',
+                        color: dark ? '#fff' : undefined,
+                        border: dark ? undefined : `1px solid ${C.border}`,
+                        borderRadius: 20,
+                        padding: 28,
+                      }}
+                    >
+                      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: dark ? '#fff' : C.ink }}>
+                        <CountUp to={card.value} prefix={card.prefix} />
+                      </div>
+                      <div style={{ fontSize: 14, color: dark ? 'rgba(255,255,255,.85)' : C.muted, marginTop: 8 }}>{card.label}</div>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}><CountUp to={1247} /></div>
-                <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>adopciones completadas</div>
+            ) : (
+              // Al principio no hay nada que presumir. Mejor decir qué se está
+              // construyendo que enseñar cuatro ceros o cifras inventadas.
+              <div style={{ background: C.teal100, borderRadius: 20, padding: 32 }}>
+                <p style={{ fontSize: 17, lineHeight: 1.6, color: C.ink, margin: 0 }}>
+                  Estamos empezando. Las cifras de impacto aparecerán aquí en cuanto se completen las
+                  primeras adopciones y donaciones: preferimos enseñarte números reales a inventarlos.
+                </p>
               </div>
-              <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}><CountUp to={38200} prefix="€" /></div>
-                <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>donados a protectoras</div>
-              </div>
-              <div style={{ background: C.gold, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}><CountUp to={126} suffix="k" /></div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,.9)', marginTop: 8 }}>Patitas generadas</div>
-              </div>
-            </div>
+            )}
           </div>
         </section>
 

@@ -75,7 +75,10 @@ export default function PublicHeader() {
           <Link className="public-header-link" to="/#impacto">Impacto</Link>
           <button
             className="public-header-link"
-            onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })}
+            // Prometía "Crea tu cuenta de protectora" y abría un registro que
+            // solo da de alta adoptantes. Las cuentas profesionales las
+            // activamos a mano, así que se ofrece entrar o solicitar el alta.
+            onClick={() => openAuth({ mode: 'login', message: 'Las cuentas de protectora las activamos nosotros. Si ya la tienes, entra aquí; si no, escríbenos a soporte@mypetlive.es y verificamos la entidad.' })}
             style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: MPL.muted }}
           >
             Protectoras

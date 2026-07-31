@@ -52,6 +52,7 @@ import adoptionRoutes from './routes/adoption.routes';
 import shoppingRoutes from './routes/shopping.routes';
 import marketplaceRoutes from './routes/marketplace.routes';
 import welcomeRoutes from './routes/welcome.routes';
+import publicStatsRoutes from './routes/publicStats.routes';
 import donationsRoutes from './routes/donations.routes';
 import pushRoutes from './routes/push.routes';
 import patitasRoutes from './routes/patitas.routes';
@@ -228,8 +229,11 @@ const checkoutLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// /health es público (Apache lo proxya), así que no publica el entorno: además
+// de ser información interna, decía "development" porque el despliegue corre a
+// propósito con NODE_ENV=development (la señal real es APP_ENV, ver utils/env).
 app.get('/health', (_req, res) =>
-  res.json({ ok: true, env: process.env.NODE_ENV, mongo: { state: mongoose.connection.readyState } }),
+  res.json({ ok: true, mongo: { state: mongoose.connection.readyState } }),
 );
 // Readiness: 200 solo si la BD está conectada (readyState 1). /health es liveness
 // (el proceso responde); este es el que deben usar deploy y monitorización para
@@ -273,6 +277,7 @@ app.use('/api/shop', shoppingRoutes);
 app.use('/api/marketplace/checkout', checkoutLimiter);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/welcome', welcomeRoutes);
+app.use('/api', publicStatsRoutes);
 app.use('/api', donationsRoutes);
 // El guard va acotado a /api/push: montado como app.use('/api', authenticate, …)
 // se ejecutaba para CUALQUIER /api/*, dejando tras el login todo lo montado

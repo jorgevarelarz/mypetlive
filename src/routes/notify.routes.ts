@@ -17,11 +17,17 @@ const notifyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// SOLO ADMIN. Esto permite enviar un correo arbitrario, a una dirección
+// arbitraria, con asunto y cuerpo arbitrarios y desde el dominio de MyPetLive:
+// abierto a cualquier usuario verificado era un relay para phishing con nuestra
+// marca (basta registrarse como adoptante). En MyPetLive no tiene ningún
+// consumidor vivo — las páginas que lo llamaban (tickets, contratos) son
+// legado de RentalApp y sus rutas solo redirigen a /home.
 router.use(
   notifyLimiter,
   authenticate as any,
   requireVerified as any,
-  authorizeRoles('admin', 'landlord', 'tenant', 'pro') as any,
+  authorizeRoles('admin') as any,
 );
 
 router.post(
