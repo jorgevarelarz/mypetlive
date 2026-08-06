@@ -108,6 +108,17 @@ export const login = async (req: Request, res: Response) => {
         code: 'invalid_credentials',
       });
     }
+    // Cuenta creada con Google/Apple: no hay hash contra el que comparar
+    // (bcrypt.compare reventaría con undefined y devolvería un 500).
+    if (!user.passwordHash) {
+      const providers = (user.authProviders || []).map((p: any) => p.provider);
+      throw new AppError(
+        providers.includes('apple') && !providers.includes('google')
+          ? 'Esta cuenta se creó con Apple. Entra con el botón de Apple.'
+          : 'Esta cuenta se creó con Google. Entra con el botón de Google.',
+        { status: 400, code: 'use_social_login', details: { providers } },
+      );
+    }
     // Compare provided password with stored hash
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {

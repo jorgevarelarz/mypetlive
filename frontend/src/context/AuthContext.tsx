@@ -4,6 +4,8 @@ import {
   getStoredUser,
   login as apiLogin,
   logout as apiLogout,
+  socialLogin as apiSocialLogin,
+  SocialProvider,
   bootstrapAuthHeader,
 } from "../api/auth";
 import {
@@ -16,6 +18,7 @@ type AuthCtx = {
   token: string | null;
   user: User | null;
   login: (email: string, password: string) => Promise<User>;
+  loginWithProvider: (provider: SocialProvider, idToken: string, name?: string) => Promise<User>;
   logout: () => void;
   updateUser: (patch: Partial<User>) => void;
   hasRole: (...roles: User["role"][]) => boolean;
@@ -80,6 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return u;
   };
 
+  const loginWithProvider = async (provider: SocialProvider, idToken: string, name?: string) => {
+    const u = await apiSocialLogin(provider, idToken, name);
+    setUser(u);
+    await refreshLegalStatus();
+    return u;
+  };
+
   const logout = () => {
     apiLogout();
     setUser(null);
@@ -108,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         user,
         login,
+        loginWithProvider,
         logout,
         updateUser,
         hasRole,

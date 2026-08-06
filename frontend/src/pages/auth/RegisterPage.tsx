@@ -1,24 +1,38 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { register as apiRegister } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
+import SocialAuthButtons from "../../components/auth/SocialAuthButtons";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
+  const loc = useLocation();
   const { login } = useAuth();
+
+  const sp = new URLSearchParams(loc.search);
+  const explicitNext = sp.get("redirect") || null;
+  const mismatch = password2.length > 0 && password !== password2;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null); setLoading(true);
+    setErr(null);
+    // Comprobado también aquí y no solo con `mismatch`: el usuario puede enviar
+    // el formulario con Enter sin haber salido del segundo campo.
+    if (password !== password2) {
+      setErr('Las dos contraseñas no coinciden.');
+      return;
+    }
+    setLoading(true);
     try {
       await apiRegister(name.trim(), email.trim(), password);
       const user = await login(email.trim(), password);
-      const destination = user?.role === 'tenant' ? '/home' : '/';
+      const destination = explicitNext || (user?.role === 'tenant' ? '/home' : '/');
       nav(destination, { replace: true });
     } catch (e: any) {
       const code = e?.response?.data?.code || e?.response?.data?.error;
@@ -52,11 +66,36 @@ export default function RegisterPage() {
           <input id="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
         </label>
         <p className="text-sm" style={{ color: '#7A8273', marginTop: -8 }}>Usa entre 12 y 72 caracteres.</p>
+        <label className="auth-label" htmlFor="password2">
+          Repite la contraseña
+          <input
+            id="password2"
+            type="password"
+            required
+            minLength={12}
+            maxLength={72}
+            autoComplete="new-password"
+            className="auth-input"
+            style={mismatch ? { borderColor: '#b91c1c' } : undefined}
+            aria-invalid={mismatch || undefined}
+            aria-describedby={mismatch ? 'password2-error' : undefined}
+            value={password2}
+            onChange={e => setPassword2(e.target.value)}
+          />
+        </label>
+        {mismatch && (
+          <p id="password2-error" className="text-sm" style={{ color: '#b91c1c', marginTop: -8 }}>
+            Las dos contraseñas no coinciden.
+          </p>
+        )}
         {err && <p className="auth-error" style={{ color: '#b91c1c' }}>{err}</p>}
-        <button type="submit" className="auth-button" disabled={loading}>
+        <button type="submit" className="auth-button" disabled={loading || mismatch}>
           {loading ? 'Creando…' : 'Crear cuenta'}
         </button>
       </form>
+
+      <SocialAuthButtons redirectTo={explicitNext || undefined} />
+
       <div className="auth-footer">
         ¿Ya tienes cuenta? <Link to="/login" className="auth-link">Inicia sesión</Link>
       </div>

@@ -119,7 +119,10 @@ export default function Landing() {
               <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 62, lineHeight: .98, fontWeight: 800, letterSpacing: '-.03em', margin: '0 0 22px' }}>Encuentra a tu <span style={{ color: C.teal }}>nuevo mejor</span> <span style={{ color: C.coral }}>amigo</span></h1>
               <p style={{ fontSize: 19, lineHeight: 1.55, color: C.muted, margin: '0 0 32px', maxWidth: 480 }}>Adopción responsable, simple y transparente. Conectamos protectoras y familias, y acompañamos cada paso después de adoptar.</p>
               <div className="lp-actions" style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
-                <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
+                {/* La portada solo la ven usuarios anónimos (AppRoutes manda a
+                    /home al que tiene sesión), así que el CTA principal lleva
+                    al alta y de ahí al catálogo. */}
+                <Link className="lp-cta" to="/register?redirect=/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
                 {/* No promete "crear cuenta": las cuentas profesionales las
                     activamos a mano, y el botón solo abre el correo. */}
                 <a className="lp-cta" href="mailto:soporte@mypetlive.es?subject=Alta%20de%20protectora%20en%20MyPetLive" title="Te contactamos para verificar la entidad y activarte la cuenta" style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14 }}>Solicitar alta de protectora</a>

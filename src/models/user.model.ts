@@ -75,7 +75,29 @@ const userSchema = new Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     // Passwords are stored hashed; see controllers/auth.controller.ts
-    passwordHash: { type: String, required: true },
+    // Obligatoria salvo que la cuenta venga de Google/Apple: en ese caso no hay
+    // contraseña que guardar (puede ponerse una después con "recuperar acceso").
+    passwordHash: {
+      type: String,
+      required(this: { authProviders?: unknown[] }) {
+        return !(this.authProviders && this.authProviders.length > 0);
+      },
+    },
+    /**
+     * Proveedores de identidad externos vinculados a esta cuenta. `sub` es el
+     * identificador estable del usuario en el proveedor (nunca el correo, que
+     * puede cambiar). Un mismo correo puede tener contraseña y proveedores.
+     */
+    authProviders: {
+      type: [
+        {
+          _id: false,
+          provider: { type: String, enum: ['google', 'apple'], required: true },
+          sub: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
     /**
      * Role assigned to the user. Supported values include:
      *  - tenant: standard renter of properties.

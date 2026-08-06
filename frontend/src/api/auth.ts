@@ -72,6 +72,24 @@ export async function register(name: string, email: string, password: string) {
   await axios.post("/api/auth/register", { name, email, password });
 }
 
+export type SocialProvider = "google" | "apple";
+
+/**
+ * Entra (o se da de alta) con el ID token que ha devuelto Google o Apple.
+ * El backend responde igual que /login, así que la sesión se guarda idéntica.
+ */
+export async function socialLogin(
+  provider: SocialProvider,
+  idToken: string,
+  name?: string,
+): Promise<User> {
+  const { data } = await axios.post(`/api/auth/oauth/${provider}`, { idToken, name });
+  const user: User = { ...data.user, token: data.token };
+  localStorage.setItem("user", JSON.stringify(user));
+  axios.defaults.headers.common["Authorization"] = `Bearer ${user.token}`;
+  return user;
+}
+
 export function logout() {
   localStorage.removeItem("user");
   delete axios.defaults.headers.common["Authorization"];

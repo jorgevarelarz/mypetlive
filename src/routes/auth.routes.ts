@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
 import { register, login, requestPasswordReset, resetPassword } from '../controllers/auth.controller';
+import { socialLogin } from '../controllers/oauth.controller';
 import { validate } from '../middleware/validate';
 import asyncHandler from '../utils/asyncHandler';
 
@@ -62,6 +63,15 @@ router.post(
   [body('email').isEmail(), body('password').isString().notEmpty()],
   validate,
   asyncHandler(login),
+);
+// Entrada con Google/Apple. Mismo limitador que el login: el coste real está
+// en verificar la firma y en escribir en Mongo, no en el proveedor.
+router.post(
+  '/oauth/:provider',
+  loginLimiter,
+  [body('idToken').isString().notEmpty(), body('name').optional().isString()],
+  validate,
+  asyncHandler(socialLogin),
 );
 router.post(
   '/request-reset',
