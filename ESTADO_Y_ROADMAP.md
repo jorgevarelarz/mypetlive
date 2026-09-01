@@ -636,6 +636,32 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.22 El pasaporte avisa de lo que toca (1 sep 2026) — **EN PRODUCCIÓN**
+
+**El agujero que lo motivó:** ninguna de las usuarias reales había recibido jamás un correo
+de MyPetLive. Los recordatorios que había cuelgan de las citas veterinarias y del plan de
+bienvenida *posterior a una adopción*, y las 9 personas reales entraron por **mascota
+propia**: el pasaporte no las llamaba nunca y ninguna volvió después del día del alta.
+
+**Y un bloqueo de fondo:** `POST /:code/health` estaba cerrado a `assertRole('vet','admin')`,
+así que la familia no podía apuntar ni una vacuna. Por eso `healthHistory` estaba vacío en
+todas las mascotas personales — no había nada que recordar. Ahora también puede quien pasa
+`canManageAnimal`; el vet y el admin siguen pudiendo aunque no sean la familia.
+
+- `healthEntrySchema` gana `nextDueAt` y `reminderSentAt`.
+- Tres formas de decidir la repetición: fecha explícita; `nextDueAt: null` para renunciar al
+  aviso; o ausente, y el servidor pone el intervalo de la categoría (vacuna 12 meses,
+  desparasitación 3). Lo que no se repite por calendario —cirugía, prueba— no programa nada.
+- `sendHealthDueReminders` avisa **una semana antes**, no el día: una vacuna exige pedir cita.
+  Idempotente por entrada y **un solo correo por animal** aunque le toquen dos cosas la misma
+  semana. Marca `reminderSentAt` *antes* de enviar: si falla el correo se pierde un aviso, que
+  es mejor que reenviarlo en cada pasada.
+- La ficha de la mascota gana el formulario para apuntarlo y muestra la próxima fecha.
+
+16 tests nuevos (`animal.health.reminder.test.ts`), 91 en verde en las suites de animales y
+47 en el frontend. Verificado en producción con la cuenta dueña de POPEYE-111: apuntar
+programa la fecha, y otra usuaria contra la misma mascota recibe 403.
+
 ## 5.21 Chapas QR físicas del collar (9 ago 2026) — **EN PRODUCCIÓN desde el 1 sep 2026**
 
 Jorge cerró proveedor de collares con chapa grabada: **0,18 €/unidad, 100 uds, envío incluido**.
