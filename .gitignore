@@ -5,3 +5,7 @@ dist
 .DS_Store
 uploads/
 storage/
+
+# Códigos de chapas: quien los tenga puede reclamar una chapa en blanco antes que su dueño
+chapas-*.csv
+docs/chapas-*.csv
