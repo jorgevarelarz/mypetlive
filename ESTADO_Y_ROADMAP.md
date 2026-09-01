@@ -636,6 +636,62 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.21 Chapas QR físicas del collar (9 ago 2026) — **SIN DESPLEGAR**
+
+Jorge cerró proveedor de collares con chapa grabada: **0,18 €/unidad, 100 uds, envío incluido**.
+A ese precio la chapa deja de ser un extra y va de serie con cada pasaporte.
+
+**El problema que había:** `Animal.code` se genera al crear la ficha a partir del nombre
+(`slugifyName(name) + random(100,999)` → `LUNA-472`). Eso impide preimprimir — el código no
+existe hasta que existe el animal — y además solo tiene 900 variantes por nombre, así que es
+enumerable. Un identificador grabado en metal no puede ser ninguna de las dos cosas.
+
+**Modelo nuevo `Tag` (`src/models/tag.model.ts`), desacoplado del animal.** La chapa nace
+**vacía** en fábrica y se casa con un animal después. Eso es lo que permite imprimir stock sin
+saber a qué animal irá cada una, y **reasignar** una chapa (animal fallecido, collar perdido,
+devolución) en vez de tirar el metal.
+
+- Código = `PREFIJO-XXXXXX`, sufijo de 6 en **Crockford base32** (sin I, L, O ni U: las tres
+  primeras se confunden en metal rayado, la U evita palabrotas por azar). 32^6 = 1.073 millones
+  por prefijo. **El prefijo es un parámetro del generador, no una constante**, para poder
+  decidirlo justo antes de imprimir.
+- El código de la chapa es **opaco a propósito**: nadie lo teclea, se llega por QR. Lo que sí se
+  teclea es el código del animal, que es otro campo.
+
+**Recorrido (`/t/:code`, `frontend/src/pages/tag/TagLanding.tsx`):**
+- **Chapa asignada** → `<Navigate replace>` a `/p/:animalCode`. Sin escala y **sin cuenta**: es
+  el caso de quien se encuentra al animal por la calle. El modo perdido y el relé de avisos ya
+  los cubre `getPassport`, no se duplica nada.
+- **Chapa vacía** → "¿de quién es esta chapa?": lista de tus mascotas + input para teclear el
+  código del animal. Sin sesión, a `/login|register?redirect=/t/CODE`.
+
+**Endpoints.** Públicos bajo `/api/tags` (montado en la zona pública de `app.ts`, cada ruta pone
+su propio `authenticate`): `GET /:code` (resolver, con limitador por IP porque incrementa el
+contador de escaneos), `POST /:code/claim`, `POST /:code/release`, `GET /mine`. Admin bajo
+`/api/admin/tags`: `POST /batch` (fabricar lote), `GET /batch/:batch.csv` (**el fichero que se
+manda al proveedor**: columnas `codigo,url`), `GET /` (estado de la flota), `POST /:code/revoke`.
+
+**Decisiones de seguridad, todas con test (`src/__tests__/tags.test.ts`, 20 en verde):**
+- Asignar **exige sesión y `canManageAnimal`**. Sin eso, cualquiera con una chapa en blanco la
+  apuntaría al animal de otro adivinando su código (900 variantes por nombre).
+- Un animal, una chapa (`animal_already_tagged`); una chapa asignada no se puede robar
+  (`tag_already_claimed`).
+- El `claim` es un `findOneAndUpdate` condicionado a `animalId: null` — dos toques simultáneos no
+  la asignan dos veces. El contador de escaneos es `$inc` por `updateOne` para no pisar con un
+  `save()` una asignación concurrente.
+- Chapa anulada → **410, no 404**: el código sigue existiendo en el mundo físico.
+- Animal borrado con la chapa puesta → vuelve a `libre` en vez de quedar muerta.
+
+**Refactor de paso:** `canManageAnimal` estaba privado en `animal.controller.ts` con 3 llamadas.
+Extraído a `src/utils/animalAccess.ts` porque ahora lo usan dos controladores — una comprobación
+de autorización duplicada acaba divergiendo, y la mitad que se quede atrás es un agujero.
+GitNexus no tenía el símbolo indexado (índice desactualizado); radio verificado a mano.
+
+**Ruta `/t/:code` fuera del `AppShell`**, como `/p/:code`.
+
+**PENDIENTE:** decidir el prefijo grabado, fabricar el lote (`POST /api/admin/tags/batch`),
+descargar el CSV y mandarlo al proveedor. Nada de esto está desplegado todavía.
+
 ## 6. Operativa / notas de mantenimiento
 - **Credenciales demo:** protectora@mypetlive.es / adoptante@mypetlive.es / **demo.tienda@mypetlive.es** (Demo1234!).
   La tienda (rol `store`, "Pet Market Centro") ya existía sembrada pero sin contraseña conocida y sin

@@ -8,6 +8,7 @@ import HashScroll from "./components/HashScroll";
 import Landing from "./pages/home/Landing";
 import Sistema from "./pages/Sistema";
 import AnimalPassport from "./pages/passport/AnimalPassport";
+import TagLanding from "./pages/tag/TagLanding";
 import MoodDirections from "./pages/MoodDirections";
 import LoginPage from "./pages/auth/LoginPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -82,6 +83,9 @@ export default function AppRoutes() {
             <Route path="/sistema" element={<Sistema />} />
             <Route path="/mood" element={<MoodDirections />} />
             <Route path="/p/:code" element={<AnimalPassport />} />
+            {/* Chapa física del collar. Fuera del AppShell y sin ProtectedRoute:
+                se llega escaneando un QR en la calle, a menudo sin cuenta. */}
+            <Route path="/t/:code" element={<TagLanding />} />
             <Route element={<AppShell />}>
               <Route path="/animals" element={<AnimalsPublicList />} />
               <Route path="/animals/:id" element={<AnimalDetail />} />

@@ -3,7 +3,7 @@ import { AnimalEvent } from '../models/animalEvent.model';
 type LogInput = {
   animalId: string;
   code?: string;
-  type: 'created' | 'published' | 'reserved' | 'adopted' | 'transferred' | 'returned' | 'vet' | 'health' | 'status';
+  type: 'created' | 'published' | 'reserved' | 'adopted' | 'transferred' | 'returned' | 'vet' | 'health' | 'status' | 'lost' | 'found' | 'sighting';
   actorId?: string;
   fromOwnerId?: string;
   toOwnerId?: string;

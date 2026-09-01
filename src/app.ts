@@ -48,6 +48,8 @@ import adminTenantProRoutes from './routes/admin.tenantPro.routes';
 import applicationRoutes from './routes/application.routes';
 import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
+import tagRoutes from './routes/tag.routes';
+import adminTagsRoutes from './routes/admin.tags.routes';
 import adoptionRoutes from './routes/adoption.routes';
 import shoppingRoutes from './routes/shopping.routes';
 import marketplaceRoutes from './routes/marketplace.routes';
@@ -270,6 +272,10 @@ app.use(seoRoutes);
 // app.use('/api/coliving', colivingRoutes);
 // Rental routes/UI preserved but hidden for tenants — kept for future reuse
 app.use('/api/animals', animalRoutes);
+// Chapas físicas del collar. Montado aquí arriba (zona pública) porque
+// resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
+// tiene cuenta. Cada ruta pone su propio `authenticate` donde hace falta.
+app.use('/api/tags', tagRoutes);
 app.use('/api/adoptions', adoptionRoutes);
 // "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
 app.use('/api/shop', shoppingRoutes);
@@ -328,6 +334,7 @@ app.use(
   adminSalesRoutes,
   adminMetricsRoutes,
   adminTenantProRoutes,
+  adminTagsRoutes,
 );
 
 // Error handler

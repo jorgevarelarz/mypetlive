@@ -272,6 +272,24 @@ export type UserPet = {
   animal: any;
 };
 
+export type PersonalPetUpdate = {
+  name?: string;
+  species?: string;
+  breed?: string;
+  age?: string;
+  mood?: AnimalMood | null;
+  sex?: 'male' | 'female';
+  size?: 'small' | 'medium' | 'large';
+  images?: string[];
+};
+
+// Edición de la ficha de una mascota propia (incluidas las fotos). Endpoint
+// distinto de `updateAnimal`, que es el de las protectoras y exige rol landlord.
+export async function updateMyPet(id: string, payload: PersonalPetUpdate) {
+  const { data } = await client.put(`/api/animals/mine/${id}`, payload);
+  return data;
+}
+
 export async function listMyPets() {
   const { data } = await client.get('/api/animals/mine');
   return data as { items: UserPet[] };

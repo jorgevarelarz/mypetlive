@@ -8,6 +8,7 @@ import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesVariants } from '../utils/species';
 import { canPublishAnimals } from '../utils/shelterVerification';
+import { canManageAnimal } from '../utils/animalAccess';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
@@ -128,6 +129,9 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
     // Los registros clínicos (vet/health) ya se renderizan desde vetHistory/
     // healthHistory con formato; el AnimalEvent equivalente es solo auditoría.
     if (e.type === 'vet' || e.type === 'health') continue;
+    // Un avistamiento cuenta dónde estuvo el animal y quién lo vio: eso es del
+    // episodio de pérdida y de la familia, no del historial público del animal.
+    if (e.type === 'sighting' && !full) continue;
     const shelterName = e.shelterId?.name as string | undefined;
     let title = e.type;
     let detail: string | undefined;
@@ -142,6 +146,9 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
         break;
       case 'reserved': title = 'Reservado'; break;
       case 'returned': title = 'De nuevo disponible'; break;
+      case 'lost': title = 'Se perdió'; detail = e.data?.area || undefined; break;
+      case 'found': title = 'Apareció'; break;
+      case 'sighting': title = 'Alguien lo vio'; detail = e.data?.hasLocation ? 'con ubicación' : undefined; break;
       default: title = e.type;
     }
     items.push({ at: e.createdAt, type: e.type, title, detail });
@@ -257,8 +264,189 @@ export async function getPassport(req: Request, res: Response) {
     isPersonalPet: animal.isPersonalPet,
     provenance: shelter ? { shelterName: shelter.name, city: shelter.profile?.address?.city || animal.city } : null,
     health: { vetVisits: vetCount, healthMilestones: healthCount },
+    // Modo perdido. Se expone la zona donde se perdió (dato del animal, útil para
+    // quien lo encuentra) pero NUNCA los avistamientos ni el contacto de la
+    // familia: quien lo encuentre escribe por `reportSighting`, que hace de relé.
+    lost: animal.lost?.isLost
+      ? {
+        isLost: true,
+        since: animal.lost.since,
+        area: animal.lost.area,
+        notes: animal.lost.notes,
+      }
+      : { isLost: false },
     timeline: buildTimeline(animal, events, false),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Modo perdido
+//
+// El QR del pasaporte ya está impreso en la chapa del collar: cuando el animal
+// se pierde, esa misma URL es lo que va a mirar quien lo encuentre. Por eso el
+// modo perdido no es una pantalla nueva, sino un estado del pasaporte.
+// ---------------------------------------------------------------------------
+
+// POST /api/animals/:id/lost — la familia declara que se ha perdido.
+export async function markLost(req: Request, res: Response) {
+  const animal: any = await Animal.findById(req.params.id);
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const user: any = (req as any).user;
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+
+  const area = typeof req.body?.area === 'string' ? req.body.area.trim().slice(0, 200) : undefined;
+  const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim().slice(0, 500) : undefined;
+
+  // Volver a marcar perdido un animal ya perdido actualiza la zona pero no
+  // reinicia el reloj: "perdido desde hace 3 días" es lo que mueve a la gente.
+  const since = animal.lost?.isLost && animal.lost?.since ? animal.lost.since : new Date();
+
+  animal.lost = {
+    isLost: true,
+    since,
+    area,
+    notes,
+    sightings: animal.lost?.sightings || [],
+  };
+  await animal.save();
+
+  await logAnimalEvent({
+    animalId: String(animal._id),
+    code: animal.code,
+    type: 'lost',
+    actorId: String(user?._id || user?.id || ''),
+    data: { area },
+  });
+
+  res.json({ ok: true, lost: { isLost: true, since, area, notes } });
+}
+
+// POST /api/animals/:id/found — apareció. Conserva los avistamientos.
+export async function markFound(req: Request, res: Response) {
+  const animal: any = await Animal.findById(req.params.id);
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const user: any = (req as any).user;
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+
+  animal.lost = {
+    isLost: false,
+    since: undefined,
+    area: undefined,
+    notes: undefined,
+    sightings: animal.lost?.sightings || [],
+  };
+  await animal.save();
+
+  await logAnimalEvent({
+    animalId: String(animal._id),
+    code: animal.code,
+    type: 'found',
+    actorId: String(user?._id || user?.id || ''),
+  });
+
+  res.json({ ok: true, lost: { isLost: false } });
+}
+
+// GET /api/animals/:id/sightings — solo la familia (o admin).
+// Los avistamientos llevan la ubicación y el contacto de terceros: no son
+// públicos ni siquiera para el resto de usuarios registrados.
+export async function listSightings(req: Request, res: Response) {
+  const animal: any = await Animal.findById(req.params.id).lean();
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+
+  const user: any = (req as any).user;
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+
+  const sightings = [...(animal.lost?.sightings || [])].sort(
+    (a: any, b: any) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  );
+  res.json({ items: sightings });
+}
+
+// POST /api/animals/passport/:code/sighting — PÚBLICO y sin sesión.
+// Quien encuentra al animal escanea el QR y avisa. Hace de relé: el que avisa
+// nunca ve el contacto de la familia, y la familia recibe el aviso por correo.
+export async function reportSighting(req: Request, res: Response) {
+  const normalized = String(req.params.code || '').trim().toUpperCase();
+  if (!normalized) return res.status(400).json({ error: 'invalid_code' });
+
+  const animal: any = await Animal.findOne({ code: normalized, status: { $ne: 'borrador' } });
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+  // Sin episodio de pérdida abierto no se aceptan avistamientos: si no, el
+  // endpoint es un buzón anónimo hacia el correo de cualquier usuario.
+  if (!animal.lost?.isLost) return res.status(409).json({ error: 'not_lost' });
+
+  const rawLat = req.body?.lat;
+  const rawLng = req.body?.lng;
+  const hasLocation = rawLat !== undefined && rawLat !== null && rawLng !== undefined && rawLng !== null;
+
+  let lat: number | undefined;
+  let lng: number | undefined;
+  let accuracy: number | undefined;
+  if (hasLocation) {
+    lat = Number(rawLat);
+    lng = Number(rawLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return res.status(400).json({ error: 'invalid_location' });
+    }
+    const rawAccuracy = Number(req.body?.accuracy);
+    if (Number.isFinite(rawAccuracy) && rawAccuracy >= 0) accuracy = rawAccuracy;
+  }
+
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 500) : undefined;
+  const contact = typeof req.body?.contact === 'string' ? req.body.contact.trim().slice(0, 120) : undefined;
+  if (!hasLocation && !note && !contact) {
+    return res.status(400).json({ error: 'empty_sighting' });
+  }
+
+  const sighting = { at: new Date(), lat, lng, accuracy, note, contact };
+  animal.lost.sightings.push(sighting);
+  await animal.save();
+
+  await logAnimalEvent({
+    animalId: String(animal._id),
+    code: animal.code,
+    type: 'sighting',
+    data: { hasLocation },
+  });
+
+  // Aviso a la familia. Best-effort: que falle el correo no puede hacer que
+  // quien encontró al animal reciba un error y no vuelva a intentarlo.
+  notifySighting(animal, sighting).catch(() => undefined);
+
+  res.status(201).json({ ok: true });
+}
+
+async function notifySighting(animal: any, sighting: any) {
+  const ownerId = animal.ownerId || animal.shelter;
+  if (!ownerId) return;
+  const owner: any = await User.findById(ownerId).select('email name').lean();
+  if (!owner?.email) return;
+
+  const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://mypetlive.es';
+  const lines = [
+    `Hola ${owner.name || ''},`,
+    '',
+    `Alguien ha escaneado el QR de ${animal.name} y ha dejado un aviso.`,
+    '',
+  ];
+  if (sighting.lat !== undefined && sighting.lng !== undefined) {
+    const precision = sighting.accuracy ? ` (precisión aproximada: ${Math.round(sighting.accuracy)} m)` : '';
+    lines.push(`Ubicación${precision}: https://www.google.com/maps?q=${sighting.lat},${sighting.lng}`);
+  } else {
+    lines.push('No ha compartido su ubicación.');
+  }
+  if (sighting.note) lines.push('', `Mensaje: ${sighting.note}`);
+  if (sighting.contact) lines.push('', `Puedes contactar con esta persona en: ${sighting.contact}`);
+  lines.push('', `Todos los avisos de ${animal.name}: ${baseUrl}/pets/${animal._id}`);
+
+  await sendEmail(
+    owner.email,
+    `Han visto a ${animal.name}`,
+    lines.join('\n'),
+  );
 }
 
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
@@ -402,6 +590,37 @@ export async function createPersonal(req: Request, res: Response) {
   });
 
   res.status(201).json(doc);
+}
+
+// PUT /api/animals/mine/:id — la familia corrige la ficha de su mascota, ya sea
+// una que registró ella o una que adoptó (al aprobarse la adopción el animal
+// pasa a `isPersonalPet` con `ownerId` del adoptante).
+//
+// No sirve `update`: exige rol landlord/admin y ser la protectora titular de la
+// ficha, así que un tenant no podía ni cambiar la foto de su propio animal.
+// Aquí manda `canManageAnimal` (shelter u ownerId), igual que en el modo perdido.
+export async function updateMine(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = user?._id || user?.id;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+  const animal: any = await Animal.findById(req.params.id);
+  // Una ficha en adopción de una protectora no se edita por aquí: para eso está
+  // `update`, con su control de publicación y de estados.
+  if (!animal || animal.isPersonalPet !== true) return res.status(404).json({ error: 'not_found' });
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+
+  // `personalPetUpdateSchema` ya ha dejado en el cuerpo solo campos editables.
+  for (const [field, value] of Object.entries(req.body as Record<string, unknown>)) {
+    animal[field] = value;
+  }
+  await animal.save();
+
+  // El código del pasaporte se genera de forma perezosa: si esta ficha es de
+  // antes de los códigos, aprovechamos que ya la tenemos cargada.
+  if (!animal.code) await ensureAnimalCode(animal);
+
+  res.json(animal);
 }
 
 export async function listMine(req: Request, res: Response) {

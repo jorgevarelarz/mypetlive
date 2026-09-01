@@ -6,6 +6,7 @@ import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import {
   listMyPets,
   createPersonalPet,
+  updateMyPet,
   AnimalMood,
 } from '../../api/animals';
 import { uploadImage } from '../../api/uploads';
@@ -44,6 +45,18 @@ const REGISTER_INITIAL = {
 
 type RegisterForm = typeof REGISTER_INITIAL;
 
+// La ficha guardada, traída al mismo formulario que la del alta: así editar y
+// registrar no se pueden ir divergiendo campo a campo.
+function formFromAnimal(animal: any): RegisterForm {
+  return {
+    name: animal?.name || '',
+    species: animal?.species || 'cat',
+    age: animal?.age || '',
+    mood: (animal?.mood || '') as '' | AnimalMood,
+    images: Array.isArray(animal?.images) ? animal.images.filter(Boolean) : [],
+  };
+}
+
 // El backend (multer) rechaza cualquier archivo por encima de 10 MB o que no sea
 // imagen; validamos lo mismo aquí para poder decir qué ha pasado.
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -64,11 +77,16 @@ const BACKEND_ERRORS: Record<string, string> = {
   animal_code_generation_failed: 'No hemos podido generar el código de la mascota. Inténtalo otra vez.',
   invalid_file_type: 'Ese archivo no es una imagen. Sube un JPG o un PNG.',
   upload_error: 'No se pudo subir la imagen. Inténtalo otra vez.',
+  not_found: 'Esta mascota ya no está en tu cuenta. Recarga la página.',
+  forbidden: 'Esta mascota no es tuya, así que no puedes editar su ficha.',
 };
 
 function backendErrorMessage(error: any, fallback: string) {
-  const code = error?.response?.data?.error;
+  const data = error?.response?.data;
+  const code = data?.error;
   if (code && BACKEND_ERRORS[code]) return BACKEND_ERRORS[code];
+  // El middleware `validate` responde con otra forma (`message`), no con `error`.
+  if (data?.message === 'validation_error') return 'Revisa los datos: hay algún campo vacío o demasiado largo.';
   if (error?.response?.status === 413) return 'La imagen es demasiado grande (máximo 10 MB).';
   return fallback;
 }
@@ -97,6 +115,9 @@ export default function PetPage() {
 
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<RegisterForm>(REGISTER_INITIAL);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const {
     data: myPets,
@@ -200,27 +221,36 @@ export default function PetPage() {
     queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
   };
 
-  const addRegisterImage = async (file?: File | null) => {
+  // Subida compartida por el alta y la edición: el mismo archivo, los mismos
+  // límites y el mismo mensaje de error en los dos formularios.
+  const addImage = async (
+    file: File | null | undefined,
+    setForm: React.Dispatch<React.SetStateAction<RegisterForm>>,
+    setError: (message: string | null) => void,
+  ) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setRegisterError('Ese archivo no es una imagen. Sube un JPG o un PNG.');
+      setError('Ese archivo no es una imagen. Sube un JPG o un PNG.');
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setRegisterError('La imagen supera los 10 MB. Prueba con una más ligera.');
+      setError('La imagen supera los 10 MB. Prueba con una más ligera.');
       return;
     }
-    setRegisterError(null);
+    setError(null);
     setUploadingImage(true);
     try {
       const { url } = await uploadImage(file);
-      setRegisterForm(prev => ({ ...prev, images: [...prev.images, url] }));
+      setForm(prev => ({ ...prev, images: [...prev.images, url] }));
     } catch (error: any) {
-      setRegisterError(backendErrorMessage(error, 'No se pudo subir la imagen. Inténtalo otra vez.'));
+      setError(backendErrorMessage(error, 'No se pudo subir la imagen. Inténtalo otra vez.'));
     } finally {
       setUploadingImage(false);
     }
   };
+
+  const addRegisterImage = (file?: File | null) => addImage(file, setRegisterForm, setRegisterError);
+  const addEditImage = (file?: File | null) => addImage(file, setEditForm, setEditError);
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -262,6 +292,53 @@ export default function PetPage() {
   const closeRegister = () => {
     setRegisterOpen(false);
     setRegisterError(null);
+  };
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      const id = String(currentPet?._id || currentPet?.id || '');
+      if (!id) throw new Error('missing_pet_id');
+      return updateMyPet(id, {
+        name: editForm.name.trim(),
+        species: editForm.species.trim(),
+        age: editForm.age.trim(),
+        images: editForm.images,
+        // `null` borra el ánimo: sin él, quien lo puso por error no podía quitarlo.
+        mood: editForm.mood || null,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Ficha actualizada');
+      setEditOpen(false);
+      setEditError(null);
+      refetchPets();
+      invalidateAnimalCaches();
+    },
+    onError: (error: any) => {
+      setEditError(backendErrorMessage(error, 'No hemos podido guardar los cambios. Inténtalo de nuevo.'));
+    },
+  });
+
+  const openEdit = () => {
+    if (!currentPet) return;
+    setEditForm(formFromAnimal(currentPet));
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  const submitEdit = () => {
+    const problem = validateRegisterForm(editForm);
+    if (problem) {
+      setEditError(problem);
+      return;
+    }
+    setEditError(null);
+    editMutation.mutate();
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditError(null);
   };
 
   const handleViewCoupons = () => {
@@ -325,7 +402,7 @@ export default function PetPage() {
           </button>
         </div>
         {registerOpen && (
-          <RegisterModal
+          <PetFormModal
             form={registerForm}
             onClose={closeRegister}
             onChange={setRegisterForm}
@@ -343,6 +420,9 @@ export default function PetPage() {
   const image = Array.isArray(featuredAnimal.images) ? featuredAnimal.images[0] : undefined;
   const mood = featuredAnimal.mood || null;
   const code = featuredAnimal.code;
+  // Solo se edita lo propio: el respaldo (`fallbackQuery`) puede estar pintando
+  // el animal destacado de una protectora, que no es de esta familia.
+  const canEdit = Boolean(currentPetEntry);
 
   return (
     <div className="p-4 grid gap-4" style={{ color: '#3F4A3C' }}>
@@ -389,6 +469,17 @@ export default function PetPage() {
       <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
         {image ? (
           <img src={toAbsoluteUrl(image)} alt={featuredAnimal.name} className="w-full rounded-2xl object-cover" style={{ maxHeight: 320 }} />
+        ) : canEdit ? (
+          // Sin foto, el hueco es el sitio donde la gente busca ponerla: que sea
+          // el propio botón y no un cartel muerto que dice "Sin imagen".
+          <button
+            type="button"
+            onClick={openEdit}
+            className="rounded-2xl bg-[#F1ECE4] h-48 w-full flex flex-col items-center justify-center gap-1"
+          >
+            <span className="text-2xl">📷</span>
+            <span className="text-sm font-semibold">Añadir una foto</span>
+          </button>
         ) : (
           <div className="rounded-2xl bg-[#F1ECE4] h-48 flex items-center justify-center">Sin imagen</div>
         )}
@@ -407,24 +498,38 @@ export default function PetPage() {
             <p className="text-sm" style={{ color: '#7A8273' }}>Estado: {moodLabel(mood)} 🌱</p>
           )}
         </div>
-        {petCode && (
+        {(petCode || canEdit) && (
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold"
-              style={{ background: '#1F6F6F', color: '#FFFFFF' }}
-            >
-              📕 Ver pasaporte
-            </button>
-            <button
-              type="button"
-              onClick={handleSharePassport}
-              className="px-3 py-2 rounded-xl text-sm font-semibold border"
-              style={{ borderColor: '#1F6F6F', color: '#1F6F6F', background: '#FFFFFF' }}
-            >
-              🔗 Compartir
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={openEdit}
+                className="px-3 py-2 rounded-xl text-sm font-semibold border"
+                style={{ borderColor: '#6A7B4F', color: '#3F4A3C', background: '#FFFFFF' }}
+              >
+                ✏️ Editar ficha y fotos
+              </button>
+            )}
+            {petCode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold"
+                  style={{ background: '#1F6F6F', color: '#FFFFFF' }}
+                >
+                  📕 Ver pasaporte
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSharePassport}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold border"
+                  style={{ borderColor: '#1F6F6F', color: '#1F6F6F', background: '#FFFFFF' }}
+                >
+                  🔗 Compartir
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -540,7 +645,7 @@ export default function PetPage() {
       />
 
       {registerOpen && (
-        <RegisterModal
+        <PetFormModal
           form={registerForm}
           onClose={closeRegister}
           onChange={setRegisterForm}
@@ -551,11 +656,25 @@ export default function PetPage() {
           error={registerError}
         />
       )}
+
+      {editOpen && (
+        <PetFormModal
+          mode="edit"
+          form={editForm}
+          onClose={closeEdit}
+          onChange={setEditForm}
+          onUpload={addEditImage}
+          onSubmit={submitEdit}
+          submitting={editMutation.isPending}
+          uploading={uploadingImage}
+          error={editError}
+        />
+      )}
     </div>
   );
 }
 
-type RegisterModalProps = {
+type PetFormModalProps = {
   form: RegisterForm;
   onChange: React.Dispatch<React.SetStateAction<RegisterForm>>;
   onUpload: (file?: File | null) => void;
@@ -564,9 +683,19 @@ type RegisterModalProps = {
   submitting: boolean;
   uploading: boolean;
   error?: string | null;
+  mode?: 'create' | 'edit';
 };
 
-function RegisterModal({ form, onChange, onUpload, onSubmit, onClose, submitting, uploading, error }: RegisterModalProps) {
+function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting, uploading, error, mode = 'create' }: PetFormModalProps) {
+  const isEdit = mode === 'edit';
+  const title = isEdit ? 'Editar ficha' : 'Registrar mascota';
+  // La tarjeta y el pasaporte enseñan `images[0]`: para "cambiar la foto" basta
+  // con poder poner otra la primera, sin obligar a borrar la que había.
+  const makeMain = (index: number) =>
+    onChange(prev => ({
+      ...prev,
+      images: [prev.images[index], ...prev.images.filter((_, i) => i !== index)],
+    }));
   return (
     // El overlay hace scroll: en pantallas bajas el formulario no cabe entero y
     // antes los botones Cancelar/Guardar quedaban fuera, sin forma de alcanzarlos.
@@ -574,11 +703,11 @@ function RegisterModal({ form, onChange, onUpload, onSubmit, onClose, submitting
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Registrar mascota"
+        aria-label={title}
         className="w-full max-w-md rounded-2xl bg-white p-5 border"
         style={{ borderColor: '#E7E1D5' }}
       >
-        <h2 className="text-xl font-semibold" style={{ color: '#3F4A3C' }}>Registrar mascota</h2>
+        <h2 className="text-xl font-semibold" style={{ color: '#3F4A3C' }}>{title}</h2>
         <div className="grid gap-3 mt-3 text-sm">
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
             Nombre
@@ -616,30 +745,62 @@ function RegisterModal({ form, onChange, onUpload, onSubmit, onClose, submitting
             </select>
           </label>
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
-            Fotos (opcional)
+            {isEdit ? 'Fotos' : 'Fotos (opcional)'}
             <input
               type="file"
               accept="image/*"
               disabled={uploading || submitting}
-              onChange={e => onUpload(e.target.files?.[0])}
+              onChange={e => {
+                onUpload(e.target.files?.[0]);
+                // Sin esto, volver a elegir el mismo archivo (tras quitarlo por
+                // error) no dispara `change` y parecía que la subida fallaba.
+                e.target.value = '';
+              }}
             />
             {uploading && <span className="text-xs" style={{ color: '#7A8273' }}>Subiendo imagen…</span>}
           </label>
           {form.images.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {form.images.map((url, idx) => (
-                <div key={url + idx} className="relative">
-                  <img src={toAbsoluteUrl(url)} alt="preview" className="w-24 h-20 object-cover rounded border" />
-                  <button
-                    type="button"
-                    aria-label="Quitar foto"
-                    className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6"
-                    onClick={() => onChange(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+            <div className="grid gap-1">
+              <div className="flex flex-wrap gap-2">
+                {form.images.map((url, idx) => (
+                  <div key={url + idx} className="relative">
+                    <img
+                      src={toAbsoluteUrl(url)}
+                      alt={idx === 0 ? 'Foto principal' : `Foto ${idx + 1}`}
+                      className="w-24 h-20 object-cover rounded border"
+                      style={idx === 0 ? { borderColor: '#1F6F6F', borderWidth: 2 } : undefined}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Quitar foto"
+                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6"
+                      onClick={() => onChange(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                    >
+                      ×
+                    </button>
+                    {idx === 0 ? (
+                      <span
+                        className="absolute bottom-1 left-1 text-[10px] font-semibold rounded px-1"
+                        style={{ background: '#1F6F6F', color: '#FFFFFF' }}
+                      >
+                        Principal
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="absolute bottom-1 left-1 text-[10px] font-semibold rounded px-1 border"
+                        style={{ background: '#FFFFFF', color: '#1F6F6F', borderColor: '#1F6F6F' }}
+                        onClick={() => makeMain(idx)}
+                      >
+                        Hacer principal
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <span className="text-xs" style={{ color: '#7A8273' }}>
+                La foto principal es la que se ve en tu panel y en el pasaporte.
+              </span>
             </div>
           )}
         </div>
@@ -650,7 +811,7 @@ function RegisterModal({ form, onChange, onUpload, onSubmit, onClose, submitting
           <button type="button" onClick={onClose} disabled={submitting}>Cancelar</button>
           {/* Bloqueado también mientras sube una foto: si no, se guardaba sin ella. */}
           <button type="button" onClick={onSubmit} disabled={submitting || uploading}>
-            {submitting ? 'Guardando…' : 'Guardar'}
+            {submitting ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Guardar'}
           </button>
         </div>
       </div>

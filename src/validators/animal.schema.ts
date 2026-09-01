@@ -38,6 +38,31 @@ export const animalCreateSchema = z.object({
 
 export const animalUpdateSchema = animalCreateSchema.partial();
 
+// Las fotos las sirve `POST /api/uploads`, que devuelve una URL absoluta, pero
+// una ficha antigua puede guardar la ruta relativa: aceptamos las dos formas y
+// ninguna más (nada de `javascript:` ni de `data:` colándose en un `<img>`).
+const petImage = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2000)
+  .refine(v => /^https?:\/\//i.test(v) || v.startsWith('/uploads/'), 'invalid_image_url');
+
+// Lo que la familia puede corregir de su propia mascota. Zod descarta lo que no
+// esté aquí, así que `status`, `shelter` y `ownerId` —que los gobierna el
+// circuito de adopción— no se pueden mover desde este endpoint aunque viajen en
+// el cuerpo de la petición.
+export const personalPetUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  species: z.string().trim().min(1).max(40).optional(),
+  breed: z.string().trim().max(80).optional(),
+  age: z.string().trim().min(1).max(40).optional(),
+  sex: z.enum(['male', 'female']).optional(),
+  size: z.enum(['small', 'medium', 'large']).optional(),
+  mood: moodEnum.nullable().optional(),
+  images: z.array(petImage).max(20).optional(),
+});
+
 export const animalStatusSchema = z.object({
   status: statusEnum,
 });

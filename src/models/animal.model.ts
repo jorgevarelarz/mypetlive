@@ -78,6 +78,44 @@ const supplySchema = new Schema(
   { _id: false },
 );
 
+// Un avistamiento es lo que manda quien se encuentra al animal y escanea su QR.
+// Las coordenadas son OPCIONALES y solo se guardan si el navegador las cede tras
+// aceptarlo: son un dato personal de quien las envía, no del animal. Por eso
+// nunca salen en el pasaporte público — solo las ve la familia (ver
+// `listSightings` en el controlador).
+const sightingSchema = new Schema(
+  {
+    at: { type: Date, default: Date.now },
+    lat: { type: Number, min: -90, max: 90 },
+    lng: { type: Number, min: -180, max: 180 },
+    // Radio de precisión en metros que reporta el navegador. Sin esto, "está
+    // aquí" con 3 km de error se lee como una certeza que no existe.
+    accuracy: { type: Number, min: 0 },
+    note: { type: String, trim: true, maxlength: 500 },
+    // Cómo contactar con quien lo ha visto. Libre a propósito: puede ser un
+    // teléfono, un correo o nada.
+    contact: { type: String, trim: true, maxlength: 120 },
+  },
+  { _id: true },
+);
+
+// Estado de "se ha perdido". Vive en el animal y no en una colección aparte
+// porque solo hay un episodio abierto a la vez y el pasaporte lo lee en la misma
+// consulta que ya hace.
+const lostSchema = new Schema(
+  {
+    isLost: { type: Boolean, default: false },
+    since: { type: Date },
+    // Zona aproximada donde se perdió, en texto libre ("Sada, cerca del puerto").
+    area: { type: String, trim: true, maxlength: 200 },
+    notes: { type: String, trim: true, maxlength: 500 },
+    // Los avistamientos NO se borran al aparecer el animal: son el historial de
+    // lo que pasó y sirven si vuelve a perderse por la misma zona.
+    sightings: { type: [sightingSchema], default: [] },
+  },
+  { _id: false },
+);
+
 const animalSchema = new Schema(
   {
     shelter: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -136,12 +174,19 @@ const animalSchema = new Schema(
       default: () => ({ foods: [], litters: [] }),
     },
     code: { type: String, unique: true, uppercase: true, index: true },
+    lost: {
+      type: lostSchema,
+      default: () => ({ isLost: false, sightings: [] }),
+    },
     isPersonalPet: { type: Boolean, default: false, index: true },
     createdByRole: { type: String, enum: ['protectora', 'tenant'], required: true, index: true },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   },
   { timestamps: true },
 );
+
+// Buscar "animales perdidos cerca de mí" es una consulta por zona, no por animal.
+animalSchema.index({ 'lost.isLost': 1, city: 1 });
 
 animalSchema.pre('save', async function handleCode(next) {
   try {
