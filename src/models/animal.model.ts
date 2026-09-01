@@ -56,6 +56,12 @@ const healthEntrySchema = new Schema(
     type: { type: String, required: true },
     notes: { type: String },
     vetId: { type: Schema.Types.ObjectId, ref: 'User' },
+    // Cuándo toca repetirlo. Es lo que convierte el pasaporte en algo que avisa
+    // solo: sin esta fecha, apuntar una vacuna es escribir en un cuaderno que
+    // nadie vuelve a abrir. Opcional — hay hitos que no se repiten (una cirugía).
+    nextDueAt: { type: Date },
+    // Sello del aviso ya enviado, para que la pasada del job sea idempotente.
+    reminderSentAt: { type: Date },
   },
   { _id: false },
 );

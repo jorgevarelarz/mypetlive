@@ -9,11 +9,30 @@ import { sendSupplyAlerts } from './supplyAlerts';
 
 const H24_MS = 24 * 60 * 60 * 1000;
 const WELCOME_NUDGE_AFTER_DAYS = 3;
+// Con cuánta antelación se avisa de lo que toca repetir en el pasaporte.
+const HEALTH_NOTICE_DAYS = 7;
 const FRONTEND_URL = () => process.env.FRONTEND_URL || 'https://mypetlive.es';
+
+// Las categorías se guardan en inglés porque son la clave del registro; lo que
+// lee una persona en su correo, no.
+const HEALTH_LABELS: Record<string, string> = {
+  vaccine: 'la vacuna',
+  deworming: 'la desparasitación',
+  checkup: 'la revisión',
+  test: 'una prueba',
+  surgery: 'una intervención',
+  other: 'una cita de salud',
+};
 
 function fmtDate(d?: Date | string | null) {
   if (!d) return 'fecha por confirmar';
   return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+}
+
+// Sin hora: una vacuna toca un día, no a las 17:30.
+function fmtDueDate(d?: Date | string | null) {
+  if (!d) return 'sin fecha';
+  return new Date(d).toLocaleDateString('es-ES', { dateStyle: 'long' });
 }
 
 // Best-effort: un fallo con un destinatario no detiene el resto de la pasada.
@@ -125,11 +144,71 @@ export async function sendWelcomeReminders(now = new Date()): Promise<number> {
   return sent;
 }
 
+/**
+ * Avisa de lo que toca repetir en el pasaporte: vacunas, desparasitaciones y
+ * cualquier hito al que se le puso fecha de repetición.
+ *
+ * Se avisa una semana antes, no el día: una vacuna exige pedir cita, y avisar
+ * el mismo día convierte el recordatorio en un reproche.
+ *
+ * Idempotente por entrada (`reminderSentAt`), y un solo correo por animal
+ * aunque le toquen dos cosas la misma semana — dos correos el mismo día por la
+ * misma mascota es la forma más rápida de que alguien deje de leerlos.
+ */
+export async function sendHealthDueReminders(now = new Date()): Promise<number> {
+  const horizon = new Date(now.getTime() + HEALTH_NOTICE_DAYS * H24_MS);
+  const animals = await Animal.find({
+    healthHistory: { $elemMatch: { nextDueAt: { $ne: null, $lte: horizon }, reminderSentAt: { $exists: false } } },
+  });
+
+  let sent = 0;
+  for (const animal of animals as any[]) {
+    const due = (animal.healthHistory || []).filter(
+      (h: any) => h.nextDueAt && h.nextDueAt <= horizon && !h.reminderSentAt,
+    );
+    if (!due.length) continue;
+
+    // Se marca antes de enviar: si el correo falla, se pierde un aviso; si se
+    // marcara después y fallara la escritura, se enviaría en cada pasada.
+    for (const h of due) h.reminderSentAt = new Date();
+    await animal.save();
+
+    const owner: any = await User.findById(animal.ownerId || animal.shelter).select('email').lean();
+    if (!owner?.email) continue;
+
+    const petName = animal.name || 'tu mascota';
+    const base = FRONTEND_URL();
+    const linea = (h: any) => `${HEALTH_LABELS[h.type] || h.type} — ${fmtDueDate(h.nextDueAt)}`;
+
+    const text =
+      `A ${petName} le toca pronto:\n` +
+      due.map((h: any) => `- ${linea(h)}`).join('\n') +
+      `\n\nApúntalo cuando lo hagáis en su pasaporte: ${base}/pets`;
+    const html = brandedEmail({
+      preheader: `A ${petName} le toca ${HEALTH_LABELS[due[0].type] || 'una revisión'}`,
+      heading: `A ${petName} le toca pronto`,
+      bodyHtml:
+        `<ul style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">` +
+        due.map((h: any) => `<li style="margin:0 0 10px;">${linea(h)}</li>`).join('') +
+        `</ul>` +
+        `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;">Cuando lo hagáis, apúntalo en su pasaporte y te avisamos la próxima vez.</p>`,
+      button: { text: `Ver el pasaporte de ${petName}`, url: `${base}/pets` },
+      footnote: 'Te avisamos una semana antes de cada cita que anotes en el pasaporte.',
+    });
+
+    await notify(owner.email, `A ${petName} le toca pronto 🐾`, text, html);
+    sent += 1;
+  }
+  if (sent) logger.info({ sent }, '[reminders] recordatorios de salud enviados');
+  return sent;
+}
+
 /** Programa las pasadas periódicas de recordatorios (arranque del servidor). */
 export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   const run = () => {
     sendAppointmentReminders().catch(err => logger.error({ err }, '[reminders] pasada de citas falló'));
     sendWelcomeReminders().catch(err => logger.error({ err }, '[reminders] pasada de bienvenida falló'));
+    sendHealthDueReminders().catch(err => logger.error({ err }, '[reminders] pasada de salud falló'));
     sendSupplyAlerts().catch(err => logger.error({ err }, '[reminders] pasada de despensa falló'));
   };
   // Primera pasada poco después de arrancar (deja respirar la conexión a Mongo).

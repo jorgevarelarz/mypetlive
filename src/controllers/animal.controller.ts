@@ -187,8 +187,26 @@ export async function getTimeline(req: Request, res: Response) {
 const HEALTH_CATEGORIES = ['visit', 'vaccine', 'deworming', 'surgery', 'checkup', 'test', 'other'] as const;
 type HealthCategory = (typeof HEALTH_CATEGORIES)[number];
 
-// POST /api/animals/:code/health — un veterinario (o admin) añade un registro
-// clínico al animal identificado por su código. Lo refleja el pasaporte.
+// Cada cuánto toca repetir, cuando quien apunta no dice otra cosa. Solo para lo
+// que de verdad se repite: una cirugía o una prueba no vuelven por calendario.
+const DEFAULT_REPEAT_MONTHS: Partial<Record<HealthCategory, number>> = {
+  vaccine: 12,
+  deworming: 3,
+};
+
+function addMonths(from: Date, months: number) {
+  const d = new Date(from);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+// POST /api/animals/:code/health — añade un registro clínico al animal
+// identificado por su código. Lo refleja el pasaporte.
+//
+// Lo puede usar un veterinario o el admin, y también **la familia**: el pasaporte
+// es del animal, y quien pone la pipeta o lleva la cartilla de vacunas es quien
+// vive con él. Mientras esto estuvo cerrado a rol vet, `healthHistory` se quedó
+// vacío en todas las mascotas personales.
 export async function addHealthRecord(req: Request, res: Response) {
   const code = String(req.params.code || '').trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'invalid_code' });
@@ -209,12 +227,35 @@ export async function addHealthRecord(req: Request, res: Response) {
   const animal: any = await Animal.findOne({ code });
   if (!animal) return res.status(404).json({ error: 'not_found' });
 
-  const actorId = String((req as any).user?._id || (req as any).user?.id || '');
+  const user: any = (req as any).user;
+  const isClinician = user?.role === 'vet' || user?.role === 'admin';
+  if (!isClinician && !canManageAnimal(user, animal)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  const actorId = String(user?._id || user?.id || '');
+
+  // Cuándo toca repetirlo. Tres casos, y el silencio no es uno de ellos:
+  //   - fecha explícita → esa;
+  //   - `nextDueAt: null` → sin recordatorio, decisión del que apunta;
+  //   - ausente → el intervalo por defecto de la categoría, si lo tiene.
+  let nextDueAt: Date | undefined;
+  if (body.nextDueAt === null) {
+    nextDueAt = undefined;
+  } else if (body.nextDueAt !== undefined) {
+    const parsed = new Date(body.nextDueAt);
+    if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: 'invalid_next_due' });
+    if (parsed.getTime() <= Date.now()) return res.status(400).json({ error: 'next_due_in_past' });
+    nextDueAt = parsed;
+  } else {
+    const months = DEFAULT_REPEAT_MONTHS[category];
+    if (months) nextDueAt = addMonths(date, months);
+  }
 
   if (category === 'visit') {
     animal.vetHistory.push({ date, note, treatment });
   } else {
-    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined });
+    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined, nextDueAt });
   }
   await animal.save();
 
@@ -229,6 +270,7 @@ export async function addHealthRecord(req: Request, res: Response) {
   res.status(201).json({
     ok: true,
     category,
+    nextDueAt: nextDueAt || null,
     health: { vetVisits: animal.vetHistory.length, healthMilestones: animal.healthHistory.length },
   });
 }

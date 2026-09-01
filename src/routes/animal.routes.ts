@@ -55,8 +55,10 @@ const sightingLimiter = rateLimit({
 });
 r.post('/passport/:code/sighting', sightingLimiter, asyncHandler(ctrl.reportSighting));
 r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
-// El veterinario (o admin) añade un registro clínico al animal por su código.
-r.post('/:code/health', ...assertRole('vet', 'admin'), asyncHandler(ctrl.addHealthRecord));
+// Registro clínico del animal por su código. El control de quién puede escribir
+// vive en el controlador y no aquí: además del vet y el admin, puede la familia
+// del animal (`canManageAnimal`), y eso depende del animal, no solo del rol.
+r.post('/:code/health', authenticate, asyncHandler(ctrl.addHealthRecord));
 r.get('/:id', asyncHandler(ctrl.getById));
 r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));
 r.post('/:id/care/feed', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markFeeding));

@@ -7,7 +7,9 @@ import {
   listMyPets,
   createPersonalPet,
   updateMyPet,
+  addHealthRecord,
   AnimalMood,
+  type HealthCategory,
 } from '../../api/animals';
 import { uploadImage } from '../../api/uploads';
 import { offersForAnimal } from '../../api/offers';
@@ -18,6 +20,24 @@ import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
+
+// Lo que la familia puede apuntar. 'visit' se queda fuera a propósito: una
+// visita al veterinario la registra la clínica, con su tratamiento.
+const HEALTH_OPTIONS: Array<{ value: HealthCategory; label: string }> = [
+  { value: 'vaccine', label: 'Vacuna' },
+  { value: 'deworming', label: 'Desparasitación' },
+  { value: 'checkup', label: 'Revisión' },
+  { value: 'test', label: 'Prueba' },
+  { value: 'surgery', label: 'Intervención' },
+  { value: 'other', label: 'Otro' },
+];
+
+// Lo que el servidor programará solo si no se pone fecha. Se enseña como pista
+// para que nadie tenga que adivinar si va a recibir un aviso o no.
+const DEFAULT_REPEAT_HINT: Partial<Record<HealthCategory, string>> = {
+  vaccine: 'Si lo dejas vacío, te avisaremos dentro de un año.',
+  deworming: 'Si lo dejas vacío, te avisaremos dentro de tres meses.',
+};
 
 const MOOD_OPTIONS: Array<{ value: '' | AnimalMood; label: string }> = [
   { value: '', label: 'Sin especificar' },
@@ -251,6 +271,42 @@ export default function PetPage() {
 
   const addRegisterImage = (file?: File | null) => addImage(file, setRegisterForm, setRegisterError);
   const addEditImage = (file?: File | null) => addImage(file, setEditForm, setEditError);
+
+  // Apuntar salud desde la ficha. Vive aquí y no en el panel del veterinario
+  // porque quien pone la pipeta y guarda la cartilla es la familia.
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [healthForm, setHealthForm] = useState<{ category: HealthCategory; note: string; nextDueAt: string }>({
+    category: 'vaccine',
+    note: '',
+    nextDueAt: '',
+  });
+
+  const healthMutation = useMutation({
+    mutationFn: async () => {
+      const code = String(featuredAnimal?.code || '');
+      if (!code) throw new Error('sin_codigo');
+      return addHealthRecord(code, {
+        category: healthForm.category,
+        note: healthForm.note.trim(),
+        // Vacío = que decida el servidor con el intervalo de la categoría; para
+        // lo que no se repite, manda `null` y no programa nada.
+        nextDueAt: healthForm.nextDueAt
+          ? new Date(`${healthForm.nextDueAt}T09:00:00`).toISOString()
+          : (DEFAULT_REPEAT_HINT[healthForm.category] ? undefined : null),
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(res.nextDueAt ? 'Apuntado. Te avisaremos cuando toque.' : 'Apuntado en el pasaporte');
+      setHealthOpen(false);
+      setHealthForm({ category: 'vaccine', note: '', nextDueAt: '' });
+      setHealthError(null);
+      invalidateAnimalCaches();
+    },
+    onError: (error: any) => {
+      setHealthError(backendErrorMessage(error, 'No hemos podido apuntarlo. Inténtalo de nuevo.'));
+    },
+  });
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -619,19 +675,97 @@ export default function PetPage() {
         </div>
       )}
 
-      {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 && (
-        <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+      <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Historial de salud</h2>
-          <ul className="mt-2 space-y-2">
+          <button
+            type="button"
+            className="text-sm font-semibold underline"
+            style={{ color: '#2E6B4F' }}
+            onClick={() => { setHealthOpen(v => !v); setHealthError(null); }}
+          >
+            {healthOpen ? 'Cancelar' : 'Apuntar'}
+          </button>
+        </div>
+
+        {healthOpen && (
+          <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: '#F7F5EF' }}>
+            <label className="block text-sm">
+              <span style={{ color: '#3F4A3C' }}>¿Qué le habéis hecho?</span>
+              <select
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: '#E7E1D5' }}
+                value={healthForm.category}
+                onChange={e => setHealthForm(f => ({ ...f, category: e.target.value as HealthCategory }))}
+              >
+                {HEALTH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-sm">
+              <span style={{ color: '#3F4A3C' }}>Detalle</span>
+              <input
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: '#E7E1D5' }}
+                placeholder="Trivalente, pipeta, revisión…"
+                value={healthForm.note}
+                onChange={e => setHealthForm(f => ({ ...f, note: e.target.value }))}
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span style={{ color: '#3F4A3C' }}>¿Cuándo toca la próxima?</span>
+              <input
+                type="date"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: '#E7E1D5' }}
+                value={healthForm.nextDueAt}
+                min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                onChange={e => setHealthForm(f => ({ ...f, nextDueAt: e.target.value }))}
+              />
+              <span className="mt-1 block text-xs" style={{ color: '#7A8273' }}>
+                {healthForm.nextDueAt
+                  ? 'Te avisaremos por correo una semana antes.'
+                  : DEFAULT_REPEAT_HINT[healthForm.category] || 'Sin fecha no enviaremos ningún aviso.'}
+              </span>
+            </label>
+
+            {healthError && <p className="text-sm" style={{ color: '#B3261E' }}>{healthError}</p>}
+
+            <button
+              type="button"
+              className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ background: '#2E6B4F' }}
+              disabled={healthMutation.isPending || !healthForm.note.trim()}
+              onClick={() => healthMutation.mutate()}
+            >
+              {healthMutation.isPending ? 'Guardando…' : 'Apuntar en el pasaporte'}
+            </button>
+          </div>
+        )}
+
+        {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 ? (
+          <ul className="mt-3 space-y-2">
             {featuredAnimal.healthHistory.map((entry: any, idx: number) => (
               <li key={idx} className="text-sm" style={{ color: '#3F4A3C' }}>
                 <span className="text-xs" style={{ color: '#7A8273' }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
                 <div>{healthCategoryLabel(entry.type)}{entry.notes ? ` · ${entry.notes}` : ''}</div>
+                {entry.nextDueAt && (
+                  <div className="text-xs" style={{ color: '#7A8273' }}>
+                    Próxima: {new Date(entry.nextDueAt).toLocaleDateString()}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        ) : (
+          !healthOpen && (
+            <p className="mt-2 text-sm" style={{ color: '#7A8273' }}>
+              Aquí van las vacunas y desparasitaciones. Si apuntas cuándo toca la próxima, te avisamos.
+            </p>
+          )
+        )}
+      </div>
 
       <SelectProtectoraModal
         open={selectProtectoraOpen}

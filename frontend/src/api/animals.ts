@@ -154,10 +154,23 @@ export async function getAnimalTimeline(code: string) {
 
 export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'surgery' | 'checkup' | 'test' | 'other';
 
-// El veterinario añade un registro clínico al animal por su código (alimenta el pasaporte).
-export async function addHealthRecord(code: string, payload: { category: HealthCategory; note: string; treatment?: string; date?: string }) {
+// Añade un registro clínico al animal por su código (alimenta el pasaporte).
+// Lo usan el veterinario y también la familia desde la ficha de su mascota.
+//
+// `nextDueAt` decide si esto genera un aviso: una fecha lo programa, `null` lo
+// desactiva a propósito, y omitirlo deja que el servidor ponga el intervalo
+// habitual de la categoría (vacuna al año, desparasitación a los tres meses).
+export async function addHealthRecord(
+  code: string,
+  payload: { category: HealthCategory; note: string; treatment?: string; date?: string; nextDueAt?: string | null },
+) {
   const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload);
-  return data as { ok: boolean; category: HealthCategory; health: { vetVisits: number; healthMilestones: number } };
+  return data as {
+    ok: boolean;
+    category: HealthCategory;
+    nextDueAt: string | null;
+    health: { vetVisits: number; healthMilestones: number };
+  };
 }
 
 export async function createAnimal(payload: any) {
