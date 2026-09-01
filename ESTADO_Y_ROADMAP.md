@@ -636,7 +636,7 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
-## 5.21 Chapas QR físicas del collar (9 ago 2026) — **SIN DESPLEGAR**
+## 5.21 Chapas QR físicas del collar (9 ago 2026) — **EN PRODUCCIÓN desde el 1 sep 2026**
 
 Jorge cerró proveedor de collares con chapa grabada: **0,18 €/unidad, 100 uds, envío incluido**.
 A ese precio la chapa deja de ser un extra y va de serie con cada pasaporte.
@@ -688,6 +688,10 @@ de autorización duplicada acaba divergiendo, y la mitad que se quede atrás es 
 GitNexus no tenía el símbolo indexado (índice desactualizado); radio verificado a mano.
 
 **Ruta `/t/:code` fuera del `AppShell`**, como `/p/:code`.
+
+**Desplegado el 1 sep 2026** (commit `0fde720`): API recreada y frontend recompilado al docroot.
+Verificado en vivo: `/api/tags/<inexistente>` 404, `/api/tags/mine` 401, `/api/admin/tags/batch` 401
+y `/t/:code` sirviendo la SPA, con el pasaporte de siempre intacto.
 
 **PENDIENTE:** decidir el prefijo grabado, fabricar el lote (`POST /api/admin/tags/batch`),
 descargar el CSV y mandarlo al proveedor. Nada de esto está desplegado todavía.
