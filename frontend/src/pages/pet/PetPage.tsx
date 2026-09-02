@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
+import { listMyTags, claimTag } from '../../api/tags';
 import { useAuth } from '../../context/AuthContext';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import {
@@ -80,6 +82,9 @@ const REGISTER_INITIAL = {
   sex: '' as '' | 'male' | 'female',
   size: '' as '' | 'small' | 'medium' | 'large',
   mood: '' as '' | AnimalMood,
+  // Solo en el alta: la fecha de la última vacuna. No es un campo del animal,
+  // es la semilla del pasaporte — ver `registerMutation`.
+  lastVaccine: '',
   images: [] as string[],
 };
 
@@ -95,6 +100,10 @@ function formFromAnimal(animal: any): RegisterForm {
     sex: (animal?.sex || '') as '' | 'male' | 'female',
     size: (animal?.size || '') as '' | 'small' | 'medium' | 'large',
     mood: (animal?.mood || '') as '' | AnimalMood,
+    // Vacío a propósito: editar la ficha no reabre el alta. Para apuntar salud
+    // está el formulario de la propia ficha, que además admite todas las
+    // categorías y no solo la vacuna.
+    lastVaccine: '',
     images: Array.isArray(animal?.images) ? animal.images.filter(Boolean) : [],
   };
 }
@@ -121,6 +130,13 @@ const BACKEND_ERRORS: Record<string, string> = {
   upload_error: 'No se pudo subir la imagen. Inténtalo otra vez.',
   not_found: 'Esta mascota ya no está en tu cuenta. Recarga la página.',
   forbidden: 'Esta mascota no es tuya, así que no puedes editar su ficha.',
+  // Chapas. Sin esto, activar una chapa ya usada enseñaba "tag_already_claimed".
+  tag_not_found: 'Ese código no es de ninguna chapa de MyPetLive. Revísalo: son letras y números.',
+  tag_already_claimed: 'Esa chapa ya está vinculada a otra mascota.',
+  tag_revoked: 'Esa chapa está anulada y no se puede usar.',
+  animal_already_tagged: 'Esta mascota ya tiene una chapa. Suéltala antes de vincular otra.',
+  animal_code_required: 'No hemos podido identificar a tu mascota. Recarga la página.',
+  animal_not_found: 'No hemos podido identificar a tu mascota. Recarga la página.',
 };
 
 function backendErrorMessage(error: any, fallback: string) {
@@ -330,6 +346,33 @@ export default function PetPage() {
     },
   });
 
+  // ---------------------------------------------------------------- la chapa
+  //
+  // En producción había **100 chapas fabricadas y 0 reclamadas**, y no era
+  // casualidad: la única forma de activar una era escanearla, y en la app no
+  // existía una sola pantalla que dijera que la chapa existe. Aquí se ve el QR
+  // del pasaporte —que ya sirve para imprimirlo uno mismo— y se puede activar
+  // una chapa física tecleando su código, sin tener que escanearla.
+  const tagsQ = useQuery({ queryKey: ['mis-chapas'], queryFn: listMyTags, enabled: Boolean(authToken) });
+  const [tagCode, setTagCode] = useState('');
+  const [tagError, setTagError] = useState<string | null>(null);
+
+  const petCodeActual = String(currentPet?.code || featuredAnimal?.code || '');
+  const chapa = (tagsQ.data?.items || []).find(t => t.animal?.code && t.animal.code === petCodeActual);
+
+  const claimMutation = useMutation({
+    mutationFn: async () => claimTag(tagCode.trim(), petCodeActual),
+    onSuccess: () => {
+      toast.success('Chapa activada. Ya lleva el pasaporte colgado del collar.');
+      setTagCode('');
+      setTagError(null);
+      tagsQ.refetch();
+    },
+    onError: (error: any) => {
+      setTagError(backendErrorMessage(error, 'No hemos podido activar la chapa.'));
+    },
+  });
+
   // ---------------------------------------------------------------- modo perdido
   //
   // Marcar "se ha perdido" PUBLICA datos: el pasaporte es la página del QR de la
@@ -388,7 +431,7 @@ export default function PetPage() {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
-      return createPersonalPet({
+      const creada = await createPersonalPet({
         name: registerForm.name.trim(),
         species: registerForm.species.trim(),
         age: registerForm.age.trim(),
@@ -398,6 +441,29 @@ export default function PetPage() {
         size: registerForm.size || undefined,
         mood: registerForm.mood || undefined,
       }, authToken || undefined);
+
+      // La semilla del pasaporte. Sin esto el alta termina en una ficha vacía:
+      // sin salud, sin despensa y sin nada que devuelva a nadie a la app. En
+      // producción había 22 mascotas y CERO entradas de salud, o sea que la
+      // función que avisa de lo que toca no tenía de qué avisar.
+      //
+      // No se manda `nextDueAt`: el servidor le suma el intervalo de la
+      // categoría A LA FECHA QUE SE APUNTA, así que una vacuna de hace ocho
+      // meses programa el aviso dentro de cuatro, no dentro de doce.
+      //
+      // Y si esta llamada falla, el alta NO falla: la mascota ya existe.
+      if (registerForm.lastVaccine && creada?.code) {
+        try {
+          await addHealthRecord(String(creada.code), {
+            category: 'vaccine',
+            note: 'Vacunación',
+            date: new Date(`${registerForm.lastVaccine}T09:00:00`).toISOString(),
+          });
+        } catch {
+          toast('Hemos registrado a tu mascota, pero no pudimos apuntar la vacuna. Puedes hacerlo desde su ficha.');
+        }
+      }
+      return creada;
     },
     onSuccess: (pet: any) => {
       toast.success('Mascota registrada');
@@ -767,6 +833,58 @@ export default function PetPage() {
         </div>
       </div>
 
+      {/* La chapa. Es lo único físico que tiene MyPetLive y lo que hace que el
+          pasaporte sirva de algo el día que el animal se pierde, y hasta ahora
+          la app no la mencionaba en ninguna parte. */}
+      {petCodeActual && (
+        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+          <h2 className="text-lg font-semibold">La chapa de {featuredAnimal.name}</h2>
+          <div className="flex flex-wrap items-start gap-4">
+            <div style={{ background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: 12, padding: 8 }}>
+              <QRCodeSVG value={`${window.location.origin}/p/${encodeURIComponent(petCodeActual)}`} size={104} bgColor="#ffffff" fgColor="#2E3A2C" />
+            </div>
+            <div style={{ minWidth: 220, flex: 1 }}>
+              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
+                Quien se encuentre a {featuredAnimal.name} y escanee este código llega a su pasaporte.
+                Si está marcado como perdido, verá además cómo avisarte.
+              </p>
+              {chapa ? (
+                <p className="text-sm" style={{ color: '#6A7B4F', marginTop: 8 }}>
+                  Chapa <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{chapa.code}</strong> activada
+                  {typeof chapa.scans === 'number' ? ` · ${chapa.scans} ${chapa.scans === 1 ? 'escaneo' : 'escaneos'}` : ''}.
+                </p>
+              ) : (
+                <div className="grid gap-2" style={{ marginTop: 10 }}>
+                  <p className="text-xs" style={{ color: '#7A8273', margin: 0 }}>
+                    ¿Tienes una chapa de MyPetLive? Escribe su código para vincularla, o imprime este QR
+                    y cuélgaselo tú mismo.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      className="border rounded px-3 py-2 text-sm"
+                      style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', maxWidth: 190 }}
+                      placeholder="Código de la chapa"
+                      value={tagCode}
+                      onChange={e => { setTagCode(e.target.value); setTagError(null); }}
+                    />
+                    <button
+                      type="button"
+                      disabled={!tagCode.trim() || claimMutation.isPending}
+                      onClick={() => claimMutation.mutate()}
+                      className="px-3 py-2 rounded-xl text-sm font-semibold"
+                      style={{ background: tagCode.trim() ? '#1F6F6F' : '#C9D2C4', color: '#FFFFFF' }}
+                    >
+                      {claimMutation.isPending ? 'Activando…' : 'Activar chapa'}
+                    </button>
+                  </div>
+                  {tagError && <p className="text-xs" style={{ color: '#8F3827', margin: 0 }}>{tagError}</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {petOffers.length > 0 && (
         <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
           <h2 className="text-lg font-semibold">Ofertas para {featuredAnimal.name || 'tu mascota'}</h2>
@@ -1108,6 +1226,26 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
               onChange={e => onChange(prev => ({ ...prev, age: e.target.value }))}
             />
           </label>
+          {/* Solo en el alta. Es la única pregunta del formulario que no describe
+              al animal sino que ARRANCA algo: con ella el pasaporte nace con un
+              hito y con un aviso programado, y la app tiene por fin una razón
+              para volver a escribir. Opcional, y quien no la sepa la deja. */}
+          {!isEdit && (
+            <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+              ¿Cuándo fue su última vacuna?
+              <input
+                type="date"
+                className="border rounded px-3 py-2"
+                max={new Date().toISOString().slice(0, 10)}
+                value={form.lastVaccine}
+                onChange={e => onChange(prev => ({ ...prev, lastVaccine: e.target.value }))}
+              />
+              <span className="text-xs" style={{ color: '#7A8273' }}>
+                Opcional. Si la pones, te avisamos una semana antes de la siguiente y su pasaporte
+                empieza con su primer hito de salud.
+              </span>
+            </label>
+          )}
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
             Estado emocional
             <select className="border rounded px-3 py-2" value={form.mood} onChange={e => onChange(prev => ({ ...prev, mood: e.target.value as '' | AnimalMood }))}>

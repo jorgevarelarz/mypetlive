@@ -636,6 +636,53 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.27 Que el alta termine en algo, y que la chapa exista dentro de la app (2 sep 2026)
+
+**El dato que lo motivó**, medido en producción:
+
+| | |
+|---|---|
+| Mascotas sin **ni un** registro de cuidado | 16 de 22 |
+| Último apunte de cuidado de toda la plataforma | **7 de agosto** (26 días) |
+| Entradas de salud en el pasaporte | **0** |
+| Chapas fabricadas / reclamadas | **100 / 0** |
+
+De las 6 mascotas con actividad, cinco dejaron de usarse **el mismo día del alta**. El problema no
+es que falten funciones: es que todo pasa el día uno y nada devuelve a nadie.
+
+### El alta siembra el pasaporte
+
+Una pregunta más, solo en el alta: **«¿cuándo fue su última vacuna?»**. Opcional, con `type="date"`
+y tope en hoy. Al crear la mascota se apunta como hito de salud con esa fecha.
+
+Lo que la hace útil es que **el servidor cuenta el intervalo desde la fecha apuntada**, no desde
+hoy (`addMonths(date, 12)`): una vacuna de hace ocho meses programa el aviso dentro de cuatro. Con
+eso el pasaporte deja de nacer vacío y —lo importante— **queda armado el primer correo que esa
+familia va a recibir**. Hasta hoy había 22 mascotas y cero entradas de salud: la función de avisos
+del 1 sep no tenía de qué avisar.
+
+Detalles que no son obvios: si la llamada de salud falla, **el alta no falla** (la mascota ya
+existe, se avisa y se puede apuntar luego desde la ficha); el campo **no aparece al editar**, que
+para eso está el formulario de salud de la propia ficha; y como ahora entran fechas históricas,
+un aviso ya vencido se anuncia como **«pendiente»** en vez de «le toca pronto», que con una fecha
+de hace dos meses hacía dudar del dato.
+
+### La chapa, dentro de la app
+
+**100 fabricadas y 0 reclamadas**, y no era casualidad: la única forma de activar una era
+escanearla (`/t/:code`), y **ninguna pantalla de la app mencionaba que la chapa existiera**. La
+ficha gana una tarjeta «La chapa de {nombre}» con:
+
+- el **QR del pasaporte**, que ya sirve para imprimirlo uno mismo y colgarlo del collar;
+- el estado: chapa vinculada y cuántas veces se ha escaneado, o
+- un campo para **activar una chapa física tecleando su código**, sin tener que escanearla.
+
+Los códigos de error de chapa (`tag_already_claimed`, `animal_already_tagged`…) pasan a estar
+traducidos, como el resto de la página.
+
+3 tests nuevos (19 en la suite de recordatorios, 100 en las cinco suites tocadas, 50 en el
+frontend).
+
 ## 5.26 El aviso de "se acaba el pienso" llegaba tarde o no llegaba (2 sep 2026)
 
 Cuatro fallos de la misma auditoría, todos en los caminos que usan las familias.

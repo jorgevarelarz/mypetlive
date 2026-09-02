@@ -182,7 +182,14 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
 
     const petName = animal.name || 'tu mascota';
     const base = FRONTEND_URL();
-    const linea = (h: any) => `${HEALTH_LABELS[h.type] || h.type} — ${fmtDueDate(h.nextDueAt)}`;
+    // "Pendiente" y no "le toca pronto" cuando la fecha ya pasó. Desde que el
+    // alta pregunta por la última vacuna, entran fechas históricas: una vacuna
+    // de hace catorce meses programa un aviso ya vencido, y decirle a alguien
+    // que "le toca pronto" algo de hace dos meses le hace dudar del dato.
+    const linea = (h: any) => {
+      const vencido = h.nextDueAt && new Date(h.nextDueAt).getTime() < now.getTime();
+      return `${HEALTH_LABELS[h.type] || h.type} — ${fmtDueDate(h.nextDueAt)}${vencido ? ' · pendiente' : ''}`;
+    };
 
     const text =
       `A ${petName} le toca pronto:\n` +

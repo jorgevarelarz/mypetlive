@@ -108,6 +108,30 @@ describe('quién puede apuntar salud en el pasaporte', () => {
   });
 });
 
+describe('la vacuna que se apunta en el alta', () => {
+  // El alta pregunta "¿cuándo fue su última vacuna?" y manda esa fecha sin
+  // `nextDueAt`. Lo que hace útil la pregunta es que el intervalo se cuente
+  // DESDE ESA FECHA: una vacuna de hace ocho meses toca dentro de cuatro, no
+  // dentro de doce. Si esto cambiara, la pregunta del alta dejaría de servir.
+  it('el próximo aviso se cuenta desde la fecha apuntada, no desde hoy', async () => {
+    const pet = await createPet();
+    const haceOchoMeses = new Date();
+    haceOchoMeses.setMonth(haceOchoMeses.getMonth() - 8);
+
+    const res = await request(app)
+      .post(`/api/animals/${pet.code}/health`)
+      .set(familyH)
+      .send({ category: 'vaccine', note: 'Vacunación', date: haceOchoMeses.toISOString() })
+      .expect(201);
+
+    const proximo = new Date(res.body.nextDueAt);
+    const dentroDe = (proximo.getTime() - Date.now()) / (24 * 3_600_000);
+    // Cuatro meses, no doce.
+    expect(dentroDe).toBeGreaterThan(100);
+    expect(dentroDe).toBeLessThan(140);
+  });
+});
+
 describe('cuándo toca repetirlo', () => {
   it('una vacuna sin fecha explícita se repite al año', async () => {
     const pet = await createPet();
@@ -189,6 +213,15 @@ describe('el aviso de lo que toca', () => {
     const [to, subject] = (sendEmail as jest.Mock).mock.calls[0];
     expect(to).toBe('ana@test.com');
     expect(subject).toContain('Luna');
+  });
+
+  // El alta pregunta por la última vacuna, así que entran fechas históricas: una
+  // vacuna de hace catorce meses deja el próximo aviso ya vencido.
+  it('lo vencido se anuncia como pendiente, no como "le toca pronto"', async () => {
+    await petConVacunaEn(-40);
+    expect(await sendHealthDueReminders()).toBe(1);
+    const [, , text] = (sendEmail as jest.Mock).mock.calls[0];
+    expect(text).toContain('pendiente');
   });
 
   it('no avisa con un mes de antelación', async () => {
