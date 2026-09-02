@@ -60,6 +60,29 @@ describe('Tarjeta de cuidado diario', () => {
     expect(screen.queryByText('Cambiar arena')).not.toBeInTheDocument();
   });
 
+  // Reportado por una usuaria (2 sep 2026): en la ficha de sus dos perros la
+  // despensa decía "apunta el pienso y la arena que usas". La tarjeta ya no le
+  // ofrecía cambiar arena, pero el texto de debajo y el diálogo de alta sí.
+  it('a un perro la despensa no le nombra la arena, ni en el texto ni al añadir', async () => {
+    renderCard('perro');
+    expect(await screen.findByText('Apunta el pienso que usas y te diremos para cuántas comidas queda.'))
+      .toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('+ Añadir producto'));
+    const dialogo = within(screen.getByRole('dialog'));
+    expect(dialogo.queryByRole('button', { name: 'Arena' })).not.toBeInTheDocument();
+    expect(dialogo.queryByRole('button', { name: 'Comida' })).not.toBeInTheDocument();
+  });
+
+  it('a un gato sí, que es de quien era el texto', async () => {
+    renderCard('gato');
+    expect(await screen.findByText('Apunta el pienso y la arena que usas y te diremos para cuántas comidas queda.'))
+      .toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('+ Añadir producto'));
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Arena' })).toBeInTheDocument();
+  });
+
   it('el paseo no se puede guardar sin elegir tipo, y guarda lo que se rellena', async () => {
     const markWalk = jest.spyOn(animalsApi, 'markAnimalWalk').mockResolvedValue({ ok: true } as any);
     renderCard('perro');

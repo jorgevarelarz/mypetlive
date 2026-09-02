@@ -66,7 +66,13 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
       {tracked.length === 0 ? (
         <p className="text-xs" style={{ color: MUTED, marginTop: 6 }}>
           {rows.length === 0
-            ? 'Apunta el pienso y la arena que usas y te diremos para cuántas comidas queda.'
+            // A un perro no se le nombra la arena. `showLitter` ya decidía qué
+            // filas y qué botones se pintan (`usesLitter(species)`), pero este
+            // texto se escribió pensando solo en el gato y le ofrecía a la
+            // familia de un perro apuntar algo que no compra.
+            ? (showLitter
+                ? 'Apunta el pienso y la arena que usas y te diremos para cuántas comidas queda.'
+                : 'Apunta el pienso que usas y te diremos para cuántas comidas queda.')
             : 'Di cuánto trae el paquete y qué ración le pones, y te diremos para cuántas comidas queda.'}
         </p>
       ) : null}
@@ -127,6 +133,9 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
       {editing && (
         <SupplyForm
           kind={editing.kind}
+          // El mismo criterio que las filas: sin esto, "+ Añadir producto"
+          // enseñaba el par Comida/Arena también en la ficha de un perro.
+          showLitter={showLitter}
           supply={editing.supply}
           busy={save.isPending}
           onCancel={() => setEditing(null)}
@@ -144,6 +153,7 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
 
 function SupplyForm({
   kind: initialKind,
+  showLitter,
   supply,
   busy,
   onCancel,
@@ -151,6 +161,7 @@ function SupplyForm({
   onSave,
 }: {
   kind: Kind;
+  showLitter: boolean;
   supply?: CareSupply;
   busy?: boolean;
   onCancel: () => void;
@@ -181,7 +192,7 @@ function SupplyForm({
       <div role="dialog" aria-modal="true" style={modal} onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold">{supply ? 'Editar producto' : 'Añadir producto'}</h3>
 
-        {!supply && (
+        {!supply && showLitter && (
           <div className="flex gap-2" style={{ marginTop: 10 }}>
             {(['food', 'litter'] as Kind[]).map(option => (
               <button

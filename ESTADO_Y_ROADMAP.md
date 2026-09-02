@@ -636,6 +636,22 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.24 La despensa le hablaba de arena a un perro (2 sep 2026)
+
+**Reportado por la misma usuaria**, en la ficha de sus dos perros: la despensa vacía decía
+*«Apunta el pienso **y la arena** que usas y te diremos para cuántas comidas queda»*.
+
+`SupplyList` ya recibía `showLitter` —`usesLitter(species)`, el mismo criterio que decide que un
+perro tenga «Marcar paseo» y un gato «Cambiar arena»— y lo usaba para las filas. Pero **el texto
+del estado vacío estaba escrito pensando solo en el gato**, así que la familia de un perro leía
+que apuntase algo que no compra.
+
+Y al tirar del hilo salió un segundo escape, el mismo error una capa más abajo: `showLitter` no
+llegaba a `SupplyForm`, así que **«+ Añadir producto» ofrecía el par Comida / Arena también en la
+ficha de un perro**. Ahora, sin arena, no se enseña la elección: el único tipo posible es comida.
+
+2 tests nuevos en `DailyCareCard.test.tsx` (13 en verde en esa suite, 49 en todo el frontend).
+
 ## 5.23 El alta de mascota no dejaba elegir sexo ni tamaño (2 sep 2026)
 
 **Reportado por usuarias reales.** Al dar de alta una mascota propia, el formulario pedía
