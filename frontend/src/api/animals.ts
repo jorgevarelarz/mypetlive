@@ -135,7 +135,21 @@ export type AnimalPassport = {
   personality: string[];
   status?: string;
   isPersonalPet?: boolean;
+  // Solo para animales de protectora: de dónde viene. En una mascota de familia
+  // llega `null` y lo que viene es `family`.
   provenance?: { shelterName?: string; city?: string } | null;
+  // La familia, con el nombre de pila y nada más.
+  family?: { name?: string } | null;
+  // El episodio de pérdida. `contact` solo viaja mientras `isLost`, y es lo que
+  // la familia escribió a sabiendas de que se publicaba.
+  lost?: {
+    isLost: boolean;
+    since?: string;
+    area?: string | null;
+    notes?: string | null;
+    contact?: string | null;
+    contactName?: string | null;
+  };
   health: { vetVisits: number; healthMilestones: number };
   timeline: AnimalTimelineItem[];
 };
@@ -300,6 +314,21 @@ export type PersonalPetUpdate = {
 // distinto de `updateAnimal`, que es el de las protectoras y exige rol landlord.
 export async function updateMyPet(id: string, payload: PersonalPetUpdate) {
   const { data } = await client.put(`/api/animals/mine/${id}`, payload);
+  return data;
+}
+
+/**
+ * Modo perdido. `contact` es lo que se publicará en el pasaporte —la página del
+ * QR de la chapa— mientras dure la pérdida; la familia lo escribe en el diálogo,
+ * que se lo advierte antes de guardar.
+ */
+export async function markPetLost(id: string, payload: { area?: string; notes?: string; contact?: string }) {
+  const { data } = await client.post(`/api/animals/${id}/lost`, payload);
+  return data;
+}
+
+export async function markPetFound(id: string) {
+  const { data } = await client.post(`/api/animals/${id}/found`, {});
   return data;
 }
 

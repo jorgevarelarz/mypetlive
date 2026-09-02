@@ -115,6 +115,15 @@ const lostSchema = new Schema(
     // Zona aproximada donde se perdió, en texto libre ("Sada, cerca del puerto").
     area: { type: String, trim: true, maxlength: 200 },
     notes: { type: String, trim: true, maxlength: 500 },
+    // Cómo avisar a la familia, y **solo mientras el animal esté perdido**.
+    //
+    // Vive en el episodio y no en el perfil a propósito: es un dato que se
+    // publica en una página que puede ver cualquiera con la chapa en la mano,
+    // así que se pide y se consiente en el momento de marcar la pérdida, se
+    // elige qué se enseña (un móvil que no es el de casa, por ejemplo) y
+    // desaparece solo al marcar "ha aparecido". Un teléfono en el perfil no
+    // tiene nada de eso.
+    contact: { type: String, trim: true, maxlength: 120 },
     // Los avistamientos NO se borran al aparecer el animal: son el historial de
     // lo que pasó y sirven si vuelve a perderse por la misma zona.
     sightings: { type: [sightingSchema], default: [] },

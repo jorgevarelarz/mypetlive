@@ -636,6 +636,56 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.25 El pasaporte publicaba el nombre del dueño, y el modo perdido no existía (2 sep 2026)
+
+**Hallado auditando los caminos que tocan las usuarias reales.** El pasaporte público —la página
+del QR impreso en la chapa del collar, hecha para que la abra un desconocido— pintaba un bloque
+«Procedencia» con `animal.shelter`. Y en una mascota de familia **`shelter` ES EL DUEÑO**, porque
+así la guarda `createPersonal`. Verificado en producción antes de tocar nada:
+
+```
+GET /api/animals/passport/CANELO-871 → provenance: {shelterName: "Sandra", city: "A Coruña"}
+GET /api/animals/passport/PEPE-783   → provenance: {shelterName: "Yerom Sánchez Fernández"}
+```
+
+Nombre completo de un particular y su ciudad, públicos, en las 22 fichas personales.
+
+**Y al ir a arreglarlo apareció lo de debajo: el modo perdido no tenía interfaz.** `markLost`,
+`markFound`, los avistamientos y el relé existen en la API desde que se montó la chapa, pero
+**no había una sola pantalla** que los usara: `grep -rn "perdid" frontend/src` no devolvía nada.
+La chapa llevaba en producción desde el 1 sep con su razón de ser inalcanzable.
+
+### Qué se publica ahora, y cuándo (decisión de Jorge)
+
+| | Fuera del modo perdido | Marcado como perdido |
+|---|---|---|
+| Animal de protectora | «Procedencia»: organización y ciudad | + aviso, zona y contacto |
+| Mascota de familia | «Su familia»: **solo el nombre de pila** | + **el contacto que la familia escriba** |
+
+- `nombreDePila()` — `profile.firstName`, o la primera palabra de `name`. Varias usuarias reales
+  se registraron con nombre y dos apellidos.
+- El contacto vive en **`lost.contact`, dentro del episodio**, y no en el perfil. Es lo que hace
+  que sea consentido y temporal: se escribe al marcar la pérdida sabiendo que se publica, se
+  elige qué número se enseña, y `markFound` **lo borra**. El teléfono del perfil se propone
+  relleno en el campo, pero no se publica solo.
+- Sin contacto no se publica nada: queda el formulario de aviso, que ya hacía de relé.
+
+### El aviso, que era el encargo
+
+El diálogo de «Se ha perdido» abre con el aviso **antes de pedir ningún dato**, en rojo y arriba:
+*«Se van a publicar tus datos. Mientras esté marcado como perdido, su pasaporte —la página del QR
+de su chapa— mostrará tu nombre de pila y el teléfono que dejes aquí…»*. Y mientras dure, la ficha
+de la mascota lleva una banda que recuerda qué se está enseñando y el botón «Ha aparecido».
+
+🔴 **Una regresión propia, cazada por sus propios tests.** El primer intento buscaba a la persona
+con `ownerId || shelter` para las dos cosas, y en un animal **adoptado** `ownerId` es el adoptante:
+«Procedencia» pasó a decir el nombre del adoptante en vez del de la protectora. Lo cazó
+`animal.passport.test.ts › no filtra nombre, email ni ids de la familia adoptante`, que existía
+exactamente para eso. Son dos personas distintas y se buscan por separado.
+
+4 tests nuevos en `animal.passport.test.ts` (18 en verde), 47 en las tres suites de animales y 49
+en el frontend.
+
 ## 5.24 La despensa le hablaba de arena a un perro (2 sep 2026)
 
 **Reportado por la misma usuaria**, en la ficha de sus dos perros: la despensa vacía decía

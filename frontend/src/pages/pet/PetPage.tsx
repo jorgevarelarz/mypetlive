@@ -6,6 +6,8 @@ import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import {
   listMyPets,
   createPersonalPet,
+  markPetLost,
+  markPetFound,
   updateMyPet,
   addHealthRecord,
   AnimalMood,
@@ -328,6 +330,62 @@ export default function PetPage() {
     },
   });
 
+  // ---------------------------------------------------------------- modo perdido
+  //
+  // Marcar "se ha perdido" PUBLICA datos: el pasaporte es la página del QR de la
+  // chapa y cualquiera que la escanee la ve. Por eso el diálogo lo dice antes de
+  // guardar y el teléfono se escribe aquí, en vez de tirar del que haya en el
+  // perfil: así se elige qué número se enseña y se consiente en el momento.
+  const [lostOpen, setLostOpen] = useState(false);
+  const [lostError, setLostError] = useState<string | null>(null);
+  const [lostForm, setLostForm] = useState({ area: '', notes: '', contact: '' });
+
+  const lostMutation = useMutation({
+    mutationFn: async () => {
+      const id = String(currentPet?._id || currentPet?.id || '');
+      if (!id) throw new Error('missing_pet_id');
+      return markPetLost(id, {
+        area: lostForm.area.trim() || undefined,
+        notes: lostForm.notes.trim() || undefined,
+        contact: lostForm.contact.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Marcado como perdido. Su pasaporte ya lo dice.');
+      setLostOpen(false);
+      setLostError(null);
+      refetchPets();
+      invalidateAnimalCaches();
+    },
+    onError: (error: any) => {
+      setLostError(backendErrorMessage(error, 'No hemos podido marcarlo. Inténtalo de nuevo.'));
+    },
+  });
+
+  const foundMutation = useMutation({
+    mutationFn: async () => {
+      const id = String(currentPet?._id || currentPet?.id || '');
+      if (!id) throw new Error('missing_pet_id');
+      return markPetFound(id);
+    },
+    onSuccess: () => {
+      toast.success('¡Qué alegría! Su pasaporte vuelve a la normalidad.');
+      refetchPets();
+      invalidateAnimalCaches();
+    },
+    onError: (error: any) => {
+      toast.error(backendErrorMessage(error, 'No hemos podido actualizarlo.'));
+    },
+  });
+
+  const openLost = () => {
+    // El teléfono del perfil se propone, no se publica solo: llega escrito en el
+    // campo y quien lo marca lo ve, lo cambia o lo borra antes de guardar.
+    setLostForm({ area: '', notes: '', contact: String((user as any)?.profile?.phone || '') });
+    setLostError(null);
+    setLostOpen(true);
+  };
+
   const registerMutation = useMutation({
     mutationFn: async () => {
       return createPersonalPet({
@@ -615,9 +673,47 @@ export default function PetPage() {
                 </button>
               </>
             )}
+            {/* Hasta ahora "se ha perdido" solo existía en la API: la chapa del
+                collar estaba en producción y su razón de ser no se podía activar
+                desde ninguna pantalla. */}
+            {canEdit && (
+              featuredAnimal.lost?.isLost ? (
+                <button
+                  type="button"
+                  onClick={() => foundMutation.mutate()}
+                  disabled={foundMutation.isPending}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold"
+                  style={{ background: '#6A7B4F', color: '#FFFFFF' }}
+                >
+                  {foundMutation.isPending ? 'Guardando…' : '🎉 Ha aparecido'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openLost}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold border"
+                  style={{ borderColor: '#C8553D', color: '#C8553D', background: '#FFFFFF' }}
+                >
+                  📍 Se ha perdido
+                </button>
+              )
+            )}
           </div>
         )}
       </div>
+
+      {featuredAnimal.lost?.isLost && (
+        <div className="border rounded-2xl p-4" style={{ borderColor: '#C8553D', background: '#FFF4F1' }}>
+          <div className="font-semibold" style={{ color: '#8F3827' }}>
+            📍 {featuredAnimal.name} está marcado como perdido
+          </div>
+          <p className="text-sm" style={{ color: '#7A8273', margin: '6px 0 0' }}>
+            Su pasaporte lo dice y enseña
+            {featuredAnimal.lost.contact ? ` tu contacto (${featuredAnimal.lost.contact})` : ' el formulario de aviso'}
+            {' '}a quien escanee su chapa. Cuando aparezca, dale a «Ha aparecido» y deja de mostrarse.
+          </p>
+        </div>
+      )}
 
       {currentPetEntry?.type === 'adopted' && (
         <WelcomeChecklist
@@ -832,6 +928,90 @@ export default function PetPage() {
           uploading={uploadingImage}
           error={editError}
         />
+      )}
+
+      {lostOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Marcar como perdido"
+            className="w-full max-w-md rounded-2xl bg-white p-5 border"
+            style={{ borderColor: '#E7E1D5' }}
+          >
+            <h2 className="text-xl font-semibold" style={{ color: '#3F4A3C' }}>
+              ¿Se ha perdido {featuredAnimal.name}?
+            </h2>
+
+            {/* El aviso va ARRIBA y antes de pedir nada: es la información con
+                la que se decide, no la letra pequeña de debajo del botón. */}
+            <div
+              className="text-sm rounded-xl border p-3"
+              style={{ marginTop: 12, borderColor: '#C8553D', background: '#FFF4F1', color: '#8F3827' }}
+            >
+              <strong>Se van a publicar tus datos.</strong> Mientras esté marcado como perdido, su
+              pasaporte —la página del QR de su chapa— mostrará tu nombre de pila y el teléfono que
+              dejes aquí, para que quien lo encuentre pueda avisarte. Dejan de verse en cuanto
+              marques que ha aparecido.
+            </div>
+
+            <div className="grid gap-3 mt-3 text-sm">
+              <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+                Teléfono de contacto
+                <input
+                  className="border rounded px-3 py-2"
+                  value={lostForm.contact}
+                  placeholder="Ej.: 600 123 456"
+                  onChange={e => setLostForm(prev => ({ ...prev, contact: e.target.value }))}
+                />
+                <span className="text-xs" style={{ color: '#7A8273' }}>
+                  Opcional. Si lo dejas vacío no se publica nada tuyo y quien lo encuentre solo podrá
+                  avisarte por el formulario del pasaporte, sin ver tus datos.
+                </span>
+              </label>
+              <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+                ¿Por dónde se perdió?
+                <input
+                  className="border rounded px-3 py-2"
+                  value={lostForm.area}
+                  placeholder="Ej.: Sada, cerca del puerto"
+                  onChange={e => setLostForm(prev => ({ ...prev, area: e.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+                Algo que ayude a reconocerlo
+                <textarea
+                  className="border rounded px-3 py-2"
+                  value={lostForm.notes}
+                  placeholder="Ej.: collar rojo, es muy asustadizo"
+                  onChange={e => setLostForm(prev => ({ ...prev, notes: e.target.value }))}
+                />
+              </label>
+            </div>
+
+            {lostError && <p className="text-sm" style={{ color: '#8F3827', marginTop: 10 }}>{lostError}</p>}
+
+            <div className="flex justify-end gap-2" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => { setLostOpen(false); setLostError(null); }}
+                className="px-3 py-2 rounded-xl text-sm font-semibold border"
+                style={{ borderColor: '#D7D0C2', color: '#3F4A3C', background: '#FFFFFF' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => lostMutation.mutate()}
+                disabled={lostMutation.isPending}
+                className="px-3 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: '#C8553D', color: '#FFFFFF' }}
+              >
+                {lostMutation.isPending ? 'Guardando…' : 'Marcar como perdido'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

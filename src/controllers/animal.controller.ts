@@ -276,13 +276,53 @@ export async function addHealthRecord(req: Request, res: Response) {
 }
 
 // GET /api/animals/passport/:code — público (sin datos personales del dueño actual).
+/**
+ * El nombre con el que se presenta a una persona en una página pública: su
+ * nombre de pila y nada más. `User.name` guarda lo que cada uno escribió al
+ * registrarse, y varias usuarias reales pusieron nombre y dos apellidos.
+ */
+function nombreDePila(user: any): string | undefined {
+  const propio = String(user?.profile?.firstName || '').trim();
+  if (propio) return propio.slice(0, 40);
+  const entero = String(user?.name || '').trim();
+  if (!entero) return undefined;
+  return entero.split(/\s+/)[0].slice(0, 40);
+}
+
 export async function getPassport(req: Request, res: Response) {
   const normalized = String(req.params.code || '').trim().toUpperCase();
   if (!normalized) return res.status(400).json({ error: 'invalid_code' });
   const animal: any = await Animal.findOne({ code: normalized, status: { $ne: 'borrador' } }).lean();
   if (!animal) return res.status(404).json({ error: 'not_found' });
 
-  const shelter: any = animal.shelter ? await User.findById(animal.shelter).select('name profile.address.city').lean() : null;
+  // 🔴 2 sep 2026 — Quién sale aquí y con qué nombre.
+  //
+  // Hasta hoy esta consulta traía `animal.shelter` y se pintaba como
+  // "Procedencia", y en una mascota de familia `shelter` ES EL DUEÑO (así lo
+  // guarda `createPersonal`): el pasaporte publicaba el nombre completo de un
+  // particular —"Yerom Sánchez Fernández"— y su ciudad, en una página que
+  // cualquiera puede abrir escaneando la chapa del collar. Ahora:
+  //
+  //   · animal de protectora → "Procedencia", con el nombre de la organización
+  //     y su ciudad, que es información pública y además le da confianza a quien
+  //     mira una ficha en adopción.
+  //   · mascota de familia   → solo el NOMBRE DE PILA ("Sandra"), sin ciudad y
+  //     sin apellidos. Lo justo para que quien encuentra al animal sepa a quién
+  //     tiene delante, y nada con lo que buscar a nadie.
+  //
+  // Son DOS personas distintas y hay que buscarlas por separado: la protectora
+  // que dio de alta la ficha (`shelter`) y quien responde hoy por el animal
+  // (`ownerId`, que en un animal adoptado es el adoptante). Mezclarlas rompe el
+  // caso de la adopción — la primera versión de este cambio puso al adoptante en
+  // "Procedencia" y lo cazó `animal.passport.test.ts`, que existe justo para eso.
+  const esPersonal = animal.isPersonalPet === true;
+  const responsableId = animal.ownerId || animal.shelter;
+  const [protectora, responsable] = await Promise.all([
+    !esPersonal && animal.shelter
+      ? User.findById(animal.shelter).select('name profile.address.city').lean()
+      : null,
+    responsableId ? User.findById(responsableId).select('name profile.firstName').lean() : null,
+  ]) as any[];
   const events = await AnimalEvent.find({ animalId: animal._id })
     .sort({ createdAt: 1 })
     .populate('shelterId', 'name')
@@ -304,7 +344,10 @@ export async function getPassport(req: Request, res: Response) {
     personality: animal.personality || [],
     status: animal.status,
     isPersonalPet: animal.isPersonalPet,
-    provenance: shelter ? { shelterName: shelter.name, city: shelter.profile?.address?.city || animal.city } : null,
+    provenance: protectora
+      ? { shelterName: protectora.name, city: protectora.profile?.address?.city || animal.city }
+      : null,
+    family: esPersonal && responsable ? { name: nombreDePila(responsable) } : null,
     health: { vetVisits: vetCount, healthMilestones: healthCount },
     // Modo perdido. Se expone la zona donde se perdió (dato del animal, útil para
     // quien lo encuentra) pero NUNCA los avistamientos ni el contacto de la
@@ -315,6 +358,12 @@ export async function getPassport(req: Request, res: Response) {
         since: animal.lost.since,
         area: animal.lost.area,
         notes: animal.lost.notes,
+        // Aquí SÍ se publica cómo avisar, porque es el único momento en que
+        // sirve de algo y porque la familia lo escribió sabiendo que se vería
+        // (ver el aviso del diálogo de "marcar como perdido"). Se va solo al
+        // marcar "ha aparecido": `markFound` borra el campo.
+        contact: animal.lost.contact || null,
+        contactName: responsable ? nombreDePila(responsable) : null,
       }
       : { isLost: false },
     timeline: buildTimeline(animal, events, false),
@@ -339,6 +388,9 @@ export async function markLost(req: Request, res: Response) {
 
   const area = typeof req.body?.area === 'string' ? req.body.area.trim().slice(0, 200) : undefined;
   const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim().slice(0, 500) : undefined;
+  // Lo que se publicará en el pasaporte mientras dure la pérdida. Opcional: sin
+  // él sigue estando el formulario de aviso, que hace de relé sin enseñar nada.
+  const contact = typeof req.body?.contact === 'string' ? req.body.contact.trim().slice(0, 120) : undefined;
 
   // Volver a marcar perdido un animal ya perdido actualiza la zona pero no
   // reinicia el reloj: "perdido desde hace 3 días" es lo que mueve a la gente.
@@ -349,6 +401,9 @@ export async function markLost(req: Request, res: Response) {
     since,
     area,
     notes,
+    // Volver a marcarlo perdido sin contacto no borra el que ya había: la
+    // segunda llamada suele venir de actualizar la zona.
+    contact: contact || animal.lost?.contact,
     sightings: animal.lost?.sightings || [],
   };
   await animal.save();
@@ -361,7 +416,7 @@ export async function markLost(req: Request, res: Response) {
     data: { area },
   });
 
-  res.json({ ok: true, lost: { isLost: true, since, area, notes } });
+  res.json({ ok: true, lost: { isLost: true, since, area, notes, contact: animal.lost.contact } });
 }
 
 // POST /api/animals/:id/found — apareció. Conserva los avistamientos.
@@ -377,6 +432,8 @@ export async function markFound(req: Request, res: Response) {
     since: undefined,
     area: undefined,
     notes: undefined,
+    // El contacto se publicaba solo mientras estaba perdido: aparecer lo borra.
+    contact: undefined,
     sightings: animal.lost?.sightings || [],
   };
   await animal.save();

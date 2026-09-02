@@ -60,6 +60,86 @@ async function createAnimal(overrides: Record<string, any> = {}) {
   return res.body;
 }
 
+// El pasaporte es la página del QR de la chapa del collar: la abre cualquiera
+// que se encuentre al animal. Lo que sale ahí de la familia es un dato personal
+// publicado, y hasta el 2 sep 2026 salía su nombre completo y su ciudad porque
+// `createPersonal` guarda al dueño en el campo `shelter`.
+describe('Qué se publica de la familia en el pasaporte', () => {
+  const familyId = new mongoose.Types.ObjectId().toHexString();
+  const familyH = { 'x-user-id': familyId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
+
+  async function crearMascotaPersonal() {
+    await User.create({
+      _id: familyId, name: 'Yerom Sánchez Fernández', email: 'yerom@test.com', passwordHash: 'x',
+      role: 'tenant', profile: { address: { city: 'A Coruña' }, phone: '600111222' },
+    });
+    const res = await request(app)
+      .post('/api/animals/personal')
+      .set(familyH)
+      .send({ name: 'Pepe', species: 'perro', age: '6' })
+      .expect(201);
+    return res.body;
+  }
+
+  it('de una mascota de familia sale el nombre de pila y nada más', async () => {
+    const pet = await crearMascotaPersonal();
+    const res = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+
+    expect(res.body.family).toEqual({ name: 'Yerom' });
+    // Ni apellidos, ni ciudad, ni el bloque de "procedencia" de las protectoras.
+    expect(res.body.provenance).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain('Sánchez');
+    expect(JSON.stringify(res.body)).not.toContain('A Coruña');
+  });
+
+  it('de un animal de protectora sigue saliendo la organización y su ciudad', async () => {
+    const animal = await createAnimal();
+    const res = await request(app).get(`/api/animals/passport/${animal.code}`).expect(200);
+    expect(res.body.provenance).toEqual({ shelterName: 'Protectora Lugo', city: 'Lugo' });
+    expect(res.body.family).toBeNull();
+  });
+
+  it('el contacto solo se publica mientras esté perdido, y se va al aparecer', async () => {
+    const pet = await crearMascotaPersonal();
+
+    let res = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+    expect(res.body.lost).toEqual({ isLost: false });
+
+    await request(app)
+      .post(`/api/animals/${pet._id}/lost`)
+      .set(familyH)
+      .send({ area: 'Sada, cerca del puerto', contact: '600 123 456' })
+      .expect(200);
+
+    res = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+    expect(res.body.lost.isLost).toBe(true);
+    expect(res.body.lost.contact).toBe('600 123 456');
+    expect(res.body.lost.contactName).toBe('Yerom');
+    expect(res.body.lost.area).toBe('Sada, cerca del puerto');
+
+    await request(app).post(`/api/animals/${pet._id}/found`).set(familyH).send({}).expect(200);
+
+    res = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+    expect(res.body.lost).toEqual({ isLost: false });
+    expect(JSON.stringify(res.body)).not.toContain('600 123 456');
+  });
+
+  it('sin teléfono no se publica ningún contacto', async () => {
+    const pet = await crearMascotaPersonal();
+    await request(app)
+      .post(`/api/animals/${pet._id}/lost`)
+      .set(familyH)
+      .send({ area: 'Oleiros' })
+      .expect(200);
+
+    const res = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+    expect(res.body.lost.isLost).toBe(true);
+    expect(res.body.lost.contact).toBeNull();
+    // El teléfono del perfil NO se publica solo: solo el que se escribe al marcar.
+    expect(JSON.stringify(res.body)).not.toContain('600111222');
+  });
+});
+
 describe('Pasaporte del animal', () => {
   it('registra el evento "created" y el pasaporte expone la línea de tiempo', async () => {
     const animal = await createAnimal();

@@ -49,6 +49,33 @@ export default function AnimalPassport() {
           </div>
         ) : (
           <>
+            {/* Se ha perdido. Va lo primero y en rojo porque esta página, cuando
+                de verdad se usa, la abre alguien que tiene al animal delante y
+                el móvil en la mano: lo demás puede esperar a después del aviso. */}
+            {p.lost?.isLost && (
+              <div style={{ ...card, borderColor: MPL.coral, background: '#FFF4F1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.coralDark, fontWeight: 800 }}>
+                  <MapPin size={18} /> {p.name} se ha perdido
+                </div>
+                {p.lost.area && <div style={{ marginTop: 8, fontSize: 15 }}>Se perdió por <strong>{p.lost.area}</strong>.</div>}
+                {p.lost.notes && <div style={{ marginTop: 4, color: MPL.muted, fontSize: 14.5 }}>{p.lost.notes}</div>}
+                {p.lost.contact ? (
+                  <div style={{ marginTop: 12, background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12.5, color: MPL.muted, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                      Avisa a su familia
+                    </div>
+                    <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, marginTop: 4 }}>
+                      {p.lost.contactName ? `${p.lost.contactName} · ` : ''}{p.lost.contact}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10, fontSize: 14.5, color: MPL.muted }}>
+                    Su familia no ha dejado un teléfono aquí. Avísala desde el formulario de esta misma página.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Hero */}
             <div style={{ ...card, display: 'grid', gridTemplateColumns: 'minmax(0,260px) 1fr', gap: 20, alignItems: 'center' }} className="passport-hero">
               <div style={{ aspectRatio: '1', borderRadius: 16, overflow: 'hidden', background: MPL.teal100 }}>
@@ -74,9 +101,16 @@ export default function AnimalPassport() {
 
             {/* Procedencia + salud + QR */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+              {/* Una protectora es una organización y su nombre y ciudad son
+                  públicos; una familia no. De ahí que aquí solo salga el nombre
+                  de pila, sin ciudad: lo justo para saber a quién se llama. */}
               <div style={card}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.teal, fontWeight: 800, marginBottom: 8 }}><MapPin size={17} /> Procedencia</div>
-                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, fontWeight: 800 }}>{p.provenance?.shelterName || 'Registrado por su familia'}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.teal, fontWeight: 800, marginBottom: 8 }}>
+                  {p.provenance ? <><MapPin size={17} /> Procedencia</> : <><Heart size={17} /> Su familia</>}
+                </div>
+                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, fontWeight: 800 }}>
+                  {p.provenance?.shelterName || p.family?.name || 'Registrado por su familia'}
+                </div>
                 {p.provenance?.city && <div style={{ color: MPL.muted, fontSize: 14 }}>{p.provenance.city}</div>}
               </div>
               <div style={card}>
