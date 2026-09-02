@@ -291,8 +291,8 @@ export type PersonalPetUpdate = {
   breed?: string;
   age?: string;
   mood?: AnimalMood | null;
-  sex?: 'male' | 'female';
-  size?: 'small' | 'medium' | 'large';
+  sex?: 'male' | 'female' | null;
+  size?: 'small' | 'medium' | 'large' | null;
   images?: string[];
 };
 

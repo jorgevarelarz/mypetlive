@@ -57,8 +57,10 @@ export const personalPetUpdateSchema = z.object({
   species: z.string().trim().min(1).max(40).optional(),
   breed: z.string().trim().max(80).optional(),
   age: z.string().trim().min(1).max(40).optional(),
-  sex: z.enum(['male', 'female']).optional(),
-  size: z.enum(['small', 'medium', 'large']).optional(),
+  // `nullable` como `mood`: quien se equivocó al darla de alta tiene que poder
+  // dejarlo en blanco otra vez, no solo cambiarlo por el otro valor.
+  sex: z.enum(['male', 'female']).nullable().optional(),
+  size: z.enum(['small', 'medium', 'large']).nullable().optional(),
   mood: moodEnum.nullable().optional(),
   images: z.array(petImage).max(20).optional(),
 });

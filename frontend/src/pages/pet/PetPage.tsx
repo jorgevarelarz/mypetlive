@@ -55,10 +55,28 @@ const SPECIES_OPTIONS = [
   { value: 'other', label: 'Otro' },
 ];
 
+// Sexo y tamaño con "sin especificar" de primero y a propósito: son opcionales
+// en el modelo y quien no lo sepa (una acogida recién llegada) no tiene por qué
+// inventárselo. Lo que NO puede volver a pasar es que la ficha lo rellene sola.
+const SEX_OPTIONS: Array<{ value: '' | 'male' | 'female'; label: string }> = [
+  { value: '', label: 'Sin especificar' },
+  { value: 'female', label: 'Hembra' },
+  { value: 'male', label: 'Macho' },
+];
+
+const SIZE_OPTIONS: Array<{ value: '' | 'small' | 'medium' | 'large'; label: string }> = [
+  { value: '', label: 'Sin especificar' },
+  { value: 'small', label: 'Pequeño' },
+  { value: 'medium', label: 'Mediano' },
+  { value: 'large', label: 'Grande' },
+];
+
 const REGISTER_INITIAL = {
   name: '',
   species: 'cat',
   age: '',
+  sex: '' as '' | 'male' | 'female',
+  size: '' as '' | 'small' | 'medium' | 'large',
   mood: '' as '' | AnimalMood,
   images: [] as string[],
 };
@@ -72,6 +90,8 @@ function formFromAnimal(animal: any): RegisterForm {
     name: animal?.name || '',
     species: animal?.species || 'cat',
     age: animal?.age || '',
+    sex: (animal?.sex || '') as '' | 'male' | 'female',
+    size: (animal?.size || '') as '' | 'small' | 'medium' | 'large',
     mood: (animal?.mood || '') as '' | AnimalMood,
     images: Array.isArray(animal?.images) ? animal.images.filter(Boolean) : [],
   };
@@ -315,6 +335,9 @@ export default function PetPage() {
         species: registerForm.species.trim(),
         age: registerForm.age.trim(),
         images: registerForm.images,
+        // Vacío = no se manda el campo. El modelo ya no rellena por su cuenta.
+        sex: registerForm.sex || undefined,
+        size: registerForm.size || undefined,
         mood: registerForm.mood || undefined,
       }, authToken || undefined);
     },
@@ -361,6 +384,12 @@ export default function PetPage() {
         images: editForm.images,
         // `null` borra el ánimo: sin él, quien lo puso por error no podía quitarlo.
         mood: editForm.mood || null,
+        // Igual con sexo y tamaño, y aquí importa más: toda mascota dada de alta
+        // antes del 2 sep 2026 salió con "hembra" y "mediano" puestos por el
+        // modelo sin que nadie los eligiera, así que esto es la vía para
+        // corregirlos —o dejarlos en blanco— desde la propia ficha.
+        sex: editForm.sex || null,
+        size: editForm.size || null,
       });
     },
     onSuccess: () => {
@@ -860,6 +889,35 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
               ))}
             </select>
           </label>
+          {/* Sexo y tamaño en una sola fila: son dos desplegables cortos y en
+              vertical alargaban el diálogo hasta obligar a hacer scroll para
+              llegar a Guardar. */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+              Sexo
+              <select
+                className="border rounded px-3 py-2"
+                value={form.sex}
+                onChange={e => onChange(prev => ({ ...prev, sex: e.target.value as '' | 'male' | 'female' }))}
+              >
+                {SEX_OPTIONS.map(option => (
+                  <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
+              Tamaño
+              <select
+                className="border rounded px-3 py-2"
+                value={form.size}
+                onChange={e => onChange(prev => ({ ...prev, size: e.target.value as '' | 'small' | 'medium' | 'large' }))}
+              >
+                {SIZE_OPTIONS.map(option => (
+                  <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
             Edad
             {/* `age` es texto libre en el modelo: se acepta "8 meses" o "2 años". */}

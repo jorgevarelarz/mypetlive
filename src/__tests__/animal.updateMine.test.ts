@@ -51,6 +51,52 @@ async function createPersonalPet() {
   return res.body;
 }
 
+describe('Sexo y tamaño de una mascota de la familia', () => {
+  // El alta no los pedía y el modelo los rellenaba con 'female'/'medium', así
+  // que el pasaporte público del QR daba por hembra mediana a cualquier animal
+  // que registrara una familia. El hueco vacío es la respuesta correcta.
+  it('sin elegirlos, la ficha se queda sin sexo ni tamaño (no los inventa)', async () => {
+    const pet = await createPersonalPet();
+    expect(pet.sex).toBeUndefined();
+    expect(pet.size).toBeUndefined();
+    const guardado: any = await Animal.findById(pet._id).lean();
+    expect(guardado.sex).toBeUndefined();
+    expect(guardado.size).toBeUndefined();
+  });
+
+  it('el alta guarda los que elige la familia', async () => {
+    const res = await request(app)
+      .post('/api/animals/personal')
+      .set(familyH)
+      .send({ name: 'Trufa', species: 'perro', age: '5 años', sex: 'male', size: 'large' })
+      .expect(201);
+    expect(res.body.sex).toBe('male');
+    expect(res.body.size).toBe('large');
+  });
+
+  it('se pueden corregir y también dejar en blanco desde la ficha', async () => {
+    const pet = await createPersonalPet();
+
+    await request(app)
+      .put(`/api/animals/mine/${pet._id}`)
+      .set(familyH)
+      .send({ sex: 'male', size: 'small' })
+      .expect(200);
+    let guardado: any = await Animal.findById(pet._id).lean();
+    expect(guardado.sex).toBe('male');
+    expect(guardado.size).toBe('small');
+
+    await request(app)
+      .put(`/api/animals/mine/${pet._id}`)
+      .set(familyH)
+      .send({ sex: null, size: null })
+      .expect(200);
+    guardado = await Animal.findById(pet._id).lean();
+    expect(guardado.sex).toBeNull();
+    expect(guardado.size).toBeNull();
+  });
+});
+
 describe('Editar la ficha de mi mascota', () => {
   it('la familia cambia la foto y los datos de su mascota', async () => {
     const pet = await createPersonalPet();

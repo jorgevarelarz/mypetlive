@@ -636,6 +636,36 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.23 El alta de mascota no dejaba elegir sexo ni tamaño (2 sep 2026)
+
+**Reportado por usuarias reales.** Al dar de alta una mascota propia, el formulario pedía
+nombre, especie, edad, estado emocional y fotos. Sexo y tamaño no aparecían por ninguna parte.
+
+**Y lo grave no era la ausencia, era el relleno.** `POST /api/animals/personal` sí aceptaba los
+dos campos —y `PUT /api/animals/mine/:id` también—, así que el fallo estaba solo en el
+formulario; pero como el modelo los declaraba con `default: 'female'` y `default: 'medium'`,
+**toda mascota registrada por una familia quedaba guardada como hembra de tamaño mediano**. No
+era un hueco vacío: era un dato inventado, y es el que sale impreso en el **pasaporte público
+del QR del collar**, en la ficha y en el JSON-LD (`sex ? … : null` en los tres sitios, que
+nunca llegaba a ser `null`).
+
+- El diálogo de alta —que es el mismo que el de edición— gana **Sexo** y **Tamaño**, en una
+  fila de dos columnas para no alargarlo, con **«Sin especificar» de primera opción**: son
+  opcionales de verdad y quien no lo sepa (una acogida recién llegada) no tiene por qué
+  inventárselo.
+- Fuera los dos `default` del modelo. El alta de protectora no se entera: `animalCreateSchema`
+  exige ambos campos. Los `enum` admiten ahora `null`, como ya hacía `mood`.
+- `personalPetUpdateSchema` los acepta `nullable`, así que desde la ficha se pueden **corregir
+  y también volver a dejar en blanco**. Ésa es la vía para arreglar lo que ya está guardado.
+
+🔴 **Las fichas creadas antes de hoy siguen diciendo «hembra» y «mediano»** aunque nadie lo
+eligiera, y no hay forma de distinguir por datos cuáles son verdad: quien puso «hembra» a
+propósito y quien no llegó a ver el campo tienen exactamente el mismo documento. No se toca la
+BD de producción — lo correcto es que cada familia lo corrija desde su ficha, que ya puede.
+
+6 tests nuevos en `animal.updateMine.test.ts` (23 en verde en esa suite y 43 en las de cuidado
+y chapas), `tsc --noEmit` del frontend limpio.
+
 ## 5.22 El pasaporte avisa de lo que toca (1 sep 2026) — **EN PRODUCCIÓN**
 
 **El agujero que lo motivó:** ninguna de las usuarias reales había recibido jamás un correo

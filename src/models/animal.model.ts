@@ -128,11 +128,18 @@ const animalSchema = new Schema(
     name: { type: String, required: true },
     species: { type: String, required: true, set: normalizeSpecies },
     breed: { type: String },
-    sex: { type: String, enum: ['male', 'female'], default: 'female' },
+    // Sin `default`. Lo tenían ('female' y 'medium') y era una mentira silenciosa:
+    // el alta de una mascota de la familia no pedía ninguno de los dos, así que
+    // TODAS entraban como hembra de tamaño mediano y eso es lo que enseñaba el
+    // pasaporte público del QR del collar. Preferimos el hueco vacío a un dato
+    // inventado: quien lee la ficha ya trata la ausencia (`sex ? … : null` en el
+    // pasaporte, en la ficha y en el SEO). El alta de protectora no se entera:
+    // `animalCreateSchema` exige los dos campos.
+    sex: { type: String, enum: ['male', 'female', null] },
     age: { type: String, required: true },
     ageGroup: { type: String, enum: ['puppy', 'young', 'adult', 'senior'] },
     city: { type: String, trim: true, index: true },
-    size: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
+    size: { type: String, enum: ['small', 'medium', 'large', null] },
     goodWithChildren: { type: Boolean },
     goodWithDogs: { type: Boolean },
     goodWithCats: { type: Boolean },
