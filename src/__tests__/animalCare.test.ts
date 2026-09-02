@@ -76,6 +76,42 @@ async function createPersonalPet() {
   });
 }
 
+// 🔴 El tope de la despensa son 8 productos y se aplicaba con un `slice` a
+// secas: marcar una comida con un nombre nuevo empujaba al más antiguo fuera y
+// con él se iban su paquete, su ración y lo que quedaba.
+describe('El tope de la despensa no se lleva por delante las existencias', () => {
+  it('con la despensa llena, lo configurado sobrevive al producto nuevo', async () => {
+    const animal = await Animal.create({
+      shelter: adopterId, ownerId: adopterId, name: 'Michi', species: 'gato', age: '3 años',
+      isPersonalPet: true, createdByRole: 'tenant',
+      carePantry: {
+        foods: Array.from({ length: 8 }, (_, i) => ({
+          name: `Pienso ${i + 1}`, unit: 'kg', packSize: 6000, perUse: 100, remaining: 3000,
+        })),
+        litters: [],
+      },
+    });
+
+    await request(app)
+      .post(`/api/animals/${animal._id}/care/feed`)
+      .set(adopterH)
+      .send({ foods: ['Una lata suelta'] })
+      .expect(200);
+
+    const saved: any = await Animal.findById(animal._id).lean();
+    expect(saved.carePantry.foods).toHaveLength(8);
+    // Los ocho siguen ahí y con su cuenta intacta.
+    for (let i = 0; i < 8; i += 1) {
+      const encontrado = saved.carePantry.foods.find((f: any) => f.name === `Pienso ${i + 1}`);
+      expect(encontrado).toBeTruthy();
+      expect(encontrado.remaining).toBe(3000);
+      expect(encontrado.perUse).toBe(100);
+    }
+    // Lo que no entra es el nombre nuevo, que no tenía nada que perder.
+    expect(saved.carePantry.foods.some((f: any) => f.name === 'Una lata suelta')).toBe(false);
+  });
+});
+
 describe('cuidado diario: quién puede registrarlo', () => {
   it('el adoptante puede marcar comida del animal que adoptó (adopción aprobada)', async () => {
     const animal = await createShelterAnimal();

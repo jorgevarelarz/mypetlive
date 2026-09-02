@@ -197,6 +197,25 @@ describe('el aviso de lo que toca', () => {
     expect(sendEmail as jest.Mock).not.toHaveBeenCalled();
   });
 
+  // 🔴 Se marcaba `reminderSentAt` ANTES de buscar al destinatario, así que un
+  // animal sin correo detrás se quedaba el aviso marcado como enviado sin
+  // haberlo enviado — y no volvía nunca. El orden ahora es al revés.
+  it('sin destinatario no quema el aviso: vuelve a intentarlo', async () => {
+    const pet = await petConVacunaEn(3);
+    // El dueño desaparece (cuenta borrada): no hay a quién escribir.
+    await User.deleteOne({ _id: familyId });
+
+    expect(await sendHealthDueReminders()).toBe(0);
+    let guardado: any = await Animal.findById(pet._id).lean();
+    expect(guardado.healthHistory[0].reminderSentAt).toBeFalsy();
+
+    // Vuelve a haber destinatario y el aviso sale, que es lo que no pasaba.
+    await User.create({ _id: familyId, name: 'Ana', email: 'ana@test.com', passwordHash: 'x', role: 'tenant' });
+    expect(await sendHealthDueReminders()).toBe(1);
+    guardado = await Animal.findById(pet._id).lean();
+    expect(guardado.healthHistory[0].reminderSentAt).toBeTruthy();
+  });
+
   it('no repite el aviso en la siguiente pasada', async () => {
     await petConVacunaEn(3);
     expect(await sendHealthDueReminders()).toBe(1);

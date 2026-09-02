@@ -5,8 +5,9 @@ import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 
 // Aviso de "se acaba el pienso" y bloque "dónde comprarlo".
 //
-// El aviso se mide en DÍAS y no en raciones: avisar cuando quedan dos comidas no
-// da tiempo a comprar nada, que es lo único que se pretende con el correo.
+// El aviso mira los DÍAS que quedan —avisar cuando quedan dos comidas no da
+// tiempo a comprar nada— y también las raciones, para no dejar sin correo a
+// quien tiene poquísimo y un ritmo lento.
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -14,6 +15,7 @@ let Animal: any;
 let User: any;
 let ShopClick: any;
 let Product: any;
+let CareLog: any;
 let sendSupplyAlerts: any;
 
 // El prefijo `mock` es lo que deja a jest referenciarla desde la factoría.
@@ -37,6 +39,7 @@ beforeAll(async () => {
   User = (await import('../models/user.model')).User;
   ShopClick = (await import('../models/shopClick.model')).ShopClick;
   Product = (await import('../models/product.model')).Product;
+  CareLog = (await import('../models/careLog.model')).CareLog;
   sendSupplyAlerts = (await import('../jobs/supplyAlerts')).sendSupplyAlerts;
 });
 
@@ -104,6 +107,48 @@ describe('aviso de existencias bajas', () => {
 
     const saved = await Animal.findById(pet._id).lean();
     expect(saved.carePantry.foods[0].lowNotifiedAt).toBeTruthy();
+  });
+
+  // 🔴 El ritmo se calculaba dividiendo SIEMPRE entre siete días, tuviera el
+  // registro una semana o dos. Una mascota recién dada de alta que come dos
+  // veces al día salía a 0,57 comidas/día, los días que quedaban se inflaban y
+  // el aviso —que se decidía solo por días— no salía.
+  it('con dos días de registro, el ritmo son dos días y no siete', async () => {
+    const pet = await petWithFood(1000); // 10 raciones de 100 g
+    const ayer = new Date(Date.now() - 24 * 3_600_000);
+    const hoy = new Date();
+    // Cuatro comidas en dos días = 2/día → 10 raciones son 5 días. Con el
+    // cálculo viejo (4/7 = 0,57/día) salían 17 días y no avisaba jamás.
+    await CareLog.create([
+      { animalId: pet._id, type: 'feed', foods: ['Acana Adult'], createdAt: ayer },
+      { animalId: pet._id, type: 'feed', foods: ['Acana Adult'], createdAt: ayer },
+      { animalId: pet._id, type: 'feed', foods: ['Acana Adult'], createdAt: hoy },
+      { animalId: pet._id, type: 'feed', foods: ['Acana Adult'], createdAt: hoy },
+    ]);
+
+    // A 2/día todavía no toca avisar (5 días > 3), pero sí en cuanto baje.
+    expect(await sendSupplyAlerts()).toBe(0);
+
+    await Animal.updateOne({ _id: pet._id }, { $set: { 'carePantry.foods.0.remaining': 500 } });
+    expect(await sendSupplyAlerts()).toBe(1);
+    // Y lo dice en días de verdad: 5 raciones a 2/día son 2 días.
+    expect(sent[0].body).toContain('2 días');
+  });
+
+  // 🔴 `isLow` decidía SOLO por días cuando conocía el ritmo, así que un
+  // producto con una ración y un consumo lento no disparaba nada, mientras la
+  // ficha lo pintaba en rojo con su propio criterio (`isRunningLow`, que sí
+  // mira las raciones). Dos respuestas distintas a la misma pregunta.
+  it('avisa cuando quedan una o dos raciones aunque el ritmo diga que hay días', async () => {
+    const pet = await petWithFood(200); // 2 raciones
+    const hace5 = new Date(Date.now() - 5 * 24 * 3_600_000);
+    await CareLog.create([
+      { animalId: pet._id, type: 'feed', foods: ['Acana Adult'], createdAt: hace5 },
+    ]);
+
+    // Una comida en cinco días: 0,2/día → 10 días de margen, pero solo quedan 2.
+    expect(await sendSupplyAlerts()).toBe(1);
+    expect(sent[0].subject).toContain('poca comida');
   });
 
   it('no avisa si queda de sobra', async () => {

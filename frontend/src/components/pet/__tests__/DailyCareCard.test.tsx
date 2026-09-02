@@ -53,8 +53,16 @@ describe('Tarjeta de cuidado diario', () => {
     expect(screen.queryByText('Marcar paseo')).not.toBeInTheDocument();
   });
 
-  it('otras especies solo tienen comida', async () => {
+  // Un conejo SÍ usa arenero, y el backend lo contempla (`markLitter` solo
+  // rechaza a los perros): era la interfaz la que se lo negaba.
+  it('a un conejo le ofrece arena y no paseo', async () => {
     renderCard('conejo');
+    await waitFor(() => expect(screen.getByText('Cambiar arena')).toBeInTheDocument());
+    expect(screen.queryByText('Marcar paseo')).not.toBeInTheDocument();
+  });
+
+  it('un ave solo tiene comida', async () => {
+    renderCard('ave');
     await waitFor(() => expect(screen.getByText('Marcar comida')).toBeInTheDocument());
     expect(screen.queryByText('Marcar paseo')).not.toBeInTheDocument();
     expect(screen.queryByText('Cambiar arena')).not.toBeInTheDocument();

@@ -636,6 +636,53 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.26 El aviso de "se acaba el pienso" llegaba tarde o no llegaba (2 sep 2026)
+
+Cuatro fallos de la misma auditoría, todos en los caminos que usan las familias.
+
+### El ritmo de consumo se dividía siempre entre siete
+
+`usesPerDayOf` estaba escrito **dos veces** —en la ficha (`listCare`) y en el job de avisos— y las
+dos hacían `usos / 7`, con la semana clavada. Para una mascota dada de alta anteayer eso divide
+entre siete días de los que solo existen dos: **cuatro comidas apuntadas salían a 0,57 comidas/día
+en vez de 2**, y los "días que quedan" se inflaban hasta 3,5×. Como el correo se decidía por días,
+llegaba tarde o no llegaba — y justo a quien acaba de registrarse, que **son 9 de las 22 fichas**.
+
+Ahora hay un solo `usesPerDayFrom()` en `utils/supplies.ts`, que mide **desde el primer uso
+registrado hasta hoy** con un mínimo de un día y un máximo de la ventana. Tenerlo escrito dos veces
+es lo que dejó que se separaran del resto.
+
+### La ficha y el correo daban respuestas distintas a la misma pregunta
+
+`isRunningLow` (la insignia roja de la despensa) es `usesLeft<=3 **o** daysLeft<=2`. `isLow` (el que
+decide si sale el correo) era un `if/else`: conocido el ritmo miraba **solo los días** e ignoraba
+que quedaran una o dos raciones. Con el ritmo inflado, la ficha podía pintar "⚠️ se está acabando"
+y el correo no salir nunca. Ahora es un "o", como el otro.
+
+### Un aviso de salud se podía quemar sin enviarse
+
+`sendHealthDueReminders` marcaba `reminderSentAt` y **luego** buscaba al destinatario: si no había
+correo detrás, `continue` dejaba el aviso marcado como enviado para siempre. Marcar antes de enviar
+sigue siendo lo correcto —un fallo de correo pierde un aviso, y eso es mejor que repetirlo cada
+cuarto de hora—, pero solo cuando ya se sabe que hay a quién escribir.
+
+### El tope de la despensa se llevaba por delante las existencias
+
+Son 8 productos y el recorte era un `slice(0, 8)` a secas, así que marcar una comida con un nombre
+nuevo empujaba al más antiguo fuera y con él **su paquete, su ración y lo que quedaba**. Ahora
+`podarDespensa()` sacrifica primero lo que es solo un nombre. Consecuencia buscada: con la despensa
+llena de productos con cuenta, el nombre nuevo **no entra** —el registro de cuidado sí lo guarda, que
+es la verdad—; se pierde el atajo de volver a marcarlo de un toque, no una cuenta de existencias.
+
+### Y un conejo sí usa arenero
+
+`usesLitter` solo conocía al gato, así que la interfaz le negaba a una familia con conejo algo que el
+servidor sí le permite (`markLitter` solo rechaza a los perros). Gatos y conejos; las aves y "otros"
+se quedan con la comida, que es lo común a todas.
+
+6 tests nuevos (19 en `supplyAlerts`, 24 en `animalCare`, 17 en el recordatorio de salud, 92 en las
+seis suites tocadas) y 50 en el frontend.
+
 ## 5.25 El pasaporte publicaba el nombre del dueño, y el modo perdido no existía (2 sep 2026)
 
 **Hallado auditando los caminos que tocan las usuarias reales.** El pasaporte público —la página

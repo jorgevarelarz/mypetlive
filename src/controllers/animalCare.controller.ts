@@ -10,6 +10,7 @@ import {
   toBase,
   unitFamily,
   supplyForecast,
+  usesPerDayFrom,
   isRunningLow,
   type SupplyUnit,
 } from '../utils/supplies';
@@ -89,7 +90,35 @@ function consumeFromPantry(current: any[] | undefined, used: string[]): any[] {
     touched.push(doc);
   }
 
-  return [...touched, ...list].slice(0, PANTRY_LIMIT);
+  return podarDespensa([...touched, ...list]);
+}
+
+/**
+ * Recorta la despensa al tope **sacrificando primero lo que es solo un nombre**.
+ *
+ * 🔴 Antes era un `slice(0, 8)` a secas: marcar una comida con un producto nuevo
+ * empujaba el más antiguo fuera de la lista y con él se iban su paquete, su
+ * ración y lo que quedaba — o sea, la cuenta de existencias que alguien se había
+ * molestado en configurar, borrada sin decir nada. Un nombre suelto se vuelve a
+ * escribir en dos segundos; una cuenta de existencias, no.
+ */
+function podarDespensa(list: any[]): any[] {
+  if (list.length <= PANTRY_LIMIT) return list;
+  const llevaCuenta = (s: any) =>
+    Boolean(s?.perUse || s?.packSize || (s?.remaining !== undefined && s?.remaining !== null));
+  const out = [...list];
+  let sobran = out.length - PANTRY_LIMIT;
+  for (let i = out.length - 1; i >= 0 && sobran > 0; i -= 1) {
+    if (!llevaCuenta(out[i])) {
+      out.splice(i, 1);
+      sobran -= 1;
+    }
+  }
+  // Consecuencia buscada: con la despensa llena de productos con cuenta, marcar
+  // una comida con un nombre nuevo YA NO entra en la lista —el registro de
+  // cuidado sí lo guarda, que es la verdad—. Se pierde el atajo de volver a
+  // marcarlo de un toque, no una cuenta de existencias.
+  return out.slice(0, PANTRY_LIMIT);
 }
 
 /** Quién lo marcó, congelado en el registro: con voluntarios turnándose importa. */
@@ -319,8 +348,8 @@ export async function upsertSupply(req: Request, res: Response) {
   if (index === -1) list.unshift(next);
   else list[index] = next;
 
-  if (kind === 'food') pantry.foods = list.slice(0, PANTRY_LIMIT);
-  else pantry.litters = list.slice(0, PANTRY_LIMIT);
+  if (kind === 'food') pantry.foods = podarDespensa(list);
+  else pantry.litters = podarDespensa(list);
   await animal.save();
 
   res.json({ ok: true, pantry: animal.carePantry });
@@ -362,12 +391,13 @@ export async function listCare(req: Request, res: Response) {
   // "come dos veces al día" en ningún sitio, y si alguien cambia de pauta el
   // cálculo la sigue solo.
   const usesPerDayOf = (kind: 'food' | 'litter', name: string) => {
-    const uses = week.filter(entry =>
+    const usos = week.filter(entry =>
       kind === 'food'
         ? entry.type === 'feed' && (entry.foods || []).some(f => f.trim().toLowerCase() === name.trim().toLowerCase())
         : entry.type === 'litter' && (entry.litterType || '').trim().toLowerCase() === name.trim().toLowerCase(),
-    ).length;
-    return uses > 0 ? uses / 7 : undefined;
+    );
+    // Sobre los días observados, no sobre siete clavados: ver `usesPerDayFrom`.
+    return usesPerDayFrom(usos.map(e => e.createdAt as Date));
   };
 
   const withForecast = (kind: 'food' | 'litter') => (supply: any) => {

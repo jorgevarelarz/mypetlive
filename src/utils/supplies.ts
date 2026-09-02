@@ -67,6 +67,34 @@ export type SupplyLike = {
   remaining?: number;
 };
 
+const DAY_MS = 24 * 3_600_000;
+
+/**
+ * Ritmo de uso a partir de las fechas en que se marcó ese producto.
+ *
+ * 🔴 Antes esto era `usos / 7` en dos sitios distintos (la ficha y el job de
+ * avisos), con la semana clavada. Para una mascota dada de alta anteayer eso
+ * divide entre siete días de los que solo existen dos: cuatro comidas apuntadas
+ * salían a 0,57 comidas/día en vez de 2, y los "días que quedan" se inflaban
+ * hasta 3,5 veces. Como el aviso de "se acaba el pienso" se decide por días, el
+ * correo llegaba tarde o no llegaba — y justo a quien acaba de registrarse, que
+ * es todo el mundo ahora mismo.
+ *
+ * Se mide sobre lo observado: desde el primer uso registrado hasta hoy, con un
+ * mínimo de un día (dos comidas hoy son dos comidas al día, no infinitas) y un
+ * máximo de la ventana que se pasa.
+ */
+export function usesPerDayFrom(dates: Array<Date | string>, now: Date = new Date(), maxDays = 7): number | undefined {
+  if (!dates.length) return undefined;
+  const first = dates
+    .map(d => new Date(d).getTime())
+    .filter(t => Number.isFinite(t))
+    .sort((a, b) => a - b)[0];
+  if (first === undefined) return undefined;
+  const spanDays = Math.min(maxDays, Math.max(1, Math.ceil((now.getTime() - first) / DAY_MS)));
+  return dates.length / spanDays;
+}
+
 /**
  * Usos que quedan y días estimados.
  *

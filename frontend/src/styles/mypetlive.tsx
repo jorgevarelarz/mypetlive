@@ -108,10 +108,17 @@ export const moodLabel = (value?: string | null) => {
   return value ? labels[String(value).toLowerCase()] || value : '';
 };
 
-// Solo los gatos usan arena: evita ofrecer "cambiar arena" a dueños de perros.
+// Quién usa arenero: gatos y conejos. Los conejos estaban fuera por descuido —el
+// backend sí los contempla (`markLitter` solo rechaza a los perros), así que la
+// interfaz le negaba a una familia con conejo algo que el servidor le permitía.
+// Los perros no, y las aves y "otros" tampoco: para eso está la comida, que es
+// lo único común a todas las especies.
 export const usesLitter = (species?: string) => {
-  const canonical: Record<string, string> = { cat: 'cat', gato: 'cat' };
-  return canonical[String(species || '').trim().toLowerCase()] === 'cat';
+  const canonical: Record<string, string> = {
+    cat: 'cat', gato: 'cat',
+    rabbit: 'rabbit', conejo: 'rabbit', conejillo: 'rabbit',
+  };
+  return Boolean(canonical[String(species || '').trim().toLowerCase()]);
 };
 
 // El simétrico del arenero: a un perro se le ofrece "marcar paseo" en el mismo

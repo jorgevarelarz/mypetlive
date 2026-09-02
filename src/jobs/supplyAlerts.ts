@@ -4,15 +4,15 @@ import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
 import { sendPushToUser } from '../utils/push';
-import { supplyForecast, formatBase, type SupplyUnit } from '../utils/supplies';
+import { supplyForecast, usesPerDayFrom, formatBase, type SupplyUnit } from '../utils/supplies';
 import { findWhereToBuy, type ShopOption } from '../utils/shopping';
 import logger from '../utils/logger';
 
 // Aviso de "se acaba el pienso".
 //
-// El umbral se mide en DÍAS, no en raciones: avisar cuando quedan dos comidas no
-// da tiempo a comprar nada, y ese es el único objetivo del aviso. Solo cuando no
-// se conoce el ritmo de consumo se cae a contar usos.
+// El umbral mira los DÍAS que quedan y también las raciones: avisar cuando
+// quedan dos comidas no da tiempo a comprar nada —de ahí los días—, pero fiarlo
+// TODO a los días dejaba sin correo a quien tiene una ración y un ritmo lento.
 //
 // Idempotente por `lowNotifiedAt` en el propio producto, que se borra al reponer
 // (ver `upsertSupply`): repetirlo cada cuarto de hora sería la forma más rápida
@@ -34,20 +34,28 @@ async function usesPerDayOf(animalId: any, kind: Kind, name: string): Promise<nu
     type: kind === 'food' ? 'feed' : 'litter',
     createdAt: { $gte: since },
   })
-    .select('foods litterType')
+    .select('foods litterType createdAt')
     .lean();
   const uses = week.filter(entry =>
     kind === 'food'
       ? (entry.foods || []).some(f => f.trim().toLowerCase() === key)
       : (entry.litterType || '').trim().toLowerCase() === key,
-  ).length;
-  return uses > 0 ? uses / 7 : undefined;
+  );
+  // El mismo cálculo que la ficha, y por el mismo sitio: tenerlo escrito dos
+  // veces es lo que dejó que se separaran.
+  return usesPerDayFrom(uses.map((e: any) => e.createdAt));
 }
 
+/**
+ * 🔴 Era un `if/else`: conocido el ritmo, decidía SOLO por días e ignoraba que
+ * quedaran una o dos raciones. Con el ritmo inflado que había, la ficha podía
+ * pintar "⚠️ se está acabando" y el correo no salir nunca: dos respuestas
+ * distintas a la misma pregunta. Ahora es un "o", como `isRunningLow`.
+ */
 function isLow(forecast: { usesLeft: number | null; daysLeft: number | null }): boolean {
   if (forecast.usesLeft === null) return false;
-  if (forecast.daysLeft !== null) return forecast.daysLeft <= ALERT_DAYS;
-  return forecast.usesLeft <= ALERT_USES;
+  if (forecast.usesLeft <= ALERT_USES) return true;
+  return forecast.daysLeft !== null && forecast.daysLeft <= ALERT_DAYS;
 }
 
 function describeLeft(kind: Kind, forecast: { usesLeft: number | null; daysLeft: number | null }) {

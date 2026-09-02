@@ -168,13 +168,17 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
     );
     if (!due.length) continue;
 
-    // Se marca antes de enviar: si el correo falla, se pierde un aviso; si se
-    // marcara después y fallara la escritura, se enviaría en cada pasada.
-    for (const h of due) h.reminderSentAt = new Date();
-    await animal.save();
-
+    // 🔴 El orden importa y estaba al revés: se marcaba y LUEGO se buscaba al
+    // destinatario, así que un animal sin correo detrás se quedaba con el aviso
+    // marcado como enviado sin haberlo enviado — y no volvía nunca. Marcar antes
+    // de enviar sigue siendo lo correcto (un fallo de correo pierde un aviso, y
+    // eso es mejor que repetirlo cada cuarto de hora), pero solo cuando hay a
+    // quién enviárselo.
     const owner: any = await User.findById(animal.ownerId || animal.shelter).select('email').lean();
     if (!owner?.email) continue;
+
+    for (const h of due) h.reminderSentAt = new Date();
+    await animal.save();
 
     const petName = animal.name || 'tu mascota';
     const base = FRONTEND_URL();
