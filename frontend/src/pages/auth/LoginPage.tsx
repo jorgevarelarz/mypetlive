@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PasswordField from '../../components/auth/PasswordField';
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import SocialAuthButtons from "../../components/auth/SocialAuthButtons";
@@ -49,9 +50,8 @@ export default function LoginPage() {
         </label>
         <label className="auth-label" htmlFor="password">
           Contraseña
-          <input
+          <PasswordField
             id="password"
-            type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

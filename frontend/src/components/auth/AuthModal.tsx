@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PasswordField from './PasswordField';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
@@ -127,7 +128,7 @@ export default function AuthModal() {
           </label>
           <label className="grid gap-1 text-sm">
             Contraseña
-            <input type="password" className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : undefined} maxLength={72} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
+            <PasswordField className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : undefined} maxLength={72} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
           </label>
           {mode === 'register' && <p className="text-xs" style={{ color: '#7A8273' }}>Usa entre 12 y 72 caracteres.</p>}
           {mode === 'register' && (

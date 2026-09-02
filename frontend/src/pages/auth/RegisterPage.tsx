@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PasswordField from '../../components/auth/PasswordField';
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { register as apiRegister } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
@@ -63,14 +64,13 @@ export default function RegisterPage() {
         </label>
         <label className="auth-label" htmlFor="password">
           Contraseña
-          <input id="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
+          <PasswordField id="password" required minLength={12} maxLength={72} autoComplete="new-password" className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} />
         </label>
         <p className="text-sm" style={{ color: '#7A8273', marginTop: -8 }}>Usa entre 12 y 72 caracteres.</p>
         <label className="auth-label" htmlFor="password2">
           Repite la contraseña
-          <input
+          <PasswordField
             id="password2"
-            type="password"
             required
             minLength={12}
             maxLength={72}

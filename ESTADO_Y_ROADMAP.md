@@ -636,6 +636,33 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.28 El ojo para ver la contraseña (2 sep 2026)
+
+Petición de Jorge. Son **cuatro pantallas** con campo de contraseña —el modal de acceso, `/login`,
+`/register` (dos campos) y `/reset`— y la contraseña mínima son **12 caracteres**: escribirla a
+ciegas es donde la gente se equivoca, se cansa y se va. O se abre una segunda cuenta, que es lo que
+parece haber pasado ya un par de veces en la base de datos.
+
+Un solo `components/auth/PasswordField.tsx` para las cuatro, no cuatro copias. Lo que tiene dentro
+y no se ve:
+
+- **`type="button"` en el botón del ojo.** Dentro de un `<form>`, un `<button>` sin tipo es
+  `submit`: pulsar el ojo enviaría el formulario a medio escribir. Hay un test que lo fija.
+- El campo **sigue siendo `password`** mientras no se pulsa, así que los gestores de contraseñas lo
+  siguen reconociendo; `autoComplete` lo decide cada pantalla (`new-password` al registrarse,
+  `current-password` al entrar) y el componente lo deja pasar tal cual, igual que `minLength`,
+  `required`, `style` y `className`.
+- **`tabIndex={-1}`**: el ojo se queda fuera del tabulador, para que del campo se pase al botón de
+  entrar, que es lo que quiere hacer quien navega con teclado. El lector de pantalla sí lo ve, con
+  `aria-label` que cambia y `aria-pressed`.
+- Se le **reserva sitio** con `paddingRight` en vez de superponerlo: si no, el icono se come la
+  última letra de una contraseña larga.
+
+`pages/Login.tsx` también tiene un campo de contraseña y **no se ha tocado**: es legado de RentalApp
+y no está en ninguna ruta de `AppRoutes`.
+
+3 tests nuevos (53 en verde en el frontend).
+
 ## 5.27 Que el alta termine en algo, y que la chapa exista dentro de la app (2 sep 2026)
 
 **El dato que lo motivó**, medido en producción:

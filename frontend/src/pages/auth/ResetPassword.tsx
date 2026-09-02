@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import PasswordField from '../../components/auth/PasswordField';
 import { resetPassword as apiResetPassword } from "../../api/auth";
 
 const containerStyle: React.CSSProperties = {
@@ -70,9 +71,8 @@ const ResetPassword: React.FC = () => {
       <h2>Restablecer contraseña</h2>
       <form onSubmit={handleSubmit}>
         <label htmlFor="password">Nueva contraseña</label>
-        <input
+        <PasswordField
           id="password"
-          type="password"
           required
           minLength={12}
           maxLength={72}
