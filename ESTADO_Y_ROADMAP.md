@@ -658,10 +658,19 @@ nunca llegaba a ser `null`).
 - `personalPetUpdateSchema` los acepta `nullable`, así que desde la ficha se pueden **corregir
   y también volver a dejar en blanco**. Ésa es la vía para arreglar lo que ya está guardado.
 
-🔴 **Las fichas creadas antes de hoy siguen diciendo «hembra» y «mediano»** aunque nadie lo
-eligiera, y no hay forma de distinguir por datos cuáles son verdad: quien puso «hembra» a
-propósito y quien no llegó a ver el campo tienen exactamente el mismo documento. No se toca la
-BD de producción — lo correcto es que cada familia lo corrija desde su ficha, que ya puede.
+🔴 **Las fichas creadas antes de hoy dicen «hembra» y «mediano» sin que nadie lo eligiera.**
+Contadas en producción tras el deploy: **21 mascotas personales y las 21 con `female` +
+`medium`**, sin una sola excepción. Eso cierra la duda de si alguna era verdad — el campo no
+existía, así que ninguna lo es salvo por casualidad. Hay nombres que cantan (Pepe, Tico, Alf,
+Popeye), pero **deducir el sexo del nombre sería volver a inventarlo**, así que no se hace.
+
+Corregidas solo las dos de las que tenemos el dato de la propia usuaria: **Sandra** avisó del
+fallo y dijo que sus dos perros son machos — `ROLLING-416` (macho, mediano) y `CANELO-871`
+(macho, grande), ambas dadas de alta el 2 sep a las 14:51 y 14:52, minutos antes de reportarlo.
+Verificado en el pasaporte público de las dos. **Las otras 19 se quedan como están**: lo
+correcto es que cada familia las corrija desde su ficha, que ya puede. La alternativa —vaciar
+los dos campos en las 19— está sobre la mesa y es una línea de `mongosh`: deja el hueco en
+blanco en vez de un dato falso en el pasaporte impreso del collar.
 
 6 tests nuevos en `animal.updateMine.test.ts` (23 en verde en esa suite y 43 en las de cuidado
 y chapas), `tsc --noEmit` del frontend limpio.
