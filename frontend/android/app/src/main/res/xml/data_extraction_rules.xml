@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MyPetLive no participa en copias de seguridad ni en la transferencia entre
+  dispositivos: la sesión (token JWT) y los datos de perfil viven en el
+  WebView y no deben viajar en un backup de Google ni en un traspaso de móvil.
+  El usuario recupera todo volviendo a iniciar sesión.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

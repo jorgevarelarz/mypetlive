@@ -92,6 +92,7 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import { requestId } from './middleware/requestId';
+import { mongoSanitize } from './middleware/mongoSanitize';
 import { loadEnv } from './config/env';
 import { metricsMiddleware, metricsHandler } from './metrics';
 
@@ -188,6 +189,11 @@ app.use(
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Proteger contra HTTP Parameter Pollution en query; no tocar body JSON para evitar falsos positivos
 app.use(hpp({ checkBody: false, checkQuery: true }));
+// Quitar claves `$...` y `a.b` de body/query/params antes de que lleguen a los
+// controladores: varios construyen el filtro de Mongo copiando el valor tal
+// cual, y sin esto `?campo[$ne]=x` colaría un operador. Va después del webhook
+// de Stripe (montado arriba con su propio raw body) para no tocarlo.
+app.use(mongoSanitize);
 // Serve uploaded files (fotos de animales, etc.): inmutables en la práctica,
 // así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
