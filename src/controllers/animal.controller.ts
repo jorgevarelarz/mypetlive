@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
 import { AnimalAlert } from '../models/animalAlert.model';
@@ -11,6 +12,18 @@ import { canPublishAnimals } from '../utils/shelterVerification';
 import { canManageAnimal } from '../utils/animalAccess';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
+
+// Lo que nunca debe salir de `getById`/`getByCode`/`search` para quien no
+// gestiona el animal (ni protectora ni admin): `ownerId` identifica a la
+// familia, `lost.sightings` lleva ubicación y contacto de terceros que
+// avisaron de un hallazgo, y `__v` es ruido interno de Mongoose. El pasaporte
+// público (`getPassport`) ya construye su propia respuesta reducida a mano;
+// esto cubre las otras rutas, que hasta ahora devolvían el documento entero.
+function stripInternalFields<T extends Record<string, any>>(animal: T): T {
+  const { ownerId, __v, ...rest } = animal as any;
+  if (rest.lost) rest.lost = { ...rest.lost, sightings: undefined };
+  return rest;
+}
 
 function matchesAlert(animal: any, filters: Record<string, any>) {
   // La especie del animal se guarda canonizada (gato→cat), pero el filtro de la
@@ -94,12 +107,23 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const a = await Animal.findById(req.params.id).populate('shelter', 'name email');
+  if (!Types.ObjectId.isValid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  // Sin poblar todavía: `canManageAnimal` compara `animal.shelter` contra el
+  // usuario, y `.populate()` sustituye ese ObjectId por el documento (o por
+  // `null` si la protectora ya no existe). Decidir el acceso sobre la
+  // referencia sin poblar es lo único que no depende de que el populate
+  // resuelva.
+  const a = await Animal.findById(req.params.id);
   if (!a) return res.status(404).json({ error: 'not_found' });
   if (a.isPersonalPet === true) return res.status(404).json({ error: 'not_found' });
   if (a.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
+  const canManage = canManageAnimal((req as any).user, a);
+  // Un borrador no está listo para verse: antes cualquiera con el ID (o
+  // adivinándolo) lo veía igual que uno publicado, sin pasar por el catálogo.
+  if (a.status === 'borrador' && !canManage) return res.status(404).json({ error: 'not_found' });
   if (!a.code) await ensureAnimalCode(a);
-  res.json(a);
+  await a.populate('shelter', 'name email');
+  res.json(canManage ? a : stripInternalFields(a.toObject()));
 }
 
 export async function getByCode(req: Request, res: Response) {
@@ -113,8 +137,10 @@ export async function getByCode(req: Request, res: Response) {
   if (!animal) return res.status(404).json({ error: 'not_found' });
   if (animal.isPersonalPet === true) return res.status(404).json({ error: 'not_found' });
   if (animal.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
+  const canManage = canManageAnimal((req as any).user, animal);
+  if (animal.status === 'borrador' && !canManage) return res.status(404).json({ error: 'not_found' });
   if (!animal.code) await ensureAnimalCode(animal);
-  res.json(animal);
+  res.json(canManage ? animal : stripInternalFields(animal.toObject()));
 }
 
 // Construye la línea de tiempo unificada del pasaporte (eventos de ciclo de vida + salud/vet).
@@ -611,7 +637,12 @@ export async function search(req: Request, res: Response) {
     Animal.countDocuments(filter),
   ]);
 
-  res.json({ items, page, limit, total });
+  // isAdmin/isOwnerView ya reflejan quién pidió la lista (ver arriba); para
+  // cualquier otro visitante (el caso normal: el catálogo público) se retira
+  // lo mismo que en `getById`/`getByCode` antes de que salga por la red.
+  const sanitized = isAdmin || isOwnerView ? items : items.map(stripInternalFields);
+
+  res.json({ items: sanitized, page, limit, total });
 }
 
 export async function updateStatus(req: Request, res: Response) {

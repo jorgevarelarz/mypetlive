@@ -75,7 +75,7 @@ export const register = async (req: Request, res: Response) => {
     // Save new user with hashed password
     const user = new User({ name: rawName, email: rawEmail, passwordHash, role: normalizedRole });
     await user.save();
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },
@@ -128,7 +128,7 @@ export const login = async (req: Request, res: Response) => {
       });
     }
     // Generate and return JWT
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
     res.json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },
@@ -180,6 +180,11 @@ export const resetPassword = async (req: Request, res: Response) => {
     user.passwordHash = await bcrypt.hash(password, 10);
     user.resetToken = undefined;
     user.resetTokenExp = undefined;
+    // Sube la versión de sesión: cualquier JWT emitido antes de este momento
+    // (robado o no) deja de valer en el siguiente `authenticate`, aunque su
+    // firma y su caducidad sigan siendo válidas. Es justo lo que faltaba: sin
+    // esto, restablecer la contraseña no cerraba ninguna sesión ya abierta.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     res.json({ ok: true });

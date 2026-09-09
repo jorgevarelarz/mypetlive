@@ -38,8 +38,19 @@ function publicProduct(doc: any, seller?: any) {
 
 // ---------------------------------------------------------------- catálogo
 
+// `req.query` puede traer cualquier cosa (`?q[x]=abc` llega como objeto, no
+// string): el tipado de arriba es solo una promesa a TypeScript, no una
+// comprobación real. Sin esto, `q.trim()` con `q` siendo un objeto tiraba la
+// petición entera con un 500.
+function queryString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 export async function listProducts(req: Request, res: Response) {
-  const { q, category, species, seller } = req.query as Record<string, string>;
+  const q = queryString(req.query.q);
+  const category = queryString(req.query.category);
+  const species = queryString(req.query.species);
+  const seller = queryString(req.query.seller);
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(48, Math.max(1, Number(req.query.limit) || 24));
 
@@ -318,27 +329,61 @@ export async function createCheckout(req: Request, res: Response) {
 
   const guestToken = user?._id || user?.id ? undefined : crypto.randomBytes(24).toString('hex');
 
-  const order = await Order.create({
-    reference: buildOrderReference(),
-    listedBy,
-    ...(sellerId ? { sellerId } : {}),
-    buyer: {
-      ...(user?._id || user?.id ? { userId: user._id || user.id } : {}),
-      email,
-      name: buyerName,
-      phone: cleanText(body.phone, 30) || undefined,
-    },
-    ...(guestToken ? { guestToken } : {}),
-    items: lines,
-    shippingAddress,
-    subtotalEur: totals.subtotalEur,
-    shippingEur: totals.shippingEur,
-    totalEur: totals.totalEur,
-    commissionPct: totals.commissionPct,
-    commissionEur: totals.commissionEur,
-    platformMarginEur: totals.platformMarginEur,
-    status: 'pending_payment',
-  });
+  // Reserva atómica de existencias. El chequeo de arriba (`product.stock < qty`)
+  // solo da un error rápido y bonito; esto es lo que de verdad impide que dos
+  // pedidos pendientes se lleven la misma última unidad: cada `updateOne` exige
+  // en la propia condición que quede stock suficiente, así que dos peticiones
+  // concurrentes para la unidad 1 de 1 solo pueden ganar una. Antes el stock se
+  // descontaba recién al cobrar (`fulfillPaidOrder`), que es tarde para evitar
+  // que ambas confirmaciones "tengan éxito".
+  const reserved: Array<{ productId: any; qty: number }> = [];
+  const releaseReserved = async () => {
+    for (const line of reserved) {
+      await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.qty } });
+    }
+  };
+  for (const line of lines) {
+    const result = await Product.updateOne(
+      { _id: line.productId, stock: { $gte: line.qty } },
+      { $inc: { stock: -line.qty } },
+    );
+    if (result.modifiedCount !== 1) {
+      await releaseReserved();
+      const fresh = await Product.findById(line.productId).select('stock').lean();
+      return res.status(409).json({ error: 'out_of_stock', productId: String(line.productId), stock: fresh?.stock ?? 0 });
+    }
+    reserved.push({ productId: line.productId, qty: line.qty });
+  }
+
+  let order: any;
+  try {
+    order = await Order.create({
+      reference: buildOrderReference(),
+      listedBy,
+      ...(sellerId ? { sellerId } : {}),
+      buyer: {
+        ...(user?._id || user?.id ? { userId: user._id || user.id } : {}),
+        email,
+        name: buyerName,
+        phone: cleanText(body.phone, 30) || undefined,
+      },
+      ...(guestToken ? { guestToken } : {}),
+      items: lines,
+      shippingAddress,
+      subtotalEur: totals.subtotalEur,
+      shippingEur: totals.shippingEur,
+      totalEur: totals.totalEur,
+      commissionPct: totals.commissionPct,
+      commissionEur: totals.commissionEur,
+      platformMarginEur: totals.platformMarginEur,
+      status: 'pending_payment',
+    });
+  } catch (err: any) {
+    // El pedido no llegó a existir: lo reservado no tiene dueño, se libera.
+    await releaseReserved();
+    logger.error({ err }, '[marketplace] no se pudo crear el pedido');
+    return res.status(500).json({ error: 'order_failed' });
+  }
 
   if (!isStripeConfigured()) {
     // Sin Stripe el pedido queda creado y a la espera: es preferible a fingir
@@ -395,6 +440,11 @@ export async function createCheckout(req: Request, res: Response) {
     await order.save();
     return res.json({ ok: true, orderId: String(order._id), reference: order.reference, url: session.url, guestToken });
   } catch (err: any) {
+    // El pedido ya existe y ya tiene el stock reservado, pero nunca habrá un
+    // enlace de pago para él: liberar la reserva, o esa unidad queda
+    // bloqueada para siempre por un pedido que nadie va a poder pagar.
+    await releaseReserved();
+    await Order.updateOne({ _id: order._id, status: 'pending_payment' }, { status: 'cancelled' });
     logger.error({ err, orderId: String(order._id) }, '[marketplace] no se pudo crear la sesión de pago');
     return res.status(502).json({ error: 'checkout_failed', orderId: String(order._id) });
   }
@@ -442,7 +492,7 @@ export async function markShipped(req: Request, res: Response) {
   const user: any = (req as any).user;
   const { id } = req.params;
   if (!Types.ObjectId.isValid(id)) return res.status(404).json({ error: 'not_found' });
-  const order = await Order.findById(id);
+  const order = await Order.findById(id).select('+guestToken');
   if (!order) return res.status(404).json({ error: 'not_found' });
 
   const isAdmin = user.role === 'admin';
@@ -462,10 +512,11 @@ export async function markShipped(req: Request, res: Response) {
     const tracking = order.tracking?.code
       ? `\n\nSeguimiento: ${order.tracking.carrier || ''} ${order.tracking.code}`.trim()
       : '';
+    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `?token=${order.guestToken}` : ''}`;
     await sendEmail(
       order.buyer.email,
       `Tu pedido ${order.reference} va de camino`,
-      `Buenas noticias: tu pedido ya ha salido.${tracking}\n\n${FRONTEND_URL()}/pedido/${order._id}`,
+      `Buenas noticias: tu pedido ya ha salido.${tracking}\n\n${orderLink}`,
     );
   } catch (err) {
     logger.error({ err, orderId: String(order._id) }, '[marketplace] no se pudo avisar del envío');
@@ -482,27 +533,29 @@ export async function markShipped(req: Request, res: Response) {
  */
 export async function fulfillPaidOrder(orderId: string, paymentRef?: string): Promise<boolean> {
   if (!Types.ObjectId.isValid(orderId)) return false;
+  // El stock ya se reservó al crear el pedido (createCheckout): aquí solo se
+  // confirma el cobro. Descontarlo también aquí es lo que permitía que dos
+  // pedidos pendientes de la misma unidad acabasen los dos "pagados" (el
+  // segundo `$inc` dejaba el stock en negativo y se recortaba a cero sin más),
+  // y que un fallo justo después de este mismo `findOneAndUpdate` dejara el
+  // descuento sin hacer para siempre: el reintento del webhook ya no
+  // encuentra el pedido en `pending_payment` y no vuelve a intentarlo.
   const order = await Order.findOneAndUpdate(
     { _id: orderId, status: 'pending_payment' },
     { status: 'paid', paidAt: new Date(), ...(paymentRef ? { paymentRef } : {}) },
     { new: true },
-  );
+  ).select('+guestToken');
   if (!order) return false;
-
-  for (const item of order.items) {
-    await Product.updateOne({ _id: item.productId }, { $inc: { stock: -item.qty } });
-  }
-  // Un stock negativo por una carrera es un dato roto: se corrige en el acto.
-  await Product.updateMany({ stock: { $lt: 0 } }, { $set: { stock: 0 } });
 
   try {
     const lines = order.items.map(i => `- ${i.qty} × ${i.name}`).join('\n');
+    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `?token=${order.guestToken}` : ''}`;
     await sendEmail(
       order.buyer.email,
       `Pedido ${order.reference} confirmado`,
       `Gracias por tu compra.\n\n${lines}\n\nTotal: ${order.totalEur.toFixed(2)} €\n` +
         `Se enviará a: ${order.shippingAddress.line1}, ${order.shippingAddress.postalCode} ${order.shippingAddress.city}\n\n` +
-        `${FRONTEND_URL()}/pedido/${order._id}`,
+        orderLink,
     );
     if (order.sellerId) {
       const seller = await User.findById(order.sellerId).select('email').lean();
@@ -519,5 +572,28 @@ export async function fulfillPaidOrder(orderId: string, paymentRef?: string): Pr
     logger.error({ err, orderId }, '[marketplace] pedido pagado pero sin avisar por email');
   }
 
+  return true;
+}
+
+/**
+ * Libera la reserva de existencias de un pedido cuya sesión de Stripe caducó
+ * sin pagarse (`checkout.session.expired`). La llama el webhook.
+ *
+ * Sin esto, la reserva atómica de `createCheckout` sería un candado sin
+ * llave: un carrito abandonado dejaría esa unidad bloqueada para siempre.
+ * Atómico y con la misma idempotencia que `fulfillPaidOrder` (el filtro por
+ * `status: 'pending_payment'` hace que un reintento del webhook no libere
+ * dos veces un pedido que otro evento ya movió a `paid` o `cancelled`).
+ */
+export async function releaseExpiredOrder(orderId: string): Promise<boolean> {
+  if (!Types.ObjectId.isValid(orderId)) return false;
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, status: 'pending_payment' },
+    { status: 'cancelled' },
+  );
+  if (!order) return false;
+  for (const item of order.items) {
+    await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.qty } });
+  }
   return true;
 }

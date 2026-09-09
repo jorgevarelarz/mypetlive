@@ -113,7 +113,7 @@ export const socialLogin = async (req: Request, res: Response) => {
       });
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
     res.json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },

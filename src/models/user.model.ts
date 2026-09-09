@@ -135,6 +135,14 @@ const userSchema = new Schema(
     // en respuestas por defecto (p. ej. el listado de usuarios).
     resetToken: { type: String, select: false },
     resetTokenExp: { type: Date, select: false },
+    // Versión de sesión: viaja embebida en el JWT que se firma al hacer login,
+    // y `authenticate`/`optionalAuthenticate` la comparan contra la de aquí en
+    // cada petición. Incrementarla (`resetPassword`) invalida de golpe
+    // cualquier token emitido antes, aunque su firma siga siendo válida y le
+    // queden días de vida. Sin `select:false`: hace falta leerla en cada
+    // petición autenticada, así que ocultarla obligaría a un `.select()` extra
+    // en cada sitio que autentica.
+    tokenVersion: { type: Number, default: 0 },
     // Cambio de email pendiente de confirmar en la dirección nueva. El email es
     // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
     // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,

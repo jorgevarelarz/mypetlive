@@ -1,15 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/jwt';
+import { User } from '../models/user.model';
 
 const JWT_SECRET = getJwtSecret();
+
+/**
+ * Un JWT sigue siendo válido (firma y caducidad) después de restablecer la
+ * contraseña: la firma no sabe nada de lo que ha pasado en la cuenta desde que
+ * se emitió. `tokenVersion` es lo que sí lo sabe — viaja en el token y
+ * `resetPassword` la sube en BD — así que un token emitido antes dejar de
+ * servir en cuanto se compara aquí, sin esperar a que caduquen sus 7 días.
+ */
+async function hasLiveSession(resolvedId: string, decoded: any): Promise<boolean> {
+  const dbUser = await User.findById(resolvedId).select('tokenVersion').lean();
+  if (!dbUser) return false;
+  return ((dbUser as any).tokenVersion || 0) === (decoded.tokenVersion || 0);
+}
 
 /**
  * Authentication middleware. Verifies a JWT from the Authorization header
  * (expected as a Bearer token) and attaches the decoded user payload to
  * the request object as req.user.
  */
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     if (process.env.NODE_ENV === 'test') {
@@ -52,6 +66,10 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
       }
     }
 
+    if (!(await hasLiveSession(resolvedId, decoded))) {
+      return res.status(401).json({ error: 'Sesión invalidada' });
+    }
+
     (req as any).user = {
       ...decoded,
       id: resolvedId,
@@ -70,7 +88,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
  * Useful for public endpoints whose response varies for the owner (e.g. catálogo
  * de animales que para la protectora dueña muestra también borradores).
  */
-export const optionalAuthenticate = (req: Request, _res: Response, next: NextFunction) => {
+export const optionalAuthenticate = async (req: Request, _res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     if (process.env.NODE_ENV === 'test' && req.headers['x-user-id']) {
@@ -86,7 +104,11 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const resolvedId = decoded._id || decoded.id;
-    (req as any).user = { ...decoded, id: resolvedId, _id: resolvedId };
+    // Igual que en `authenticate`: una sesión cerrada por un reset de
+    // contraseña no debe verse aquí como el dueño, sino como anónimo.
+    if (await hasLiveSession(resolvedId, decoded)) {
+      (req as any).user = { ...decoded, id: resolvedId, _id: resolvedId };
+    }
   } catch {
     // Token inválido en endpoint público: continuar como anónimo.
   }

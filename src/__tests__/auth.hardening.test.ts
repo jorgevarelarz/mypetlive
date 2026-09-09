@@ -110,6 +110,47 @@ describe('Auth hardening', () => {
     expect(res.body.token).toBeDefined();
   });
 
+  // Regresión de la auditoría del 5 sep 2026 (hallazgo alta #4): un JWT
+  // seguía aceptándose después de restablecer la contraseña, porque
+  // `authenticate` solo comprobaba la firma y la caducidad del token, nunca
+  // si la cuenta había cambiado desde que se emitió.
+  it('invalidates tokens issued before a password reset', async () => {
+    const user = await User.create({
+      name: 'Con sesión abierta',
+      email: 'sesion@example.com',
+      passwordHash: await bcrypt.hash(password, 10),
+      role: 'tenant',
+    });
+
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password })
+      .expect(200);
+    const oldToken = login.body.token as string;
+
+    await request(app).get('/api/animals/mine').set('Authorization', `Bearer ${oldToken}`).expect(200);
+
+    await User.updateOne(
+      { _id: user._id },
+      { resetToken: 'test-reset-token', resetTokenExp: new Date(Date.now() + 60_000) },
+    );
+    await request(app)
+      .post('/api/auth/reset')
+      .send({ token: 'test-reset-token', password: 'una-clave-nueva-2026' })
+      .expect(200);
+
+    await request(app).get('/api/animals/mine').set('Authorization', `Bearer ${oldToken}`).expect(401);
+
+    const freshLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: 'una-clave-nueva-2026' })
+      .expect(200);
+    await request(app)
+      .get('/api/animals/mine')
+      .set('Authorization', `Bearer ${freshLogin.body.token}`)
+      .expect(200);
+  });
+
   it('enables production security headers when APP_ENV is production', async () => {
     const res = await request(app).get('/health');
 

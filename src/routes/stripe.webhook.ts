@@ -221,6 +221,17 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
       }
       break;
     }
+    // Checkout sin pagar que Stripe da por caducado (24h por defecto). Solo
+    // aplica al marketplace: es el único flujo que reserva existencias antes
+    // de cobrar, así que es el único que necesita liberarlas si nadie paga.
+    case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.marketplaceOrderId) {
+        const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
+        await releaseExpiredOrder(session.metadata.marketplaceOrderId);
+      }
+      break;
+    }
     case 'charge.refunded': {
       // handle refund record logic
       break;

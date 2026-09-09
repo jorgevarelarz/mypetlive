@@ -59,7 +59,7 @@ r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
 // vive en el controlador y no aquí: además del vet y el admin, puede la familia
 // del animal (`canManageAnimal`), y eso depende del animal, no solo del rol.
 r.post('/:code/health', authenticate, asyncHandler(ctrl.addHealthRecord));
-r.get('/:id', asyncHandler(ctrl.getById));
+r.get('/:id', optionalAuthenticate, asyncHandler(ctrl.getById));
 r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));
 r.post('/:id/care/feed', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markFeeding));
 r.post('/:id/care/litter', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(markLitter));

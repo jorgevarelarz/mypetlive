@@ -11,5 +11,11 @@ export function canManageAnimal(user: any, animal: any) {
   if (user.role === 'admin') return true;
   const uid = String(user._id || user.id || '');
   if (!uid) return false;
-  return String(animal.shelter) === uid || String(animal.ownerId || '') === uid;
+  // `animal.shelter` puede llegar poblado (p.ej. `getById` hace
+  // `.populate('shelter', 'name email')` para pintar el nombre): ahí es un
+  // documento de User, no el ObjectId, y compararlo con `String()` a pelo
+  // nunca casa con nadie.
+  const shelterId = animal.shelter?._id ?? animal.shelter;
+  const ownerId = animal.ownerId?._id ?? animal.ownerId;
+  return String(shelterId || '') === uid || String(ownerId || '') === uid;
 }

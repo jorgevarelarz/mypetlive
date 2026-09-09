@@ -119,3 +119,69 @@ describe('Animal discovery', () => {
     await request(app).delete(`/api/animals/alerts/${created.body._id}`).set(userHeaders).expect(200);
   });
 });
+
+// Regresión de la auditoría del 5 sep 2026: `getById`/`search` devolvían el
+// documento entero (avistamientos con contacto/GPS, ownerId, __v) a
+// CUALQUIERA, y un borrador se veía igual que uno publicado con solo conocer
+// (o adivinar) su ID.
+describe('Visibilidad pública de animales', () => {
+  it('esconde un borrador de cualquiera que no sea su protectora', async () => {
+    const created = await request(app)
+      .post('/api/animals')
+      .set(shelterHeaders)
+      .send({
+        shelter: shelterId,
+        name: 'Sombra',
+        species: 'perro',
+        sex: 'male',
+        age: '1 año',
+        size: 'medium',
+      })
+      .expect(201);
+    expect(created.body.status).toBe('borrador');
+
+    await request(app).get(`/api/animals/${created.body._id}`).expect(404);
+    await request(app).get(`/api/animals/${created.body._id}`).set(userHeaders).expect(404);
+
+    const asOwner = await request(app)
+      .get(`/api/animals/${created.body._id}`)
+      .set(shelterHeaders)
+      .expect(200);
+    expect(asOwner.body.status).toBe('borrador');
+  });
+
+  it('no expone avistamientos, ownerId ni __v en el detalle ni en el catálogo público', async () => {
+    const nina = await createPublishedAnimal();
+    await request(app)
+      .post(`/api/animals/${nina._id}/lost`)
+      .set(shelterHeaders)
+      .send({ area: 'Retiro' })
+      .expect(200);
+    await request(app)
+      .post(`/api/animals/passport/${nina.code}/sighting`)
+      .send({ lat: 40, lng: -3, contact: 'quien-lo-vio@test.com', note: 'cerca del lago' })
+      .expect(201);
+
+    const detail = await request(app).get(`/api/animals/${nina._id}`).expect(200);
+    expect(detail.body.lost?.sightings).toBeUndefined();
+    expect(detail.body.ownerId).toBeUndefined();
+    expect(detail.body.__v).toBeUndefined();
+
+    const catalog = await request(app).get('/api/animals').query({ code: nina.code }).expect(200);
+    expect(catalog.body.items[0].lost?.sightings).toBeUndefined();
+    expect(catalog.body.items[0].ownerId).toBeUndefined();
+    expect(catalog.body.items[0].__v).toBeUndefined();
+
+    // La protectora dueña sí necesita ver los avistamientos: es lo único que
+    // le dice quién ha escrito para devolver al animal.
+    const asOwner = await request(app)
+      .get(`/api/animals/${nina._id}`)
+      .set(shelterHeaders)
+      .expect(200);
+    expect(asOwner.body.lost.sightings).toHaveLength(1);
+  });
+
+  it('devuelve 404 (no 500) ante un ID mal formado', async () => {
+    await request(app).get('/api/animals/no-es-un-object-id').expect(404);
+  });
+});

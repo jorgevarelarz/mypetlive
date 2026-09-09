@@ -7,6 +7,7 @@ import { orderTotals, shippingFor, priceFromCost, ORDER_MAX_EUR } from '../utils
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
 }));
+import { sendEmail } from '../utils/notification';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -286,6 +287,32 @@ describe('Checkout', () => {
     expect(res.body.error).toBe('out_of_stock');
   });
 
+  // Regresión de la auditoría del 5 sep 2026 (hallazgo alta #5): el stock solo
+  // se comprobaba al crear la sesión de pago, nunca se reservaba, así que dos
+  // pedidos concurrentes por la última unidad podían los dos "tener éxito" y
+  // acabar los dos pagados. Sin Stripe configurado (ver arriba) `createCheckout`
+  // deja el pedido creado y devuelve 503 tras reservar; eso basta para probar
+  // la reserva sin necesitar un cobro real.
+  it('con una sola unidad, dos pedidos a la vez solo reservan uno', async () => {
+    const product = await seedProduct({ stock: 1 });
+    const body = { items: [{ productId: product._id, qty: 1 }], shippingAddress: address };
+
+    const [a, b] = await Promise.all([
+      request(app).post('/api/marketplace/checkout').set(buyerH).send(body),
+      request(app).post('/api/marketplace/checkout').set(otherH).send(body),
+    ]);
+
+    const statuses = [a.status, b.status].sort();
+    // 503: Stripe no configurado, pero el pedido se creó con el stock reservado.
+    expect(statuses).toEqual([409, 503]);
+
+    const after: any = await Product.findById(product._id).lean();
+    expect(after.stock).toBe(0);
+
+    const pending = await Order.countDocuments({ status: 'pending_payment' });
+    expect(pending).toBe(1);
+  });
+
   it('frena un pedido por encima del tope', async () => {
     const product = await seedProduct({ priceEur: 1000, stock: 20 });
     const res = await request(app)
@@ -348,12 +375,18 @@ describe('Checkout', () => {
 
 async function seedPendingOrder(overrides: Record<string, any> = {}) {
   const product = await seedProduct({ stock: 5 });
+  const qty = 2;
+  // Un pedido en `pending_payment` ya tiene su existencia reservada (ver
+  // `createCheckout`): esta fábrica de test construye el pedido a mano, así
+  // que reproduce esa misma reserva a mano para no fingir un estado que
+  // `createCheckout` nunca dejaría existir.
+  await Product.updateOne({ _id: product._id }, { $inc: { stock: -qty } });
   const order = await Order.create({
     reference: 'MP-TEST-0002',
     listedBy: 'partner',
     sellerId: storeId,
     buyer: { userId: buyerId, email: 'ana@test.com', name: 'Ana' },
-    items: [{ productId: product._id, name: product.name, priceEur: 20, qty: 2 }],
+    items: [{ productId: product._id, name: product.name, priceEur: 20, qty }],
     shippingAddress: { ...address, country: 'ES' },
     subtotalEur: 40,
     shippingEur: 0,
@@ -385,6 +418,37 @@ describe('Pago confirmado', () => {
   it('ignora un pedido que no está esperando pago', async () => {
     const { order } = await seedPendingOrder({ status: 'cancelled' });
     expect(await fulfillPaidOrder(String(order._id), 'pi_2')).toBe(false);
+  });
+
+  // Regresión de la auditoría del 5 sep 2026 (hallazgo media #6): el email de
+  // confirmación al invitado enlazaba al pedido sin su `guestToken`, así que
+  // el propio correo llevaba a un 403 sin salida (la página no tiene dónde
+  // teclear el token a mano).
+  it('el email de confirmación al invitado lleva su token en el enlace', async () => {
+    (sendEmail as jest.Mock).mockClear();
+    const product = await seedProduct({ stock: 5 });
+    const created = await request(app)
+      .post('/api/marketplace/checkout')
+      .send({
+        items: [{ productId: product._id, qty: 1 }],
+        email: 'invitada@test.com',
+        name: 'Invitada',
+        shippingAddress: address,
+      })
+      .expect(503);
+
+    expect(await fulfillPaidOrder(created.body.orderId, 'pi_guest')).toBe(true);
+
+    const confirmation = (sendEmail as jest.Mock).mock.calls.find(c => c[0] === 'invitada@test.com');
+    expect(confirmation).toBeTruthy();
+    const link = confirmation![2].match(/https:\/\/\S+\/pedido\/\S+/)?.[0];
+    expect(link).toContain(`token=${created.body.guestToken}`);
+
+    const url = new URL(link!);
+    await request(app).get(`/api/marketplace/orders/${created.body.orderId}`).expect(403);
+    await request(app)
+      .get(`/api/marketplace/orders/${created.body.orderId}${url.search}`)
+      .expect(200);
   });
 });
 
