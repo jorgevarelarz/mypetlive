@@ -36,6 +36,12 @@ function DetailBlock({ icon, title, children }: { icon: React.ReactNode; title: 
   );
 }
 
+const ADOPTION_ERROR_TEXT: Record<string, string> = {
+  animal_not_available: 'Este compañero ya no está disponible para adopción.',
+  animal_not_found: 'No encontramos este compañero.',
+  unauthorized: 'Inicia sesión para enviar la solicitud.',
+};
+
 export default function AnimalDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -84,7 +90,7 @@ export default function AnimalDetail() {
     return Boolean(me && shelterId && String(shelterId) === me);
   }, [user, shelterId]);
 
-  const { data: questionnaireData } = useQuery({
+  const { data: questionnaireData, refetch: refetchQuestionnaire } = useQuery({
     queryKey: ['questionnaire', shelterId],
     queryFn: () => getQuestionnaireByProtectora(String(shelterId)),
     enabled: Boolean(shelterId),
@@ -144,12 +150,25 @@ export default function AnimalDetail() {
       nav('/adoptions/mine');
     },
     onError: (e: any) => {
-      toast.error(e?.response?.data?.error || 'No se pudo crear la solicitud');
+      const code = e?.response?.data?.error;
+      // El servidor exige responder a las preguntas VIGENTES, casadas por texto. Si la
+      // protectora las cambia con la ficha ya abierta, el adoptante respondía a las
+      // viejas y solo veía "answers_incomplete" (29 sep 2026). Recargamos las preguntas
+      // (las respuestas a las que no cambian se conservan) y se lo explicamos.
+      if (code === 'answers_incomplete' || code === 'answers_required') {
+        refetchQuestionnaire();
+        setQuestionnaireOpen(true);
+        toast.error('La protectora ha actualizado el cuestionario. Revisa las preguntas y vuelve a enviarlo.');
+        return;
+      }
+      toast.error(ADOPTION_ERROR_TEXT[code] || 'No se pudo enviar la solicitud. Inténtalo de nuevo.');
     },
   });
 
-  const proceedAdopt = () => {
-    if (questions.length > 0) {
+  const proceedAdopt = async () => {
+    // Preguntas frescas al abrir: la ficha puede llevar rato abierta.
+    const fresh = shelterId ? (await refetchQuestionnaire()).data?.questions ?? questions : questions;
+    if (fresh.length > 0) {
       setQuestionnaireOpen(true);
       return;
     }
