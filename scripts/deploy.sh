@@ -17,12 +17,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${1:-all}"
 
 deploy_api() {
+  # Mismo motivo que en deploy_web: aquí `set -e` no protege, así que cada paso corta.
   echo "==> Backend: rsync src/ → $HOST:$REMOTE_APP/src/"
-  rsync -az --delete "$ROOT/src/" "$HOST:$REMOTE_APP/src/"
+  rsync -az --delete "$ROOT/src/" "$HOST:$REMOTE_APP/src/" || exit 1
   echo "==> Backend: rsync legal/ → $HOST:$REMOTE_APP/legal/"
-  rsync -az --delete "$ROOT/legal/" "$HOST:$REMOTE_APP/legal/"
+  rsync -az --delete "$ROOT/legal/" "$HOST:$REMOTE_APP/legal/" || exit 1
   echo "==> Backend: rebuild + recreate del contenedor api"
-  ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api"
+  ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api" || exit 1
   echo "==> Backend: health check"
   sleep 5
   # /health/ready devuelve 503 si la API arrancó pero no conecta a Mongo
@@ -37,7 +38,14 @@ deploy_web() {
     exit 1
   fi
   echo "==> Frontend: npm run build"
-  (cd "$ROOT/frontend" && npm run build)
+  # `|| exit 1` explícito: deploy_web se llama dentro de `&&` y ahí bash ignora
+  # `set -e`. El 29 sep 2026 un build fallido siguió adelante, el rsync --delete
+  # subió un build/ sin index.html y la web dio 500 unos minutos.
+  (cd "$ROOT/frontend" && npm run build) || { echo "ERROR: el build del frontend ha fallado; no se sube nada." >&2; exit 1; }
+  if [[ ! -f "$ROOT/frontend/build/index.html" ]] || ! ls "$ROOT"/frontend/build/static/js/main.*.js >/dev/null 2>&1; then
+    echo "ERROR: build/ incompleto (sin index.html o sin main.*.js); no se sube nada." >&2
+    exit 1
+  fi
   echo "==> Frontend: rsync build/ → $HOST:$DOCROOT/"
   rsync -az --delete "$ROOT/frontend/build/" "$HOST:$DOCROOT/"
   ssh "$HOST" "chown -R mypetlive:psaserv $DOCROOT"
