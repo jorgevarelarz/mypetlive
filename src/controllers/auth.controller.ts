@@ -10,6 +10,9 @@ import { AppError, badRequest, isAppError } from '../utils/errors';
 
 import { getJwtSecret } from '../config/jwt';
 
+const normalizeEmail = (value: unknown) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
 const JWT_SECRET = getJwtSecret();
 const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
 
@@ -47,7 +50,7 @@ export const register = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
   try {
     const rawName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const rawEmail = normalizeEmail(req.body?.email);
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     if (!rawName || !rawEmail || !password) {
       throw badRequest('missing_fields');
@@ -99,8 +102,10 @@ export const login = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
   log.info({ email: req.body?.email }, 'Login request received');
   try {
-    const { email, password } = req.body;
-    // Find the user by email
+    const { password } = req.body;
+    // El alta guarda el email en minúsculas; sin normalizar aquí, el móvil que pone
+    // la inicial en mayúscula dejaba fuera a la usuaria con la contraseña correcta.
+    const email = normalizeEmail(req.body?.email);
     const user = await User.findOne({ email });
     if (!user) {
       throw new AppError('Usuario o contraseña incorrectos', {
@@ -144,9 +149,11 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const requestPasswordReset = async (req: Request, res: Response) => {
-  const { email } = req.body;
+  const email = normalizeEmail(req.body?.email);
   const log = getRequestLogger(req);
   try {
+    // Mismo motivo que en el login: sin esto, "Marina@..." no encontraba la cuenta y,
+    // como la respuesta es siempre ok (no revela qué emails existen), nadie se enteraba.
     const user = await User.findOne({ email });
     if (user) {
       const token = crypto.randomBytes(20).toString('hex');

@@ -110,6 +110,29 @@ describe('Auth hardening', () => {
     expect(res.body.token).toBeDefined();
   });
 
+  // Regresión del 29 sep 2026: el móvil puso la inicial en mayúscula, el login
+  // decía "usuario o contraseña incorrectos" y el reseteo respondía ok sin enviar nada.
+  it('matches the email regardless of case in login and reset request', async () => {
+    await User.create({
+      name: 'Marina',
+      email: 'marina@example.com',
+      passwordHash: await bcrypt.hash(password, 10),
+      role: 'tenant',
+    });
+
+    await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'Marina@Example.com', password })
+      .expect(200);
+
+    await request(app)
+      .post('/api/auth/request-reset')
+      .send({ email: 'Marina@example.com' })
+      .expect(200);
+    const stored = await User.findOne({ email: 'marina@example.com' }).select('+resetToken');
+    expect(stored?.resetToken).toBeTruthy();
+  });
+
   // Regresión de la auditoría del 5 sep 2026 (hallazgo alta #4): un JWT
   // seguía aceptándose después de restablecer la contraseña, porque
   // `authenticate` solo comprobaba la firma y la caducidad del token, nunca

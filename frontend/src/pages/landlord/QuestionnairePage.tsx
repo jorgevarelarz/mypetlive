@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardList, Plus, Trash2, Info, AlertTriangle } from 'lucide-react';
 import { getMyQuestionnaire, saveQuestionnaire } from '../../api/questionnaire';
 import { toast } from 'react-hot-toast';
@@ -8,7 +8,8 @@ import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 const normalize = (value: string) => value.trim().toLowerCase();
 
 export default function QuestionnairePage() {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError, refetch, isFetchedAfterMount } = useQuery({
     queryKey: ['my-questionnaire'],
     queryFn: getMyQuestionnaire,
   });
@@ -23,17 +24,22 @@ export default function QuestionnairePage() {
     // Solo hidratamos una vez. Con `[data?.questions]` cualquier refetch (react-query
     // recarga al volver a la pestaña) devolvía un array nuevo y machacaba en silencio
     // las preguntas que la protectora estaba escribiendo.
-    if (!data || hydrated) return;
+    // Y solo con datos pedidos en ESTA visita: el primer `data` puede venir de la caché
+    // (una visita anterior con el cuestionario vacío, o incluso otra cuenta en el mismo
+    // navegador) y, al quedar hidratada con él, la respuesta buena del servidor se
+    // descartaba y la protectora veía "aún no tienes preguntas" (29 sep 2026).
+    if (!data || hydrated || !isFetchedAfterMount) return;
     setQuestions(data.questions || []);
     setSaved(data.questions || []);
     setHydrated(true);
-  }, [data, hydrated]);
+  }, [data, hydrated, isFetchedAfterMount]);
 
   const saveMutation = useMutation({
     mutationFn: (payload: string[]) => saveQuestionnaire(payload),
     onSuccess: response => {
       setQuestions(response.questions);
       setSaved(response.questions);
+      queryClient.setQueryData(['my-questionnaire'], response);
       toast.success('Cuestionario guardado');
     },
     onError: () => toast.error('No se pudo guardar el cuestionario. Inténtalo de nuevo.'),
