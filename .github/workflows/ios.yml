@@ -12,7 +12,7 @@ on:
   push:
     branches: ["**"]
     tags: ["ios-*"]
-    paths: ["frontend/ios/**", "frontend/src/**", "frontend/public/**", "frontend/capacitor.config.json", "frontend/package.json", ".github/workflows/ios.yml"]
+    paths: ["frontend/ios/**", "frontend/src/**", "frontend/public/**", "frontend/capacitor.config.json", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", ".github/workflows/ios.yml"]
   workflow_dispatch:
     inputs:
       testflight:
