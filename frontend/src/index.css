@@ -5,6 +5,8 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
+/* Un botón-icono con el padding por defecto aplastaba el SVG (flex-shrink) hasta dejarlo en 6 px. */
+button svg, a svg { flex-shrink: 0; }
 
 :root {
   --bg: #f6f3ec;

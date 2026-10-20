@@ -83,16 +83,16 @@ export default function AppointmentsCalendar({
 
   return (
     <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, margin: 0 }}>{title}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button type="button" onClick={() => move(-1)} aria-label="Mes anterior" style={navBtn}><ChevronLeft size={18} /></button>
-          <span style={{ fontWeight: 800, minWidth: 150, textAlign: 'center', textTransform: 'capitalize' }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</span>
+          <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</span>
           <button type="button" onClick={() => move(1)} aria-label="Mes siguiente" style={navBtn}><ChevronRight size={18} /></button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
         {WEEKDAYS.map(w => (
           <div key={w} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: MPL.faint, padding: '4px 0' }}>{w}</div>
         ))}
@@ -149,4 +149,4 @@ export default function AppointmentsCalendar({
   );
 }
 
-const navBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, border: `1px solid ${MPL.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MPL.ink };
+const navBtn: React.CSSProperties = { width: 34, height: 34, padding: 0, flexShrink: 0, borderRadius: 9, border: `1px solid ${MPL.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MPL.ink };

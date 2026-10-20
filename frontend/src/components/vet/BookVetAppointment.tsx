@@ -184,7 +184,7 @@ export default function BookVetAppointment() {
             </label>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
               Mascota (opcional)
               <select

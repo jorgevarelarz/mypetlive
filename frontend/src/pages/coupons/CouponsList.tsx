@@ -88,7 +88,7 @@ export default function CouponsList() {
         .coupon-card{transition:transform .18s ease, box-shadow .18s ease;}
         .coupon-card:hover{transform:translateY(-3px);box-shadow:0 1px 3px rgba(31,55,40,.06),0 18px 38px -24px rgba(31,55,40,.32)!important;}
         @media (max-width: 920px){.coupon-hero{grid-template-columns:1fr}.coupon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.coupon-wrap{padding:26px 16px 48px}}
-        @media (max-width: 620px){.coupon-wrap{padding:22px 20px 96px!important}.coupon-tabs{display:none!important}.coupon-hero{gap:16px!important}.coupon-hero h1{font-size:24px!important}.coupon-hero p{font-size:13.5px!important}.coupon-grid{grid-template-columns:1fr}.ticket-feature{padding:14px!important;border-radius:16px!important;gap:13px!important}.ticket-feature button{width:100%;grid-column:1 / -1}.coupon-card{border-radius:15px!important}.coupon-card > div:first-child{padding:14px!important}.coupon-card > div:last-child{padding:12px 14px!important}}
+        @media (max-width: 620px){.coupon-wrap{padding:22px 20px 96px!important}.coupon-tabs{display:none!important}.coupon-hero{gap:16px!important}.coupon-hero h1{font-size:24px!important}.coupon-hero p{font-size:13.5px!important}.coupon-grid{grid-template-columns:1fr}.ticket-feature{padding:14px!important;border-radius:16px!important;gap:13px!important;flex-wrap:wrap!important}.ticket-feature > div:nth-child(2){width:52px!important;height:52px!important}.ticket-feature h2{font-size:20px!important}.ticket-feature button{flex:1 1 100%!important}.coupon-card{border-radius:15px!important}.coupon-card > div:first-child{padding:14px!important}.coupon-card > div:last-child{padding:12px 14px!important}}
       `}</style>
 
       <main className="coupon-wrap">

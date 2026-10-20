@@ -21,7 +21,7 @@ export default function AppointmentsPage() {
   const ownerTitle = (a: VetAppointment) => a.vetId?.profile?.orgName || a.vetId?.name || 'Veterinario';
 
   return (
-    <div style={{ display: 'grid', gap: 18, padding: 24, maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 18, padding: '24px 16px', maxWidth: 900, margin: '0 auto' }}>
       <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, margin: 0 }}>Citas veterinarias 🩺</h1>
