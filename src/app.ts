@@ -257,7 +257,10 @@ app.get('/metrics', metricsHandler);
 // Public routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/verification', verificationRoutes);
-app.use('/api/kyc', identityRoutes);
+// [FROZEN RentalApp] KYC con Stripe Identity: nadie lo usa en MyPetLive y estaba
+// expuesto (webhook sin firma que cualquiera podía llamar, y /start abría sesiones
+// de Stripe Identity, que se cobran por verificación, con returnUrl libre).
+// app.use('/api/kyc', identityRoutes);
 app.use('/api', legalRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/notify', notifyRoutes);
@@ -315,7 +318,9 @@ app.use('/api', questionnaireRoutes);
 
 // Protected routes (autenticación + rol; sin verificación KYC — adopción libre)
 app.use('/api/users', authenticate, userRoutes);
-app.use('/api/reviews', authenticate, reviewRoutes);
+// [FROZEN RentalApp] Reseñas entre usuarios de alquiler: sin uso en la web y
+// cualquier cuenta podía puntuar a cualquier otra (ratingAvg).
+// app.use('/api/reviews', authenticate, reviewRoutes);
 app.use('/api/chat', authenticate, chatRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);

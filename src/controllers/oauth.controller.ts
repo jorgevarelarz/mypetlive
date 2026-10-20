@@ -98,10 +98,20 @@ export const socialLogin = async (req: Request, res: Response) => {
         (p: any) => p.provider === provider && p.sub === claims.sub,
       );
       if (!already) {
+        const firstProvider = (user.authProviders || []).length === 0;
         user.authProviders = [
           ...(user.authProviders || []).filter((p: any) => p.provider !== provider),
           { provider, sub: claims.sub },
         ] as any;
+        // Preapropiación de cuentas: el alta con contraseña no verifica el correo,
+        // así que alguien pudo registrarse antes con el correo de esta persona.
+        // Al demostrar el correo con Google/Apple por primera vez, esa contraseña
+        // y sus sesiones dejan de valer; si era suya, la recupera por correo.
+        // Mismo arreglo que RentalApp (9c06e29).
+        if (firstProvider && user.passwordHash) {
+          user.passwordHash = undefined;
+          user.tokenVersion = (user.tokenVersion || 0) + 1;
+        }
         await user.save();
       }
     } else {

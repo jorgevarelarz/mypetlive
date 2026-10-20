@@ -69,7 +69,7 @@ describe('Login con Google/Apple', () => {
     expect(saved?.authProviders).toEqual([{ provider: 'google', sub: 'google-sub-1' }]);
   });
 
-  it('vincula el proveedor a una cuenta que ya existe con contraseña', async () => {
+  it('vincula el proveedor a una cuenta que ya existe con contraseña y anula esa contraseña', async () => {
     await User.create({
       name: 'Laura',
       email: 'laura@example.com',
@@ -85,11 +85,16 @@ describe('Login con Google/Apple', () => {
     expect(res.status).toBe(200);
     const saved = await User.findOne({ email: 'laura@example.com' }).lean();
     expect(saved?.authProviders).toEqual([{ provider: 'google', sub: 'sub-laura' }]);
-    // Sigue pudiendo entrar con su contraseña de siempre.
+    // Preapropiación: el alta con contraseña no verifica el correo, así que esa
+    // contraseña pudo ponerla otra persona. Al demostrar el correo con Google deja
+    // de valer (y sus sesiones también); si era de Laura, la recupera por correo.
+    expect(saved?.passwordHash).toBeUndefined();
+    expect(saved?.tokenVersion).toBe(1);
     const login = await request(app)
       .post('/api/auth/login')
       .send({ email: 'laura@example.com', password: 'una-clave-segura-2026' });
-    expect(login.status).toBe(200);
+    expect(login.status).toBe(400);
+    expect(login.body.code).toBe('use_social_login');
   });
 
   it('no duplica el proveedor al entrar dos veces', async () => {

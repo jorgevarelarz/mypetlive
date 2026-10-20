@@ -10,6 +10,20 @@ import { Adoption } from '../models/adoption.model';
 import { Animal } from '../models/animal.model';
 import { getUserId } from '../utils/getUserId';
 import { User } from '../models/user.model';
+
+// Ruta /uploads/<fichero> propia: relativa, o absoluta con el origen de esta API
+// (APP_URL/FRONTEND_URL o el host de la petición, que es lo que devuelve /api/uploads).
+function isOwnUploadUrl(url: string, req: any): boolean {
+  const file = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
+  if (url.startsWith('/')) return file.test(url) && !url.includes('..');
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return false; }
+  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.search || parsed.hash) return false;
+  const origins = [process.env.APP_URL, process.env.FRONTEND_URL, `${req.protocol}://${req.get('host')}`]
+    .filter(Boolean)
+    .map(o => { try { return new URL(String(o)).origin; } catch { return ''; } });
+  return origins.includes(parsed.origin) && file.test(parsed.pathname) && !parsed.pathname.includes('..');
+}
 import { sendPushToUser } from '../utils/push';
 
 const r = Router();
@@ -196,11 +210,10 @@ r.post('/:conversationId/messages', async (req, res) => {
     const text = typeof body === 'string' ? String(body).slice(0, 2000) : undefined;
     let url: string | undefined = typeof attachmentUrl === 'string' ? String(attachmentUrl) : undefined;
     if (url) {
-      const allow = (process.env.UPLOADS_BASE_URL || '').split(',').map(s=>s.trim()).filter(Boolean);
-      const ok = allow.length === 0
-        ? /^https?:\/\//i.test(url) || url.startsWith('/uploads/')
-        : allow.some(prefix => url.startsWith(prefix));
-      if (!ok) {
+      // Solo ficheros subidos a nuestro /uploads (RentalApp fd6351f). Antes, sin
+      // UPLOADS_BASE_URL (producción), valía cualquier URL http: enlaces de phishing
+      // o píxeles de rastreo dentro del chat de adopción.
+      if (!isOwnUploadUrl(url, req)) {
         return res.status(400).json({ error: 'attachment_domain_not_allowed' });
       }
     }

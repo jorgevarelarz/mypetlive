@@ -12,10 +12,20 @@ const JWT_SECRET = getJwtSecret();
  * `resetPassword` la sube en BD — así que un token emitido antes dejar de
  * servir en cuanto se compara aquí, sin esperar a que caduquen sus 7 días.
  */
-async function hasLiveSession(resolvedId: string, decoded: any): Promise<boolean> {
-  const dbUser = await User.findById(resolvedId).select('tokenVersion').lean();
-  if (!dbUser) return false;
-  return ((dbUser as any).tokenVersion || 0) === (decoded.tokenVersion || 0);
+async function loadLiveSession(resolvedId: string, decoded: any): Promise<{ role?: string } | null> {
+  const dbUser: any = await User.findById(resolvedId).select('tokenVersion role').lean();
+  if (!dbUser) return null;
+  if ((dbUser.tokenVersion || 0) !== (decoded.tokenVersion || 0)) return null;
+  return dbUser;
+}
+
+/**
+ * El rol manda desde la base, no desde el token: si el admin cambia el rol de
+ * una cuenta (o la degrada), se aplica en la siguiente petición y no al
+ * caducar el JWT, que dura 7 días. Mismo arreglo que RentalApp (1231d5c).
+ */
+function withDbRole(decoded: any, session: { role?: string }) {
+  return session.role ? { ...decoded, role: session.role } : decoded;
 }
 
 /**
@@ -66,12 +76,13 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       }
     }
 
-    if (!(await hasLiveSession(resolvedId, decoded))) {
+    const session = await loadLiveSession(resolvedId, decoded);
+    if (!session) {
       return res.status(401).json({ error: 'Sesión invalidada' });
     }
 
     (req as any).user = {
-      ...decoded,
+      ...withDbRole(decoded, session),
       id: resolvedId,
       _id: resolvedId,
       isVerified: typeof tokenVerified === 'boolean' ? tokenVerified : false,
@@ -106,8 +117,9 @@ export const optionalAuthenticate = async (req: Request, _res: Response, next: N
     const resolvedId = decoded._id || decoded.id;
     // Igual que en `authenticate`: una sesión cerrada por un reset de
     // contraseña no debe verse aquí como el dueño, sino como anónimo.
-    if (await hasLiveSession(resolvedId, decoded)) {
-      (req as any).user = { ...decoded, id: resolvedId, _id: resolvedId };
+    const session = await loadLiveSession(resolvedId, decoded);
+    if (session) {
+      (req as any).user = { ...withDbRole(decoded, session), id: resolvedId, _id: resolvedId };
     }
   } catch {
     // Token inválido en endpoint público: continuar como anónimo.

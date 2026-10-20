@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import { User } from '../models/user.model';
+import { createHash } from 'crypto';
+
+const hashResetToken = (t: string) => createHash('sha256').update(t).digest('hex');
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -129,8 +132,13 @@ describe('Auth hardening', () => {
       .post('/api/auth/request-reset')
       .send({ email: 'Marina@example.com' })
       .expect(200);
-    const stored = await User.findOne({ email: 'marina@example.com' }).select('+resetToken');
-    expect(stored?.resetToken).toBeTruthy();
+    // La respuesta sale antes de procesar (sin enumeración por tiempo): esperar al token.
+    let stored: any = null;
+    for (let i = 0; i < 50 && !stored?.resetToken; i++) {
+      await new Promise(r => setTimeout(r, 50));
+      stored = await User.findOne({ email: 'marina@example.com' }).select('+resetToken');
+    }
+    expect(stored?.resetToken).toMatch(/^[0-9a-f]{64}$/); // solo el hash, nunca el token
   });
 
   // Regresión de la auditoría del 5 sep 2026 (hallazgo alta #4): un JWT
@@ -155,7 +163,7 @@ describe('Auth hardening', () => {
 
     await User.updateOne(
       { _id: user._id },
-      { resetToken: 'test-reset-token', resetTokenExp: new Date(Date.now() + 60_000) },
+      { resetToken: hashResetToken('test-reset-token'), resetTokenExp: new Date(Date.now() + 60_000) },
     );
     await request(app)
       .post('/api/auth/reset')
@@ -180,5 +188,25 @@ describe('Auth hardening', () => {
     expect(res.status).toBe(200);
     expect(res.headers['strict-transport-security']).toBeDefined();
     expect(res.headers['content-security-policy']).toBeDefined();
+  });
+
+  // RentalApp 1231d5c: el rol se leía del JWT (7 días). Si el admin degradaba una
+  // cuenta, seguía con los permisos del token hasta que caducaba.
+  it('aplica un cambio de rol en la siguiente petición, sin esperar a que caduque el token', async () => {
+    const user = await User.create({
+      name: 'Protectora degradada',
+      email: 'degradada@example.com',
+      passwordHash: await bcrypt.hash(password, 10),
+      role: 'landlord',
+    });
+    const login = await request(app).post('/api/auth/login').send({ email: user.email, password }).expect(200);
+    const auth = { Authorization: `Bearer ${login.body.token}` };
+    const animal = { name: 'Toby', species: 'dog', age: '2 años' };
+
+    const ok = await request(app).post('/api/animals').set(auth).send(animal);
+    expect(ok.status).not.toBe(403);
+
+    await User.updateOne({ _id: user._id }, { role: 'tenant' });
+    await request(app).post('/api/animals').set(auth).send(animal).expect(403);
   });
 });

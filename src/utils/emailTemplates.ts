@@ -1,3 +1,4 @@
+import { escapeHtml } from './escapeHtml';
 // Plantillas de email de marca MyPetLive.
 // HTML compatible con clientes de correo: layout en tablas + estilos inline.
 
@@ -26,7 +27,10 @@ interface BrandedEmailOpts {
 
 /** Envuelve contenido en la maqueta de marca y devuelve el HTML completo. */
 export function brandedEmail(opts: BrandedEmailOpts): string {
-  const { preheader = '', heading, bodyHtml, button, footnote } = opts;
+  const { bodyHtml, button, footnote } = opts;
+  // Asunto, preencabezado y texto del botón son texto plano (llevan nombres de mascota).
+  const preheader = escapeHtml(opts.preheader || '');
+  const heading = escapeHtml(opts.heading);
   const year = new Date().getFullYear();
 
   const buttonBlock = button
@@ -34,7 +38,7 @@ export function brandedEmail(opts: BrandedEmailOpts): string {
          <tr><td align="center" bgcolor="${BRAND.teal}" style="border-radius:10px;">
            <a href="${button.url}" target="_blank"
               style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:10px;">
-             ${button.text}
+             ${escapeHtml(button.text)}
            </a>
          </td></tr>
        </table>`
@@ -179,7 +183,7 @@ export function emailChangeNoticeEmail(newEmail: string, applied: boolean): { te
     heading,
     bodyHtml: `
       <p style="margin:0 0 14px;">Hola,</p>
-      <p style="margin:0;">${what}</p>`,
+      <p style="margin:0;">${escapeHtml(what)}</p>`,
     footnote: 'Si no has sido tú, entra ahora en tu cuenta y cambia la contraseña: alguien podría tener acceso.',
   });
 

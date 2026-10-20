@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { WelcomePlan, WELCOME_TASKS } from '../models/welcomePlan.model';
 import { matchOffersForAnimal } from '../controllers/offers.controller';
 import { brandedEmail } from './emailTemplates';
+import { escapeHtml } from './escapeHtml';
 import { sendEmail } from './notification';
 import logger from './logger';
 
@@ -60,11 +61,11 @@ export async function activateWelcomePlan(opts: {
         `<li style="margin:0 0 12px;"><strong>${t.title}.</strong> ${t.description}</li>`,
     ).join('');
     const offersHtml = offers.length
-      ? `<p style="margin:24px 0 8px;font-family:Arial,Helvetica,sans-serif;"><strong>Ofertas de bienvenida para ${animal.name}:</strong></p><ul style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">` +
+      ? `<p style="margin:24px 0 8px;font-family:Arial,Helvetica,sans-serif;"><strong>Ofertas de bienvenida para ${escapeHtml(animal.name)}:</strong></p><ul style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">` +
         offers
           .map(
             o =>
-              `<li style="margin:0 0 8px;">${o.title}${o.partner?.name ? ` — ${o.partner.name}` : ''}${o.discount ? ` (${o.discount})` : ''}</li>`,
+              `<li style="margin:0 0 8px;">${escapeHtml(o.title)}${o.partner?.name ? ` — ${escapeHtml(o.partner.name)}` : ''}${o.discount ? ` (${escapeHtml(o.discount)})` : ''}</li>`,
           )
           .join('') +
         `</ul>`
@@ -73,7 +74,7 @@ export async function activateWelcomePlan(opts: {
       preheader: `Primeros pasos con ${animal.name}`,
       heading: `¡Bienvenido a casa, ${animal.name}!`,
       bodyHtml:
-        `<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;">¡Enhorabuena! La adopción se ha completado y ${animal.name} ya es parte de tu familia. Para que la llegada sea fácil, te dejamos una guía de primeros pasos:</p>` +
+        `<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;">¡Enhorabuena! La adopción se ha completado y ${escapeHtml(animal.name)} ya es parte de tu familia. Para que la llegada sea fácil, te dejamos una guía de primeros pasos:</p>` +
         `<ol style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">${stepsHtml}</ol>` +
         offersHtml,
       button: { text: 'Ver mi plan de bienvenida', url: `${base}/pets` },

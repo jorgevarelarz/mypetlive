@@ -3,6 +3,7 @@ import { CareLog } from '../models/careLog.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
+import { escapeHtml } from '../utils/escapeHtml';
 import { sendPushToUser } from '../utils/push';
 import { supplyForecast, usesPerDayFrom, formatBase, type SupplyUnit } from '../utils/supplies';
 import { findWhereToBuy, type ShopOption } from '../utils/shopping';
@@ -104,7 +105,7 @@ async function whereToBuyBlock(product: string, animalId: string): Promise<{ tex
     html:
       `<p style="margin:16px 0 8px"><strong>Dónde comprarlo</strong></p><ul style="margin:0;padding-left:18px">` +
       lines
-        .map(l => `<li style="margin-bottom:6px"><a href="${link(l.option)}">${l.label}</a></li>`)
+        .map(l => `<li style="margin-bottom:6px"><a href="${link(l.option)}">${escapeHtml(l.label)}</a></li>`)
         .join('') +
       `</ul>`,
   };
@@ -157,7 +158,7 @@ export async function sendSupplyAlerts(): Promise<number> {
               brandedEmail({
                 preheader: `Queda ${quantity} de ${supply.name}.`,
                 heading: subject,
-                bodyHtml: `<p style="margin:0 0 12px">${intro}</p>${shop.html}`,
+                bodyHtml: `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>${shop.html}`,
                 button: { text: 'Ver la despensa', url: `${FRONTEND_URL()}/pet` },
                 footnote: 'Te avisamos una vez por producto; el aviso vuelve a armarse cuando repongas.',
               }),

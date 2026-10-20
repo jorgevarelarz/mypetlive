@@ -119,6 +119,23 @@ describe('Chat de adopción (adoptante ↔ protectora)', () => {
     await request(app).get(`/api/chat/${convId}/messages`).set(strangerH).expect(403);
     await request(app).post(`/api/chat/${convId}/messages`).set(strangerH).send({ body: 'hola' }).expect(403);
   });
+
+  it('los adjuntos solo pueden ser ficheros subidos a MyPetLive', async () => {
+    const conv = await request(app)
+      .post('/api/chat/conversations/ensure')
+      .set(adopterH)
+      .send({ kind: 'adoption', refId: adoptionId })
+      .expect(200);
+    const send = (attachmentUrl: string) =>
+      request(app).post(`/api/chat/${conv.body._id}/messages`).set(adopterH).send({ body: 'mira', attachmentUrl });
+
+    await send('/uploads/3f2c9a1e-1b2c-4d5e-8f90-1234567890ab.webp').expect(201);
+    // Phishing, rutas raras y otros dominios: fuera.
+    await send('https://phishing.example/login').expect(400);
+    await send('https://mypetlive.es.evil.example/uploads/a.webp').expect(400);
+    await send('/uploads/../.env').expect(400);
+    await send('javascript:alert(1)').expect(400);
+  });
 });
 
 describe('Perfil público de protectora', () => {

@@ -148,16 +148,23 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+// En la base solo se guarda el hash: quien lea la colección de usuarios (una
+// copia de seguridad, un volcado) no puede usar los enlaces de recuperación.
+export const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
 export const requestPasswordReset = async (req: Request, res: Response) => {
   const email = normalizeEmail(req.body?.email);
   const log = getRequestLogger(req);
+  // Se responde ANTES de buscar la cuenta y mandar el correo: si se esperase,
+  // el tiempo de respuesta delataría qué correos tienen cuenta (RentalApp 8d447c1).
+  res.json({ ok: true });
   try {
     // Mismo motivo que en el login: sin esto, "Marina@..." no encontraba la cuenta y,
     // como la respuesta es siempre ok (no revela qué emails existen), nadie se enteraba.
     const user = await User.findOne({ email });
     if (user) {
       const token = crypto.randomBytes(20).toString('hex');
-      user.resetToken = token;
+      user.resetToken = hashResetToken(token);
       user.resetTokenExp = new Date(Date.now() + 60 * 60 * 1000);
       await user.save();
       const resetUrl = buildResetLink(token);
@@ -167,16 +174,17 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
   } catch (error) {
     log.error({ err: error, email }, 'Error generando token de reseteo');
   }
-
-  res.json({ ok: true });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
   try {
     const { token, password } = req.body;
+    if (typeof token !== 'string' || !token) {
+      throw new AppError('Token inválido o expirado', { status: 400, code: 'token_invalid' });
+    }
     const user = await User.findOne({
-      resetToken: token,
+      resetToken: hashResetToken(token),
       resetTokenExp: { $gt: new Date() },
     });
 
