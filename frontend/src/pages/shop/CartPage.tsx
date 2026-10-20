@@ -6,6 +6,7 @@ import { createCheckout, type ShippingAddress } from '../../api/marketplace';
 import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../context/AuthContext';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
+import { isNativeApp, openPaymentPage } from '../../utils/native';
 import { formatPriceEur } from '../../utils/limits';
 
 // Carrito y checkout en una sola pantalla.
@@ -71,12 +72,15 @@ export default function CartPage() {
 
       // El pedido existe ya en el servidor: el carrito local ha cumplido.
       cart.clear();
+      const suffix = result.guestToken ? `?token=${result.guestToken}` : '';
       if (result.url) {
-        window.location.href = result.url;
+        // En la app el pago se abre en Safari y debajo queda el pedido, que se
+        // actualiza solo cuando Stripe confirma.
+        if (isNativeApp()) navigate(`/pedido/${result.orderId}${suffix}`);
+        await openPaymentPage(result.url);
         return;
       }
       // Sin pasarela: el pedido queda pendiente y la persona puede consultarlo.
-      const suffix = result.guestToken ? `?token=${result.guestToken}` : '';
       navigate(`/pedido/${result.orderId}${suffix}`);
     } catch (error: any) {
       const code = error?.response?.data?.error;

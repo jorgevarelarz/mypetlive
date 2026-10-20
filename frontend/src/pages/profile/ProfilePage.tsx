@@ -14,6 +14,7 @@ import VetHealthPanel from '../../components/vet/VetHealthPanel';
 import VetOffersPanel from '../../components/vet/VetOffersPanel';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 import DeleteAccountPanel from '../../components/account/DeleteAccountPanel';
+import { openPaymentPage } from '../../utils/native';
 import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
 
 const roleLabel: Record<string, string> = {
@@ -236,7 +237,7 @@ function DonationPayout() {
     setLinking(true);
     try {
       const { url } = await createShelterConnectLink();
-      window.location.href = url;
+      await openPaymentPage(url, () => { setLinking(false); void load(); });
     } catch (e: any) {
       if (e?.response?.status === 503) {
         setUnavailable(true);

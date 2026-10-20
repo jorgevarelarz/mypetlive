@@ -9,6 +9,7 @@ import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus }
 import { getPartnerMetrics } from '../../api/metrics';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
+import { openPaymentPage } from '../../utils/native';
 import { SALE_MAX_EUR, formatEur } from '../../utils/limits';
 
 // Carga diferida: html5-qrcode (zxing) es pesado y solo lo usan los partners al escanear.
@@ -192,7 +193,7 @@ function PartnerPayout() {
     setLinking(true);
     try {
       const { url } = await createPartnerConnectLink();
-      window.location.href = url;
+      await openPaymentPage(url, () => { setLinking(false); void load(); });
     } catch (e: any) {
       if (e?.response?.status === 503) { setUnavailable(true); toast.error('Los pagos aún no están disponibles'); }
       else toast.error('No se pudo iniciar la configuración');

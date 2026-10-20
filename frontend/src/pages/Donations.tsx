@@ -7,6 +7,7 @@ import { DONATION_MIN_EUR, DONATION_MAX_EUR, formatEur } from '../utils/limits';
 import { getAnimal } from '../api/animals';
 import { listProtectoras } from '../api/patitas';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
+import { isNativeApp, openPaymentPage, webUrl } from '../utils/native';
 
 const PRESETS = [5, 10, 20, 50];
 
@@ -85,6 +86,28 @@ export default function DonationsPage() {
       setSubmitting(false);
     }
   };
+
+  // App Store 3.2.2(iv): una app que no es de una ONG aprobada por Apple no puede
+  // cobrar donaciones dentro; sí puede mandar a hacerlas en Safari.
+  if (isNativeApp()) {
+    return (
+      <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', padding: '32px 20px' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'grid', gap: 18 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: MPL.coral }}>
+            <PawMark size={26} />
+            <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: MPL.ink, margin: 0 }}>Haz una donación</h1>
+          </div>
+          <p style={{ color: MPL.muted, margin: 0, fontSize: 14 }}>
+            Las donaciones a las protectoras se hacen desde nuestra web, en Safari. Tu donación llega igual a la protectora.
+          </p>
+          <button type="button" onClick={() => { void openPaymentPage(webUrl(`/donate${sp.toString() ? `?${sp.toString()}` : ''}`)); }}
+            style={{ justifySelf: 'start', background: MPL.coralDark, color: '#fff', border: 0, borderRadius: 13, padding: '13px 22px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+            Donar en mypetlive.es
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', padding: '32px 20px' }}>

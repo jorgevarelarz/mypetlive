@@ -7,6 +7,7 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
+import { isNativeApp } from '../../utils/native';
 import { useAuth } from '../../context/AuthContext';
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -186,7 +187,7 @@ export default function CouponsList() {
                       +{coupon.bonusPatitas || 40}
                     </span>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                      {canSponsor(coupon) && (
+                      {canSponsor(coupon) && !isNativeApp() && (
                         coupon.sponsored && coupon.sponsorshipStatus === 'active' ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: MPL.goldDark }}>
                             <Star size={14} fill={MPL.gold} color={MPL.gold} /> Destacado

@@ -5,6 +5,7 @@ import { Package, Truck } from 'lucide-react';
 import { ORDER_STATUS_LABELS, getOrder, resumeOrderPayment } from '../../api/marketplace';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 import { formatPriceEur } from '../../utils/limits';
+import { openPaymentPage } from '../../utils/native';
 
 // Detalle del pedido. Es la pantalla de vuelta de Stripe y el enlace que va en
 // todos los correos, así que tiene que funcionar sin sesión: el invitado entra
@@ -33,7 +34,7 @@ export default function OrderPage() {
     setPaymentError('');
     try {
       const { url } = await resumeOrderPayment(id, token);
-      window.location.assign(url);
+      await openPaymentPage(url, () => { void refetch(); });
     } catch (err: any) {
       const messages: Record<string, string> = {
         payment_processing: 'El pago se está confirmando. No necesitas volver a pagar.',
