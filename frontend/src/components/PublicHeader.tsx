@@ -131,8 +131,8 @@ export default function PublicHeader() {
               </Link>
             </>
           )}
-          <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 44, height: 44, padding: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
+            {menuOpen ? <X size={22} style={{ flexShrink: 0 }} /> : <Menu size={22} style={{ flexShrink: 0 }} />}
           </button>
         </div>
       </div>

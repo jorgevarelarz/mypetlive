@@ -19,7 +19,7 @@ const colors = {
   muted: '#6B7464',
   soft: '#98A088',
   teal: '#1F6F6F',
-  coral: '#E8654A',
+  coral: '#C0512F',
   olive: '#6A7B4F',
   gold: '#E9A93C',
   goldSoft: '#FBEFD4',

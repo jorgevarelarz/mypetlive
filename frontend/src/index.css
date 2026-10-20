@@ -15,7 +15,7 @@
   --accent: #efeADF;
   --focus: rgba(31, 111, 111, 0.42);
   --brand-teal: #1f6f6f;
-  --brand-coral: #e8654a;
+  --brand-coral: #c0512f;
   --brand-olive: #6a7b4f;
   --brand-gold: #e9a93c;
 }
@@ -94,8 +94,9 @@ select:focus {
   width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; font-size: .95rem; background: rgba(255,255,255,.9);
 }
 .auth-input:focus { border-color: var(--focus); box-shadow: 0 0 0 4px rgba(63,74,60,.15); outline: none; background: #fff; }
-.auth-button { height: 48px; border-radius: 14px; border: 1px solid var(--border); background: #fff; color: var(--fg); font-size: 1rem; font-weight: 500; cursor: pointer; box-shadow: none; }
-.auth-button:hover { background: var(--accent); }
+.auth-button { height: 48px; border-radius: 14px; border: 0; background: var(--brand-coral); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 10px 22px -14px rgba(192, 81, 47, .7); }
+.auth-button:hover { background: #a8442a; }
+.auth-button:disabled { opacity: .6; cursor: not-allowed; }
 .auth-footer { margin-top: 20px; text-align: center; font-size: .9rem; color: rgba(15,23,42,.7); }
 
 code {

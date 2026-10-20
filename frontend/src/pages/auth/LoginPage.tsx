@@ -33,7 +33,7 @@ export default function LoginPage() {
   return (
     <>
       <h1 className="auth-title">Inicia sesión</h1>
-      <p className="auth-subtitle">Ingresa para cuidar de tus mascotas y seguir su día a día.</p>
+      <p className="auth-subtitle">Entra para cuidar de tus mascotas y seguir su día a día.</p>
       <form className="auth-form" onSubmit={submit} noValidate>
         <label className="auth-label" htmlFor="email">
           Correo electrónico

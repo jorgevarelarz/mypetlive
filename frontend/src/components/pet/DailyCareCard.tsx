@@ -300,7 +300,7 @@ function Chip({ label, hint, warn, active, onClick }: { label: string; hint?: st
       className="border px-3 py-2 text-sm text-left"
       style={{
         borderRadius: 999,
-        borderColor: active ? '#1F6F6F' : warn ? '#E8654A' : '#D7D0C2',
+        borderColor: active ? '#1F6F6F' : warn ? '#C0512F' : '#D7D0C2',
         background: active ? '#1F6F6F' : '#FFFFFF',
         color: active ? '#FFFFFF' : '#3F4A3C',
       }}
