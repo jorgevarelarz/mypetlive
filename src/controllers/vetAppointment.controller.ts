@@ -6,7 +6,9 @@ import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
-import { logAnimalEvent } from '../utils/animalEvents';
+import { AnimalEvent } from '../models/animalEvent.model';
+import { withRequiredTxn, withTxnIfAvailable } from '../utils/txn';
+import { AppError } from '../utils/errors';
 import { PatitaTxn } from '../models/patitaTxn.model';
 import {
   eurFromPatitas, centsFromPatitas, genRedeemCode,
@@ -188,24 +190,23 @@ export async function createAppointment(req: Request, res: Response) {
     if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_patitas_cost' });
     patitasCost = Math.round(n);
   }
+  const payload = {
+    vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
+    patitasCost, patitasReserved: patitasCost > 0, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
+  };
+  let appt;
   if (patitasCost > 0) {
-    const locked = await lockPatitas(String(userId), patitasCost);
-    if (!locked) {
-      const shelter: any = await User.findById(userId).select('patitas patitasLocked').lean();
+    appt = await withRequiredTxn(async session => {
+      if (!(await lockPatitas(userId, patitasCost, session))) return null;
+      const [created] = await VetAppointment.create([payload], { session });
+      return created;
+    });
+    if (!appt) {
+      const shelter = await User.findById(userId).select('patitas patitasLocked').lean();
       return res.status(400).json({ error: 'insufficient_patitas', available: availablePatitas(shelter) });
     }
-  }
-
-  let appt;
-  try {
-    appt = await VetAppointment.create({
-      vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
-      patitasCost, patitasReserved: patitasCost > 0, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
-    });
-  } catch (err) {
-    // Si la cita no llega a existir, el bloqueo no puede quedarse puesto.
-    if (patitasCost > 0) await releasePatitas(String(userId), patitasCost);
-    throw err;
+  } else {
+    appt = await VetAppointment.create(payload);
   }
 
   // Avisar al veterinario de la nueva solicitud.
@@ -249,117 +250,108 @@ const VET_TRANSITIONS: Record<string, string[]> = {
 // PATCH /api/vet-appointments/:id/status
 export async function updateAppointmentStatus(req: Request, res: Response) {
   const { id: actorId, role } = actor(req);
-  const appt: any = await VetAppointment.findById(req.params.id);
-  if (!appt) return res.status(404).json({ error: 'not_found' });
-
-  const isVet = role === 'vet' && String(appt.vetId) === actorId;
-  const isOwner = String(appt.userId) === actorId;
-  const isAdmin = role === 'admin';
-  if (!isVet && !isOwner && !isAdmin) return res.status(403).json({ error: 'forbidden' });
-
+  if (!Types.ObjectId.isValid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  const initial = await VetAppointment.findById(req.params.id).lean();
+  if (!initial) return res.status(404).json({ error: 'not_found' });
   const { status, scheduledAt, vetNotes, cancelReason } = req.body || {};
-  if (!status) return res.status(400).json({ error: 'status_required' });
+  if (typeof status !== 'string') return res.status(400).json({ error: 'status_required' });
 
-  // El dueño solo puede cancelar; el vet/admin manejan el resto de transiciones.
-  if (isOwner && !isVet && !isAdmin && status !== 'cancelled') {
-    return res.status(403).json({ error: 'owner_can_only_cancel' });
-  }
-  if (['completed', 'confirmed', 'rescheduled'].includes(status) && !(isVet || isAdmin)) {
-    return res.status(403).json({ error: 'vet_only' });
-  }
-
-  const allowed = VET_TRANSITIONS[appt.status] || [];
-  if (!allowed.includes(status)) {
-    return res.status(409).json({ error: 'invalid_transition', from: appt.status, to: status });
-  }
-
-  if (status === 'confirmed' || status === 'rescheduled') {
-    if (scheduledAt) {
-      const when = new Date(scheduledAt);
-      if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
-      appt.scheduledAt = when;
-    } else if (status === 'confirmed' && !appt.scheduledAt) {
-      // Confirmar sin nueva fecha = se acepta la propuesta del dueño.
-      appt.scheduledAt = appt.requestedAt;
-    } else if (status === 'rescheduled') {
-      return res.status(400).json({ error: 'scheduled_at_required' });
-    }
-  }
-  if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
-  if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
-
-  appt.status = status;
-  await appt.save();
-
-  // Al cancelar se libera la reserva: las Patitas comprometidas vuelven a estar
-  // disponibles. Sin esto, cancelar dejaría el saldo bloqueado para siempre.
-  if (status === 'cancelled' && appt.patitasCost > 0 && appt.patitasReserved && !appt.patitasPaid) {
-    await releasePatitas(String(appt.userId), appt.patitasCost);
-    appt.patitasReserved = false;
-    appt.payoutStatus = 'none';
-    await appt.save();
-  }
-
-  // Al completar: si la protectora comprometió Patitas, se liquida (debita a la
-  // protectora y paga € al vet, gateado por Stripe — mismo modelo que el canje).
-  let patitasSettlementFailed = false;
-  if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
-    // Lo normal es consumir la reserva hecha al pedir la cita. Las citas creadas
-    // antes de existir la reserva (patitasReserved: false) caen al débito
-    // directo de siempre, que sí puede fallar por saldo insuficiente.
-    const debited = appt.patitasReserved
-      ? await consumeLockedPatitas(String(appt.userId), appt.patitasCost)
-      : await User.findOneAndUpdate(
-        { _id: appt.userId, patitas: { $gte: appt.patitasCost } },
-        { $inc: { patitas: -appt.patitasCost } },
-        { new: true },
-      ).select('patitas');
-    if (debited) {
-      appt.patitasReserved = false;
-      const valueEur = eurFromPatitas(appt.patitasCost);
-      const code = genRedeemCode();
-      const txn: any = await PatitaTxn.create({
-        type: 'redeem', shelterId: appt.userId, partnerId: appt.vetId,
-        amount: appt.patitasCost, valueEur, code, status: 'pending_payout',
-        concept: 'Cita veterinaria',
-      });
-      let payoutStatus = 'pending_payout';
-      const vetDoc: any = await User.findById(appt.vetId).select('stripeAccountId');
-      if (isStripeConfigured() && vetDoc?.stripeAccountId) {
-        try {
-          const stripe = getStripeClient();
-          const transfer = await stripe.transfers.create({
-            amount: centsFromPatitas(appt.patitasCost), currency: 'eur',
-            destination: vetDoc.stripeAccountId,
-            metadata: { code, appointmentId: String(appt._id), patitas: String(appt.patitasCost) },
-          });
-          txn.status = 'paid'; txn.payoutRef = transfer.id; await txn.save();
-          payoutStatus = 'paid';
-        } catch (err) {
-          logger.error({ err, code }, '[vet-appointments] fallo en transfer de Patitas');
+  // Leer y validar de nuevo dentro de la transacción: dos cancelaciones o dos
+  // confirmaciones simultáneas no pueden gastar/liberar la misma reserva.
+  const transact = initial.patitasCost > 0 ? withRequiredTxn : withTxnIfAvailable;
+  let result;
+  try {
+    result = await transact(async session => {
+      const appt: any = await VetAppointment.findById(req.params.id).session(session ?? null);
+      if (!appt) throw new AppError('not_found', { status: 404 });
+      const isVet = role === 'vet' && String(appt.vetId) === actorId;
+      const isOwner = String(appt.userId) === actorId;
+      const isAdmin = role === 'admin';
+      if (!isVet && !isOwner && !isAdmin) throw new AppError('forbidden', { status: 403 });
+      if (!isVet && !isAdmin && status !== 'cancelled') throw new AppError('owner_can_only_cancel', { status: 403 });
+      const retrySettlement = status === 'completed' && appt.status === status && appt.patitasCost > 0 && !appt.patitasPaid;
+      if (!(VET_TRANSITIONS[appt.status] || []).includes(status) && !retrySettlement) {
+        throw new AppError('invalid_transition', { status: 409 });
+      }
+      if (status === 'confirmed' || status === 'rescheduled') {
+        if (scheduledAt) {
+          const when = new Date(scheduledAt);
+          if (Number.isNaN(when.getTime()) || when.getTime() < Date.now() - 60_000) throw new AppError('invalid_date', { status: 400 });
+          appt.scheduledAt = when;
+        } else if (status === 'confirmed' && !appt.scheduledAt) {
+          appt.scheduledAt = appt.requestedAt;
+        } else if (status === 'rescheduled') throw new AppError('scheduled_at_required', { status: 400 });
+      }
+      if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
+      if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
+      appt.status = status;
+      let patitasSettlementFailed = false;
+      if (status === 'cancelled' && appt.patitasReserved && !appt.patitasPaid) {
+        if (!(await releasePatitas(String(appt.userId), appt.patitasCost, session))) {
+          throw new AppError('reservation_inconsistent', { status: 409 });
+        }
+        appt.patitasReserved = false;
+        appt.payoutStatus = 'none';
+      }
+      if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
+        const debited = appt.patitasReserved
+          ? await consumeLockedPatitas(String(appt.userId), appt.patitasCost, session)
+          : await User.findOneAndUpdate(
+              { _id: appt.userId, $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, appt.patitasCost] } },
+              { $inc: { patitas: -appt.patitasCost } }, { new: true, session },
+            );
+        if (debited) {
+          const code = genRedeemCode();
+          await PatitaTxn.create([{
+            type: 'redeem', shelterId: appt.userId, partnerId: appt.vetId,
+            amount: appt.patitasCost, valueEur: eurFromPatitas(appt.patitasCost), code,
+            status: 'pending_payout', concept: 'Cita veterinaria',
+          }], { session });
+          appt.patitasReserved = false;
+          appt.patitasPaid = true;
+          appt.patitasCode = code;
+          appt.payoutStatus = 'pending_payout';
+        } else patitasSettlementFailed = true;
+      }
+      let clinicalRecordAdded = false;
+      if (!retrySettlement && status === 'completed' && req.body?.addToHistory && appt.animalCode) {
+        const animal: any = await Animal.findOne({ code: appt.animalCode }).session(session ?? null);
+        if (animal) {
+          const note = appt.vetNotes || appt.reason || 'Visita veterinaria';
+          animal.vetHistory.push({ date: appt.scheduledAt || appt.requestedAt, note });
+          await animal.save({ session });
+          await AnimalEvent.create([{ animalId: String(animal._id), code: animal.code, type: 'vet', actorId, data: { note, fromAppointment: String(appt._id) } }], { session });
+          clinicalRecordAdded = true;
         }
       }
-      appt.patitasPaid = true; appt.patitasCode = code; appt.payoutStatus = payoutStatus as any;
-      await appt.save();
-    } else {
-      // Solo alcanzable con citas anteriores a la reserva (sin bloqueo previo).
-      // Antes se quedaba en un log y el vet veía "Cita actualizada" sin saber
-      // que no había cobrado: ahora se devuelve al cliente para poder decirlo.
-      patitasSettlementFailed = true;
-      logger.warn({ appt: String(appt._id) }, '[vet-appointments] saldo de Patitas insuficiente al completar');
-    }
+      await appt.save({ session });
+      return { appt, isVet, isOwner, clinicalRecordAdded, patitasSettlementFailed };
+    });
+  } catch (err) {
+    if (err instanceof AppError) return res.status(err.status).json({ error: err.message });
+    throw err;
   }
+  const { appt, isVet, isOwner, clinicalRecordAdded, patitasSettlementFailed } = result;
+  const isAdmin = role === 'admin';
 
-  // Al completar, el vet puede volcar la cita al historial clínico del animal.
-  let clinicalRecordAdded = false;
-  if (status === 'completed' && (isVet || isAdmin) && req.body?.addToHistory && appt.animalCode) {
-    const animal: any = await Animal.findOne({ code: appt.animalCode });
-    if (animal) {
-      const note = (appt.vetNotes && appt.vetNotes.trim()) || appt.reason || 'Visita veterinaria';
-      animal.vetHistory.push({ date: appt.scheduledAt || appt.requestedAt || new Date(), note });
-      await animal.save();
-      await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'vet', actorId, data: { note, fromAppointment: String(appt._id) } });
-      clinicalRecordAdded = true;
+  // Stripe queda fuera del callback, que Mongo puede repetir. El asiento ya
+  // existe aunque el proveedor falle; la clave impide duplicar el mismo pago.
+  if (status === 'completed' && appt.patitasPaid && appt.payoutStatus === 'pending_payout') {
+    const vetDoc = await User.findById(appt.vetId).select('stripeAccountId').lean();
+    if (isStripeConfigured() && vetDoc?.stripeAccountId) {
+      try {
+        const transfer = await getStripeClient().transfers.create({
+          amount: centsFromPatitas(appt.patitasCost), currency: 'eur', destination: vetDoc.stripeAccountId,
+          metadata: { code: appt.patitasCode, appointmentId: String(appt._id), patitas: String(appt.patitasCost) },
+        }, { idempotencyKey: `vet-appointment-${appt._id}` });
+        await withRequiredTxn(async session => {
+          await PatitaTxn.updateOne({ code: appt.patitasCode }, { status: 'paid', payoutRef: transfer.id }, { session });
+          await VetAppointment.updateOne({ _id: appt._id }, { payoutStatus: 'paid' }, { session });
+        });
+        appt.payoutStatus = 'paid';
+      } catch (err) {
+        logger.error({ err, appointmentId: String(appt._id) }, '[vet-appointments] liquidación pendiente');
+      }
     }
   }
 

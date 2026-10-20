@@ -1,15 +1,15 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
-import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import type { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
 
 let app: any;
-let mongo: MongoMemoryServer | undefined;
+let mongo: MongoMemoryReplSet | undefined;
 let User: any;
 let Animal: any;
 
 beforeAll(async () => {
-  mongo = await startMongoMemoryServer();
+  mongo = await startMongoMemoryReplicaSet();
   process.env.MONGO_URL = mongo.getUri();
   process.env.NODE_ENV = 'test';
   process.env.ALLOW_UNVERIFIED = 'true';
@@ -194,6 +194,35 @@ describe('Citas veterinarias', () => {
 // comprobaba el saldo al pedir la cita y se debitaba al completarla, así que
 // gastarlo entre medias dejaba al veterinario sin cobrar.
 describe('Citas veterinarias · reserva de Patitas', () => {
+  it('revierte saldo y estado si falla el asiento y permite un reintento seguro', async () => {
+    const { PatitaTxn } = await import('../models/patitaTxn.model');
+    const { VetAppointment } = await import('../models/vetAppointment.model');
+    const created = await createAppt(shelterH, { patitasCost: 10 }).expect(201);
+    const url = `/api/vet-appointments/${created.body._id}/status`;
+    await request(app).patch(url).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const fail = jest.spyOn(PatitaTxn, 'create').mockRejectedValueOnce(new Error('synthetic ledger failure'));
+    try { await request(app).patch(url).set(vetH).send({ status: 'completed' }).expect(500); }
+    finally { fail.mockRestore(); }
+    expect((await User.findById(shelterId)).patitas).toBe(50);
+    expect((await User.findById(shelterId)).patitasLocked).toBe(10);
+    expect((await VetAppointment.findById(created.body._id))?.status).toBe('confirmed');
+    expect(await PatitaTxn.countDocuments()).toBe(0);
+    await request(app).patch(url).set(vetH).send({ status: 'completed' }).expect(200);
+    expect((await User.findById(shelterId)).patitas).toBe(40);
+    expect(await PatitaTxn.countDocuments()).toBe(1);
+  });
+
+  it('dos confirmaciones simultáneas consumen una sola reserva', async () => {
+    const { PatitaTxn } = await import('../models/patitaTxn.model');
+    const created = await createAppt(shelterH, { patitasCost: 10 }).expect(201);
+    const url = `/api/vet-appointments/${created.body._id}/status`;
+    await request(app).patch(url).set(vetH).send({ status: 'confirmed' }).expect(200);
+    const results = await Promise.all([1, 2].map(() => request(app).patch(url).set(vetH).send({ status: 'completed' })));
+    expect(results.map(r => r.status).sort()).toEqual([200, 409]);
+    expect((await User.findById(shelterId)).patitas).toBe(40);
+    expect(await PatitaTxn.countDocuments({ type: 'redeem' })).toBe(1);
+  });
+
   const bookWithPatitas = (patitasCost: number) =>
     request(app).post('/api/vet-appointments').set(shelterH)
       .send({ vetId, reason: 'Vacunación', requestedAt: future(), patitasCost });
