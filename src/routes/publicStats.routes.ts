@@ -21,7 +21,7 @@ router.get(
   '/stats/public',
   asyncHandler(async (_req: Request, res: Response) => {
     const [shelterIds, animales, adopciones, donacionRows, patitaRows] = await Promise.all([
-      User.find({ role: { $in: ['landlord', 'protectora'] } }).select('_id').lean(),
+      User.find({ role: { $in: ['landlord', 'protectora'] }, deletedAt: null }).select('_id').lean(),
       Animal.countDocuments({ isPersonalPet: { $ne: true }, status: 'publicado' }),
       Adoption.countDocuments({ status: 'aprobada' }),
       Donation.aggregate([

@@ -13,6 +13,7 @@ import PatitasPartnerPanel from '../../components/patitas/PatitasPartnerPanel';
 import VetHealthPanel from '../../components/vet/VetHealthPanel';
 import VetOffersPanel from '../../components/vet/VetOffersPanel';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
+import DeleteAccountPanel from '../../components/account/DeleteAccountPanel';
 import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
 
 const roleLabel: Record<string, string> = {
@@ -705,6 +706,8 @@ export default function ProfilePage() {
         {role === 'landlord' && <PatitasShelterPanel />}
         {(role === 'store' || role === 'vet') && <PatitasPartnerPanel />}
       </section>
+
+      <DeleteAccountPanel />
     </div>
   );
 }

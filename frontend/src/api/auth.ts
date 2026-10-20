@@ -115,3 +115,17 @@ export async function requestPasswordReset(email: string) {
 export async function resetPassword(token: string, password: string) {
   await axios.post(`/api/auth/reset`, { token, password });
 }
+
+export type DeletionBlocker =
+  | "open_vet_appointments" | "locked_patitas" | "patitas_balance" | "pending_payouts"
+  | "open_orders_as_seller" | "open_orders_as_buyer" | "open_adoptions_as_shelter" | "admin_account";
+
+export async function getDeletionCheck(): Promise<{ canDelete: boolean; blockers: DeletionBlocker[]; confirmWith: "password" | "email" }> {
+  const { data } = await axios.get("/api/auth/account/deletion-check");
+  return data;
+}
+
+export async function deleteMyAccount(body: { password?: string; confirmEmail?: string }) {
+  const { data } = await axios.post("/api/auth/account/delete", body);
+  return data as { ok: true };
+}

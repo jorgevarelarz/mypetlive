@@ -40,7 +40,7 @@ async function notify(to: string | undefined, subject: string, body: string) {
 // GET /api/vets — directorio público de veterinarios (para que el dueño elija).
 export async function listVets(req: Request, res: Response) {
   const { city, q } = req.query as Record<string, string>;
-  const filter: any = { role: 'vet' };
+  const filter: any = { role: 'vet', deletedAt: null };
   if (city) filter['profile.address.city'] = new RegExp(String(city).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   if (q) {
     const rx = new RegExp(String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -143,7 +143,7 @@ export async function createAppointment(req: Request, res: Response) {
   const { vetId, animalCode, reason, requestedAt, serviceName } = req.body || {};
 
   if (!vetId || !Types.ObjectId.isValid(String(vetId))) return res.status(400).json({ error: 'invalid_vet' });
-  const vet: any = await User.findOne({ _id: vetId, role: 'vet' }).select('_id profile.vet.serviceCatalog').lean();
+  const vet: any = await User.findOne({ _id: vetId, role: 'vet', deletedAt: null }).select('_id profile.vet.serviceCatalog').lean();
   if (!vet) return res.status(404).json({ error: 'vet_not_found' });
 
   const cleanReason = typeof reason === 'string' ? reason.trim() : '';

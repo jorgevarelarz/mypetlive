@@ -52,7 +52,7 @@ function shortCode(): string {
 }
 
 export async function listProtectoras(_req: Request, res: Response) {
-  const items = await User.find({ role: { $in: ['landlord', 'protectora'] } })
+  const items = await User.find({ role: { $in: ['landlord', 'protectora'] }, deletedAt: null })
     .select('name')
     .sort({ name: 1 })
     .lean();

@@ -143,6 +143,10 @@ const userSchema = new Schema(
     // petición autenticada, así que ocultarla obligaría a un `.select()` extra
     // en cada sitio que autentica.
     tokenVersion: { type: Number, default: 0 },
+    // Cuenta borrada por su titular (utils/accountDeletion): el documento se
+    // conserva anonimizado porque pedidos, donaciones y adopciones lo referencian.
+    // Los listados públicos filtran `deletedAt: null`.
+    deletedAt: { type: Date, default: null },
     // Cambio de email pendiente de confirmar en la dirección nueva. El email es
     // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
     // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,
