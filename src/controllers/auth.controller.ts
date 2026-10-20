@@ -98,39 +98,28 @@ export const register = async (req: Request, res: Response) => {
  *
  * Expects: email and password in the request body.
  */
+const INVALID_CREDENTIALS =
+  'Usuario o contraseña incorrectos. Si te registraste con Google o Apple, entra con ese botón.';
+// Hash de una contraseña que nadie conoce, para comparar también cuando no hay cuenta.
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+
 export const login = async (req: Request, res: Response) => {
   const log = getRequestLogger(req);
-  log.info({ email: req.body?.email }, 'Login request received');
+  log.info('Login request received');
   try {
     const { password } = req.body;
     // El alta guarda el email en minúsculas; sin normalizar aquí, el móvil que pone
     // la inicial en mayúscula dejaba fuera a la usuaria con la contraseña correcta.
     const email = normalizeEmail(req.body?.email);
     const user = await User.findOne({ email });
-    if (!user) {
-      throw new AppError('Usuario o contraseña incorrectos', {
-        status: 400,
-        code: 'invalid_credentials',
-      });
-    }
-    // Cuenta creada con Google/Apple: no hay hash contra el que comparar
-    // (bcrypt.compare reventaría con undefined y devolvería un 500).
-    if (!user.passwordHash) {
-      const providers = (user.authProviders || []).map((p: any) => p.provider);
-      throw new AppError(
-        providers.includes('apple') && !providers.includes('google')
-          ? 'Esta cuenta se creó con Apple. Entra con el botón de Apple.'
-          : 'Esta cuenta se creó con Google. Entra con el botón de Google.',
-        { status: 400, code: 'use_social_login', details: { providers } },
-      );
-    }
-    // Compare provided password with stored hash
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      throw new AppError('Usuario o contraseña incorrectos', {
-        status: 400,
-        code: 'invalid_credentials',
-      });
+    // Misma respuesta y mismo tiempo exista o no la cuenta, tenga contraseña o se
+    // creara con Google/Apple: antes «Esta cuenta se creó con Google» y la ausencia
+    // de bcrypt en cuentas inexistentes delataban qué correos tienen cuenta
+    // (RentalApp 2541239). El mensaje recuerda la vía social a todos por igual.
+    const hash = user?.passwordHash || DUMMY_HASH;
+    const isMatch = await bcrypt.compare(String(password ?? ''), hash);
+    if (!user || !user.passwordHash || !isMatch) {
+      throw new AppError(INVALID_CREDENTIALS, { status: 400, code: 'invalid_credentials' });
     }
     // Generate and return JWT
     const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });

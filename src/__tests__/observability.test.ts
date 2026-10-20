@@ -24,7 +24,7 @@ describe('Observabilidad y errores estructurados', () => {
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
       code: 'invalid_credentials',
-      message: 'Usuario o contraseña incorrectos',
+      message: 'Usuario o contraseña incorrectos. Si te registraste con Google o Apple, entra con ese botón.',
     });
     expect(response.headers).toHaveProperty('x-request-id');
   });

@@ -94,7 +94,7 @@ describe('Login con Google/Apple', () => {
       .post('/api/auth/login')
       .send({ email: 'laura@example.com', password: 'una-clave-segura-2026' });
     expect(login.status).toBe(400);
-    expect(login.body.code).toBe('use_social_login');
+    expect(login.body.code).toBe('invalid_credentials');
   });
 
   it('no duplica el proveedor al entrar dos veces', async () => {
@@ -148,7 +148,9 @@ describe('Login con Google/Apple', () => {
     expect(res.status).toBe(400);
   });
 
-  it('explica que hay que usar el botón social al intentar entrar con contraseña', async () => {
+  // Sin enumeración: la respuesta es la misma que con un correo inexistente, pero el
+  // mensaje recuerda a todos que pueden entrar con Google o Apple.
+  it('recuerda el botón social al intentar entrar con contraseña, sin delatar la cuenta', async () => {
     mockVerify.mockResolvedValue(googleClaims() as any);
     await request(app).post('/api/auth/oauth/google').send({ idToken: 'token-valido' });
 
@@ -157,8 +159,12 @@ describe('Login con Google/Apple', () => {
       .send({ email: 'nueva@gmail.com', password: 'lo-que-sea-largo-1234' });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('use_social_login');
-    expect(res.body.message).toMatch(/Google/);
+    expect(res.body.code).toBe('invalid_credentials');
+    expect(res.body.message).toMatch(/Google o Apple/);
+    const noAccount = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'nadie@gmail.com', password: 'lo-que-sea-largo-1234' });
+    expect(noAccount.body).toMatchObject({ code: res.body.code, message: res.body.message });
   });
 
   it('usa el nombre que manda el front cuando el token no lo trae (caso Apple)', async () => {
