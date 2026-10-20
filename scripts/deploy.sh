@@ -22,6 +22,10 @@ deploy_api() {
   rsync -az --delete "$ROOT/src/" "$HOST:$REMOTE_APP/src/" || exit 1
   echo "==> Backend: rsync legal/ → $HOST:$REMOTE_APP/legal/"
   rsync -az --delete "$ROOT/legal/" "$HOST:$REMOTE_APP/legal/" || exit 1
+  # Dockerfile.api hace `npm ci` con el package.json del VPS: sin esto una
+  # dependencia nueva (sharp, oct 2026) no entra en la imagen y la API no arranca.
+  echo "==> Backend: rsync package.json + package-lock.json"
+  rsync -az "$ROOT/package.json" "$ROOT/package-lock.json" "$HOST:$REMOTE_APP/" || exit 1
   echo "==> Backend: rebuild + recreate del contenedor api"
   ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api" || exit 1
   echo "==> Backend: health check"
