@@ -1,5 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AppRoutes from './AppRoutes';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -30,7 +31,9 @@ jest.mock('axios', () => {
 jest.mock('@stripe/stripe-js', () => ({ loadStripe: jest.fn(async () => null) }), { virtual: true });
 
 test('la app renderiza sin crashear', () => {
+  // AuthProvider usa la caché de React Query (la vacía al cambiar de cuenta), igual que en index.tsx.
   render(
+    <QueryClientProvider client={new QueryClient()}>
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
@@ -39,6 +42,7 @@ test('la app renderiza sin crashear', () => {
         </AuthProvider>
       </ToastProvider>
     </ThemeProvider>
+    </QueryClientProvider>
   );
   expect(true).toBe(true);
 });

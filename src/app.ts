@@ -15,28 +15,13 @@ import stripeWebhookRoutes from './routes/stripe.webhook';
 import authRoutes from './routes/auth.routes';
 import seoRoutes from './routes/seo.routes';
 import verificationRoutes from './routes/verification.routes';
-import identityRoutes from './routes/identity.routes';
-import propertyRoutes from './routes/property.routes';
-import clausesRoutes from './routes/clauses.routes';
 import legalRoutes from './routes/legal.routes';
 import uploadRoutes from './routes/upload.routes';
-import demoContractRoutes from './routes/demoContract.routes';
 import notifyRoutes from './routes/notify.routes';
-import postsignRouter from './routes/postsign';
-import tenantProRoutes from './routes/tenantPro.routes';
-import tenantProMeRoutes from './routes/tenantPro.me';
-import appointmentsRoutes from './routes/appointments.routes';
-import contractRoutes, { contractPublicRoutes } from './routes/contract.routes';
 import userRoutes from './routes/user.routes';
-import proRoutes from './routes/pro.routes';
-import ticketRoutes from './routes/ticket.routes';
-import reviewRoutes from './routes/review.routes';
 import chatRoutes from './routes/chat.routes';
-import contractPaymentsRoutes from './routes/contract.payments.routes';
 import paymentsRoutes from './routes/payments.routes';
 import connectRoutes from './routes/connect.routes';
-import signatureRoutes from './routes/signature.routes';
-import serviceOffersRoutes from './routes/serviceOffers.routes';
 import adminRoutes from './routes/admin.routes';
 import adminEarningsRoutes from './routes/admin.earnings.routes';
 import adminSalesRoutes from './routes/admin.sales.routes';
@@ -45,8 +30,6 @@ import posRoutes from './routes/pos.routes';
 import { posAuth } from './middleware/posAuth';
 import asyncHandlerApp from './utils/asyncHandler';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
-import applicationRoutes from './routes/application.routes';
-import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
 import tagRoutes from './routes/tag.routes';
 import adminTagsRoutes from './routes/admin.tags.routes';
@@ -198,13 +181,6 @@ app.use(mongoSanitize);
 // así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
 
-const tenantProLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'test' ? 1000 : 100,
@@ -257,29 +233,11 @@ app.get('/metrics', metricsHandler);
 // Public routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/verification', verificationRoutes);
-// [FROZEN RentalApp] KYC con Stripe Identity: nadie lo usa en MyPetLive y estaba
-// expuesto (webhook sin firma que cualquiera podía llamar, y /start abría sesiones
-// de Stripe Identity, que se cobran por verificación, con returnUrl libre).
-// app.use('/api/kyc', identityRoutes);
 app.use('/api', legalRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/notify', notifyRoutes);
 // SEO / Open Graph (público, sin auth): /sitemap.xml y /og/animals/:id (para bots).
 app.use(seoRoutes);
-// [FROZEN RentalApp] Mounts de alquiler desactivados durante la migración a MyPetLive.
-// OJO: postsign y appointments montaban authenticate/requireVerified sobre '/api' global,
-// lo que bloqueaba el catálogo público de animales. Congelados aquí.
-// app.use('/api', propertyRoutes);
-// app.use('/api', clausesRoutes);
-// app.use('/api', demoContractRoutes);
-// app.use('/api', authenticate, postsignRouter);
-// app.use('/api/tenant-pro', tenantProLimiter);
-// app.use('/api', tenantProRoutes);
-// app.use('/api', tenantProMeRoutes);
-// app.use('/api', requireVerified, appointmentsRoutes);
-// app.use('/api/applications', applicationRoutes);
-// app.use('/api/coliving', colivingRoutes);
-// Rental routes/UI preserved but hidden for tenants — kept for future reuse
 app.use('/api/animals', animalRoutes);
 // Chapas físicas del collar. Montado aquí arriba (zona pública) porque
 // resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
@@ -318,22 +276,11 @@ app.use('/api', questionnaireRoutes);
 
 // Protected routes (autenticación + rol; sin verificación KYC — adopción libre)
 app.use('/api/users', authenticate, userRoutes);
-// [FROZEN RentalApp] Reseñas entre usuarios de alquiler: sin uso en la web y
-// cualquier cuenta podía puntuar a cualquier otra (ratingAvg).
-// app.use('/api/reviews', authenticate, reviewRoutes);
 app.use('/api/chat', authenticate, chatRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
-// [FROZEN RentalApp] Rutas protegidas de alquiler congeladas.
-// app.use('/api/contracts', contractPublicRoutes);
-// app.use('/api/contracts', authenticate, requireVerified, contractRoutes);
-// app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
-// app.use('/api/pros', authenticate, requireVerified, proRoutes);
-// app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
 // Stripe Connect: onboarding de cobro para protectoras (donaciones). Sin requireVerified.
 app.use('/api', authenticate, connectRoutes);
-// app.use('/api', authenticate, requireVerified, signatureRoutes);
-// app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
 
 // Admin
 app.use(
