@@ -36,6 +36,7 @@ export interface IOrder extends Document {
   platformMarginEur: number;
   status: OrderStatus;
   sessionId?: string;
+  checkoutRequest?: Record<string, unknown>;
   paymentRef?: string;
   tracking?: { carrier?: string; code?: string; shippedAt?: Date };
   paidAt?: Date;
@@ -93,6 +94,7 @@ const schema = new Schema<IOrder>(
       index: true,
     },
     sessionId: { type: String, index: true },
+    checkoutRequest: { type: Schema.Types.Mixed, select: false },
     paymentRef: { type: String },
     tracking: {
       type: new Schema(

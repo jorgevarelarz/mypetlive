@@ -9,6 +9,7 @@ import {
   upsertProduct,
   deleteProduct,
   createCheckout,
+  resumeOrderPayment,
   getOrder,
   myOrders,
   sellerOrders,
@@ -34,6 +35,7 @@ r.get('/products/:id', optionalAuthenticate, asyncHandler(getProduct));
 // Auth opcional: se puede comprar sin cuenta. Obligar a registrarse para gastar
 // dinero es la forma más rápida de perder un pedido ya decidido.
 r.post('/checkout', optionalAuthenticate, asyncHandler(createCheckout));
+r.post('/orders/:id/payment', optionalAuthenticate, asyncHandler(resumeOrderPayment));
 
 // ------------------------------------------------------------------ pedidos
 r.get('/orders', authenticate, asyncHandler(myOrders));

@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Truck } from 'lucide-react';
-import { ORDER_STATUS_LABELS, getOrder } from '../../api/marketplace';
+import { ORDER_STATUS_LABELS, getOrder, resumeOrderPayment } from '../../api/marketplace';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 import { formatPriceEur } from '../../utils/limits';
 
@@ -15,8 +15,10 @@ export default function OrderPage() {
   const [params] = useSearchParams();
   const token = params.get('token') || undefined;
   const cancelado = params.get('cancelado') === '1';
+  const [resuming, setResuming] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
-  const { data: order, isLoading, isError } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: ['marketplace-order', id, token],
     queryFn: () => getOrder(id, token),
     enabled: !!id,
@@ -24,6 +26,25 @@ export default function OrderPage() {
     // pedido se queda en "pendiente de pago" a la vista de quien acaba de pagar.
     refetchInterval: query => (query.state.data?.status === 'pending_payment' ? 3000 : false),
   });
+
+  const resume = async () => {
+    if (resuming) return;
+    setResuming(true);
+    setPaymentError('');
+    try {
+      const { url } = await resumeOrderPayment(id, token);
+      window.location.assign(url);
+    } catch (err: any) {
+      const messages: Record<string, string> = {
+        payment_processing: 'El pago se está confirmando. No necesitas volver a pagar.',
+        payment_expired: 'El plazo de pago ha terminado. Puedes hacer un nuevo pedido desde la tienda.',
+        payment_needs_review: 'Necesitamos comprobar este pago. Contacta con soporte@mypetlive.es e indica la referencia del pedido.',
+        order_not_pending: 'El pedido ha cambiado de estado. Estamos actualizando la información.',
+      };
+      setPaymentError(messages[err?.response?.data?.error] || 'No hemos podido abrir el pago. Inténtalo de nuevo en unos minutos.');
+      void refetch();
+    } finally { setResuming(false); }
+  };
 
   if (isLoading) return <p style={{ color: MPL.muted, fontSize: 13.5 }}>Cargando tu pedido…</p>;
   if (isError || !order) {
@@ -78,7 +99,7 @@ export default function OrderPage() {
             fontSize: 13.5,
           }}
         >
-          Has salido del pago sin terminarlo. El pedido sigue guardado: escríbenos si quieres retomarlo.
+          Has salido del pago sin terminarlo. El pedido sigue guardado y puedes retomarlo aquí.
         </div>
       )}
 
@@ -93,9 +114,19 @@ export default function OrderPage() {
             color: MPL.muted,
           }}
         >
-          Estamos confirmando el pago con el banco. Esta página se actualiza sola en unos segundos.
+          {params.get('ok') === '1'
+            ? 'Estamos confirmando el pago. Esta página se actualiza automáticamente.'
+            : 'Tu pedido está guardado y pendiente de pago. Puedes continuar con el mismo pedido.'}
         </div>
       )}
+
+      {order.status === 'pending_payment' && (
+        <button type="button" onClick={resume} disabled={resuming}
+          style={{ padding: '12px 20px', border: 0, borderRadius: 12, background: MPL.coralDark, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          {resuming ? 'Comprobando el pago…' : 'Retomar pago'}
+        </button>
+      )}
+      {paymentError && <p role="alert" style={{ color: MPL.coralDark }}>{paymentError}</p>}
 
       {order.tracking?.code && (
         <div

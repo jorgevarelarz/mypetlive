@@ -1,4 +1,4 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryServer, MongoMemoryReplSet } from 'mongodb-memory-server';
 import { readFileSync } from 'fs';
 
 function ensureMongoBinaryDistro(): void {
@@ -33,5 +33,13 @@ export async function startMongoMemoryServer(): Promise<MongoMemoryServer> {
   return MongoMemoryServer.create({
     binary: { version },
     instance: { storageEngine: 'wiredTiger', launchTimeout: 60000 },
+  });
+}
+
+export async function startMongoMemoryReplicaSet(): Promise<MongoMemoryReplSet> {
+  ensureMongoBinaryDistro();
+  return MongoMemoryReplSet.create({
+    binary: { version: process.env.MONGOMS_VERSION || '7.0.5' },
+    replSet: { count: 1, storageEngine: 'wiredTiger' },
   });
 }

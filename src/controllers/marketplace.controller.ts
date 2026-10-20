@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import type Stripe from 'stripe';
 import { Types } from 'mongoose';
 import { Product, PRODUCT_CATEGORIES } from '../models/product.model';
-import { Order, buildOrderReference } from '../models/order.model';
+import { Order, buildOrderReference, type IOrder } from '../models/order.model';
 import { User } from '../models/user.model';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import {
@@ -17,6 +18,8 @@ import {
 import { normalizeSpecies, speciesVariants } from '../utils/species';
 import { sendEmail } from '../utils/notification';
 import logger from '../utils/logger';
+import { withRequiredTxn } from '../utils/txn';
+import { AppError } from '../utils/errors';
 
 const FRONTEND_URL = () => process.env.FRONTEND_URL || 'https://mypetlive.es';
 
@@ -278,7 +281,7 @@ export async function createCheckout(req: Request, res: Response) {
   const listedBy: ListedBy = first.listedBy;
   const sellerId = first.sellerId ? String(first.sellerId) : undefined;
 
-  const lines = [];
+  const lines: IOrder['items'] = [];
   for (const product of products as any[]) {
     const qty = Math.min(20, qtyById.get(String(product._id)) as number);
     if (product.stock < qty) {
@@ -329,72 +332,40 @@ export async function createCheckout(req: Request, res: Response) {
 
   const guestToken = user?._id || user?.id ? undefined : crypto.randomBytes(24).toString('hex');
 
-  // Reserva atómica de existencias. El chequeo de arriba (`product.stock < qty`)
-  // solo da un error rápido y bonito; esto es lo que de verdad impide que dos
-  // pedidos pendientes se lleven la misma última unidad: cada `updateOne` exige
-  // en la propia condición que quede stock suficiente, así que dos peticiones
-  // concurrentes para la unidad 1 de 1 solo pueden ganar una. Antes el stock se
-  // descontaba recién al cobrar (`fulfillPaidOrder`), que es tarde para evitar
-  // que ambas confirmaciones "tengan éxito".
-  const reserved: Array<{ productId: any; qty: number }> = [];
-  const releaseReserved = async () => {
-    for (const line of reserved) {
-      await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.qty } });
-    }
-  };
-  for (const line of lines) {
-    const result = await Product.updateOne(
-      { _id: line.productId, stock: { $gte: line.qty } },
-      { $inc: { stock: -line.qty } },
-    );
-    if (result.modifiedCount !== 1) {
-      await releaseReserved();
-      const fresh = await Product.findById(line.productId).select('stock').lean();
-      return res.status(409).json({ error: 'out_of_stock', productId: String(line.productId), stock: fresh?.stock ?? 0 });
-    }
-    reserved.push({ productId: line.productId, qty: line.qty });
-  }
+  if (!isStripeConfigured()) return res.status(503).json({ error: 'payments_unavailable' });
 
   let order: any;
   try {
-    order = await Order.create({
-      reference: buildOrderReference(),
-      listedBy,
-      ...(sellerId ? { sellerId } : {}),
-      buyer: {
-        ...(user?._id || user?.id ? { userId: user._id || user.id } : {}),
-        email,
-        name: buyerName,
-        phone: cleanText(body.phone, 30) || undefined,
-      },
-      ...(guestToken ? { guestToken } : {}),
-      items: lines,
-      shippingAddress,
-      subtotalEur: totals.subtotalEur,
-      shippingEur: totals.shippingEur,
-      totalEur: totals.totalEur,
-      commissionPct: totals.commissionPct,
-      commissionEur: totals.commissionEur,
-      platformMarginEur: totals.platformMarginEur,
-      status: 'pending_payment',
+    order = await withRequiredTxn(async session => {
+      for (const line of lines) {
+        const reserved = await Product.updateOne(
+          { _id: line.productId, active: true, stock: { $gte: line.qty } },
+          { $inc: { stock: -line.qty } }, { session },
+        );
+        if (reserved.modifiedCount !== 1) throw new AppError('out_of_stock', { status: 409 });
+      }
+      const [created] = await Order.create([{
+        reference: buildOrderReference(), listedBy, ...(sellerId ? { sellerId } : {}),
+        buyer: {
+          ...(user?._id || user?.id ? { userId: user._id || user.id } : {}),
+          email, name: buyerName, phone: cleanText(body.phone, 30) || undefined,
+        },
+        ...(guestToken ? { guestToken } : {}), items: lines, shippingAddress,
+        subtotalEur: totals.subtotalEur, shippingEur: totals.shippingEur, totalEur: totals.totalEur,
+        commissionPct: totals.commissionPct, commissionEur: totals.commissionEur,
+        platformMarginEur: totals.platformMarginEur, status: 'pending_payment',
+      }], { session });
+      return created;
     });
-  } catch (err: any) {
-    // El pedido no llegó a existir: lo reservado no tiene dueño, se libera.
-    await releaseReserved();
-    logger.error({ err }, '[marketplace] no se pudo crear el pedido');
-    return res.status(500).json({ error: 'order_failed' });
-  }
-
-  if (!isStripeConfigured()) {
-    // Sin Stripe el pedido queda creado y a la espera: es preferible a fingir
-    // que no ha pasado nada cuando alguien ya ha rellenado su dirección.
-    return res.status(503).json({ error: 'payments_unavailable', orderId: String(order._id), guestToken });
+  } catch (err) {
+    if (err instanceof AppError) return res.status(err.status).json({ error: err.message });
+    throw err;
   }
 
   try {
     const stripe = getStripeClient();
     const base = FRONTEND_URL();
-    const session = await stripe.checkout.sessions.create({
+    const checkoutRequest: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       customer_email: email,
       line_items: [
@@ -434,19 +405,58 @@ export async function createCheckout(req: Request, res: Response) {
       },
       success_url: `${base}/pedido/${order._id}?ok=1${guestToken ? `&token=${guestToken}` : ''}`,
       cancel_url: `${base}/pedido/${order._id}?cancelado=1${guestToken ? `&token=${guestToken}` : ''}`,
-    });
+    };
+    // Guardar exactamente la petición permite recuperar un timeout sin duplicar el cobro.
+    order.checkoutRequest = checkoutRequest;
+    await order.save();
+    const session = await stripe.checkout.sessions.create(checkoutRequest, { idempotencyKey: `marketplace-${order._id}` });
 
     order.sessionId = session.id;
     await order.save();
     return res.json({ ok: true, orderId: String(order._id), reference: order.reference, url: session.url, guestToken });
   } catch (err: any) {
-    // El pedido ya existe y ya tiene el stock reservado, pero nunca habrá un
-    // enlace de pago para él: liberar la reserva, o esa unidad queda
-    // bloqueada para siempre por un pedido que nadie va a poder pagar.
-    await releaseReserved();
-    await Order.updateOne({ _id: order._id, status: 'pending_payment' }, { status: 'cancelled' });
+    // Un timeout puede ocurrir DESPUÉS de que Stripe haya creado la sesión.
+    // Solo una denegación definitiva permite liberar sin arriesgar una venta sin stock.
+    if (['StripeInvalidRequestError', 'StripeAuthenticationError', 'StripePermissionError'].includes(err?.type)) {
+      await releaseExpiredOrder(String(order._id));
+    }
     logger.error({ err, orderId: String(order._id) }, '[marketplace] no se pudo crear la sesión de pago');
-    return res.status(502).json({ error: 'checkout_failed', orderId: String(order._id) });
+    return res.status(502).json({ error: 'checkout_failed', orderId: String(order._id), guestToken });
+  }
+}
+
+export async function resumeOrderPayment(req: Request, res: Response) {
+  if (!Types.ObjectId.isValid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  const order = await Order.findById(req.params.id).select('+guestToken +checkoutRequest');
+  if (!order) return res.status(404).json({ error: 'not_found' });
+  const user: any = (req as any).user;
+  const buyer = user && (user.role === 'admin' || String(order.buyer.userId) === String(user._id || user.id));
+  const guest = typeof req.body?.token === 'string' && order.guestToken && req.body.token === order.guestToken;
+  if (!buyer && !guest) return res.status(403).json({ error: 'forbidden' });
+  if (order.status !== 'pending_payment') return res.status(409).json({ error: 'order_not_pending' });
+  if (!isStripeConfigured()) return res.status(503).json({ error: 'payments_unavailable' });
+  // Stripe conserva las claves al menos 24 h: pasado ese plazo nunca recrear a ciegas.
+  if (!order.sessionId && (!order.checkoutRequest || Date.now() - order.createdAt.getTime() >= 23 * 3600_000)) {
+    return res.status(409).json({ error: 'payment_needs_review' });
+  }
+  try {
+    const stripe = getStripeClient();
+    const session = order.sessionId
+      ? await stripe.checkout.sessions.retrieve(order.sessionId)
+      : await stripe.checkout.sessions.create(order.checkoutRequest as unknown as Stripe.Checkout.SessionCreateParams, { idempotencyKey: `marketplace-${order._id}` });
+    if (!order.sessionId) {
+      order.sessionId = session.id;
+      await order.save();
+    }
+    if (session.status === 'expired') {
+      await releaseExpiredOrder(String(order._id));
+      return res.status(409).json({ error: 'payment_expired' });
+    }
+    if (session.status !== 'open' || !session.url) return res.status(409).json({ error: 'payment_processing' });
+    return res.json({ url: session.url });
+  } catch (err) {
+    logger.error({ err, orderId: String(order._id) }, '[marketplace] no se pudo retomar el pago');
+    return res.status(502).json({ error: 'checkout_failed' });
   }
 }
 
@@ -587,13 +597,16 @@ export async function fulfillPaidOrder(orderId: string, paymentRef?: string): Pr
  */
 export async function releaseExpiredOrder(orderId: string): Promise<boolean> {
   if (!Types.ObjectId.isValid(orderId)) return false;
-  const order = await Order.findOneAndUpdate(
-    { _id: orderId, status: 'pending_payment' },
-    { status: 'cancelled' },
-  );
-  if (!order) return false;
-  for (const item of order.items) {
-    await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.qty } });
-  }
-  return true;
+  return withRequiredTxn(async session => {
+    const order = await Order.findOneAndUpdate(
+      { _id: orderId, status: 'pending_payment' },
+      { status: 'cancelled' },
+      { session },
+    );
+    if (!order) return false;
+    for (const item of order.items) {
+      await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.qty } }, { session });
+    }
+    return true;
+  });
 }

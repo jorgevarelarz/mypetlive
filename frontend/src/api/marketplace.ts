@@ -164,6 +164,11 @@ export async function getOrder(id: string, token?: string) {
   return data as Order;
 }
 
+export async function resumeOrderPayment(id: string, token?: string): Promise<{ url: string }> {
+  const { data } = await client.post(`/api/marketplace/orders/${id}/payment`, { token });
+  return data;
+}
+
 export async function myOrders() {
   const { data } = await client.get('/api/marketplace/orders');
   return (data as { items: Order[] }).items;

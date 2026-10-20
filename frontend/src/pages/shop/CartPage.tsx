@@ -35,7 +35,7 @@ const CHECKOUT_ERRORS: Record<string, string> = {
   order_too_large: 'Ese pedido supera el importe máximo. Divídelo en dos.',
   seller_payouts_not_ready: 'Esta tienda todavía no puede cobrar online. Estamos con ella para activarlo.',
   seller_unavailable: 'Esta tienda ya no está disponible.',
-  payments_unavailable: 'Los pagos no están disponibles ahora mismo. Tu pedido queda guardado.',
+  payments_unavailable: 'Los pagos no están disponibles ahora mismo. Conservamos tu carrito para que lo intentes más tarde.',
   checkout_failed: 'No hemos podido abrir la pasarela de pago. Vuelve a intentarlo.',
 };
 
@@ -81,9 +81,8 @@ export default function CartPage() {
     } catch (error: any) {
       const code = error?.response?.data?.error;
       const data = error?.response?.data;
-      if (code === 'payments_unavailable' && data?.orderId) {
-        // 503 con pedido creado: no es un fallo del usuario, es nuestro. El
-        // pedido se guarda y se le lleva a verlo en vez de perder sus datos.
+      if ((code === 'payments_unavailable' || code === 'checkout_failed') && data?.orderId) {
+        // Retomar el pedido existente evita reservar las mismas unidades otra vez.
         cart.clear();
         const suffix = data.guestToken ? `?token=${data.guestToken}` : '';
         navigate(`/pedido/${data.orderId}${suffix}`);

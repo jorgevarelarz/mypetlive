@@ -1,8 +1,20 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
-import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import type { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
 import { orderTotals, shippingFor, priceFromCost, ORDER_MAX_EUR } from '../utils/marketplace';
+
+jest.mock('../utils/stripe', () => ({
+  isStripeConfigured: jest.fn(() => true),
+  getStripeClient: jest.fn(() => ({
+    accounts: { retrieve: jest.fn().mockResolvedValue({ charges_enabled: true }) },
+    checkout: { sessions: {
+      create: jest.fn().mockResolvedValue({ id: 'cs_synthetic', status: 'open', url: 'https://checkout.stripe.com/test' }),
+      retrieve: jest.fn().mockResolvedValue({ id: 'cs_synthetic', status: 'open', url: 'https://checkout.stripe.com/test' }),
+    } },
+  })),
+}));
+import { getStripeClient, isStripeConfigured } from '../utils/stripe';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -10,20 +22,19 @@ jest.mock('../utils/notification', () => ({
 import { sendEmail } from '../utils/notification';
 
 let app: any;
-let mongo: MongoMemoryServer | undefined;
+let mongo: MongoMemoryReplSet | undefined;
 let User: any;
 let Product: any;
 let Order: any;
 let fulfillPaidOrder: any;
 
 beforeAll(async () => {
-  mongo = await startMongoMemoryServer();
+  mongo = await startMongoMemoryReplicaSet();
   process.env.MONGO_URL = mongo.getUri();
   process.env.NODE_ENV = 'test';
+  process.env.FRONTEND_URL = 'https://mypetlive.example';
   process.env.ALLOW_UNVERIFIED = 'true';
-  // Sin clave de Stripe a propósito: el checkout deja el pedido creado y
-  // devuelve 503, que es justo lo que hace falta para probar todo lo de antes
-  // del cobro sin hablar con Stripe.
+  // Stripe se simula en memoria; ninguna prueba llama al proveedor real.
   delete process.env.STRIPE_SECRET_KEY;
   const mod = await import('../app');
   app = mod.app || mod.default;
@@ -53,6 +64,7 @@ const adminH = { 'x-user-id': adminId, 'x-user-role': 'admin', 'x-user-verified'
 const address = { line1: 'Rúa Real 12', city: 'A Coruña', postalCode: '15003' };
 
 beforeEach(async () => {
+  (isStripeConfigured as jest.Mock).mockReturnValue(true);
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
     await mongoose.connection.db.dropDatabase();
   }
@@ -63,6 +75,7 @@ beforeEach(async () => {
       email: 'store@test.com',
       passwordHash: 'x',
       role: 'store',
+      stripeAccountId: 'acct_synthetic',
       profile: { address: { city: 'A Coruña' }, marketplace: { shippingEur: 3.5, freeFromEur: 40 } },
     },
     { _id: store2Id, name: 'Tienda Sur', email: 'store2@test.com', passwordHash: 'x', role: 'store' },
@@ -241,6 +254,62 @@ describe('Alta de productos', () => {
 // ---------------------------------------------------------------- checkout
 
 describe('Checkout', () => {
+  it('sin Stripe no crea pedidos ni reserva existencias', async () => {
+    (isStripeConfigured as jest.Mock).mockReturnValue(false);
+    const product = await seedProduct({ stock: 2 });
+    await request(app).post('/api/marketplace/checkout').set(buyerH)
+      .send({ items: [{ productId: product._id, qty: 1 }], shippingAddress: address }).expect(503);
+    expect(await Order.countDocuments()).toBe(0);
+    expect((await Product.findById(product._id)).stock).toBe(2);
+  });
+
+  it('revierte el stock si falla la escritura del pedido', async () => {
+    const product = await seedProduct({ stock: 2 });
+    const failure = jest.spyOn(Order, 'create').mockRejectedValueOnce(new Error('synthetic write failure'));
+    try {
+      await request(app).post('/api/marketplace/checkout').set(buyerH)
+        .send({ items: [{ productId: product._id, qty: 1 }], shippingAddress: address }).expect(500);
+      expect((await Product.findById(product._id)).stock).toBe(2);
+      expect(await Order.countDocuments()).toBe(0);
+    } finally { failure.mockRestore(); }
+  });
+
+  it('recupera un timeout con la misma petición y clave, sin duplicar la reserva', async () => {
+    const stripe = getStripeClient();
+    (stripe.checkout.sessions.create as jest.Mock).mockRejectedValueOnce(new Error('timeout'));
+    (getStripeClient as jest.Mock).mockReturnValueOnce(stripe).mockReturnValueOnce(stripe).mockReturnValueOnce(stripe);
+    const product = await seedProduct({ stock: 2 });
+    const created = await request(app).post('/api/marketplace/checkout')
+      .send({ items: [{ productId: product._id, qty: 1 }], shippingAddress: address, email: 'guest@test.com', name: 'Guest' }).expect(502);
+    const url = `/api/marketplace/orders/${created.body.orderId}/payment`;
+    await request(app).post(url).expect(403);
+    await request(app).post(url).set(storeH).expect(403);
+    await request(app).post(url).send({ token: 'incorrecto' }).expect(403);
+    await request(app).post(url).send({ token: created.body.guestToken }).expect(200);
+    const calls = (stripe.checkout.sessions.create as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(calls[0]);
+    expect((await Product.findById(product._id)).stock).toBe(1);
+    expect(await Order.countDocuments()).toBe(1);
+    const shown = await request(app).get(`/api/marketplace/orders/${created.body.orderId}?token=${created.body.guestToken}`).expect(200);
+    expect(shown.body.checkoutRequest).toBeUndefined();
+  });
+
+  it('una sesión caducada libera la reserva una sola vez', async () => {
+    const { order, product } = await seedPendingOrder();
+    order.sessionId = 'cs_expired';
+    await order.save();
+    const stripe = getStripeClient();
+    (stripe.checkout.sessions.retrieve as jest.Mock).mockResolvedValue({ status: 'expired' });
+    (getStripeClient as jest.Mock).mockReturnValueOnce(stripe);
+    const before = (await Product.findById(product._id)).stock;
+    const url = `/api/marketplace/orders/${order._id}/payment`;
+    const result = await request(app).post(url).set(buyerH).expect(409);
+    expect(result.body.error).toBe('payment_expired');
+    await request(app).post(url).set(buyerH).expect(409);
+    expect((await Product.findById(product._id)).stock).toBe(before + order.items[0].qty);
+  });
+
   it('no mezcla dos vendedores en un pedido', async () => {
     const a = await seedProduct();
     const b = await seedProduct({ sellerId: store2Id, name: 'De la otra tienda' });
@@ -290,9 +359,7 @@ describe('Checkout', () => {
   // Regresión de la auditoría del 5 sep 2026 (hallazgo alta #5): el stock solo
   // se comprobaba al crear la sesión de pago, nunca se reservaba, así que dos
   // pedidos concurrentes por la última unidad podían los dos "tener éxito" y
-  // acabar los dos pagados. Sin Stripe configurado (ver arriba) `createCheckout`
-  // deja el pedido creado y devuelve 503 tras reservar; eso basta para probar
-  // la reserva sin necesitar un cobro real.
+  // acabar los dos pagados. Stripe está simulado, sin cobros reales.
   it('con una sola unidad, dos pedidos a la vez solo reservan uno', async () => {
     const product = await seedProduct({ stock: 1 });
     const body = { items: [{ productId: product._id, qty: 1 }], shippingAddress: address };
@@ -303,8 +370,8 @@ describe('Checkout', () => {
     ]);
 
     const statuses = [a.status, b.status].sort();
-    // 503: Stripe no configurado, pero el pedido se creó con el stock reservado.
-    expect(statuses).toEqual([409, 503]);
+    // Solo una sesión obtiene la última unidad.
+    expect(statuses).toEqual([200, 409]);
 
     const after: any = await Product.findById(product._id).lean();
     expect(after.stock).toBe(0);
@@ -330,9 +397,9 @@ describe('Checkout', () => {
       .post('/api/marketplace/checkout')
       .set(buyerH)
       .send({ items: [{ productId: product._id, qty: 1 }], shippingAddress: address })
-      .expect(503); // sin Stripe: el pedido queda creado y a la espera
+      .expect(200);
 
-    expect(res.body.error).toBe('payments_unavailable');
+    expect(res.body.url).toBe('https://checkout.stripe.com/test');
     const order: any = await Order.findById(res.body.orderId).lean();
     expect(order.subtotalEur).toBe(20);
     expect(order.shippingEur).toBe(3.5); // por debajo del umbral de 40 €
@@ -352,7 +419,7 @@ describe('Checkout', () => {
         name: 'Invitada',
         shippingAddress: address,
       })
-      .expect(503);
+      .expect(200);
 
     expect(res.body.guestToken).toBeTruthy();
     const order: any = await Order.findById(res.body.orderId).select('+guestToken').lean();
@@ -399,6 +466,20 @@ async function seedPendingOrder(overrides: Record<string, any> = {}) {
 }
 
 describe('Pago confirmado', () => {
+  it('un fallo al devolver stock revierte la cancelación y el reintento devuelve una sola vez', async () => {
+    const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
+    const { product, order } = await seedPendingOrder();
+    const before = (await Product.findById(product._id)).stock;
+    const fail = jest.spyOn(Product, 'updateOne').mockImplementationOnce(() => { throw new Error('synthetic stock failure'); });
+    try { await expect(releaseExpiredOrder(String(order._id))).rejects.toThrow('synthetic stock failure'); }
+    finally { fail.mockRestore(); }
+    expect((await Order.findById(order._id)).status).toBe('pending_payment');
+    expect((await Product.findById(product._id)).stock).toBe(before);
+    expect(await releaseExpiredOrder(String(order._id))).toBe(true);
+    expect(await releaseExpiredOrder(String(order._id))).toBe(false);
+    expect((await Product.findById(product._id)).stock).toBe(before + order.items[0].qty);
+  });
+
   it('descuenta el stock una sola vez aunque el webhook se repita', async () => {
     const { product, order } = await seedPendingOrder();
 
@@ -435,7 +516,7 @@ describe('Pago confirmado', () => {
         name: 'Invitada',
         shippingAddress: address,
       })
-      .expect(503);
+      .expect(200);
 
     expect(await fulfillPaidOrder(created.body.orderId, 'pi_guest')).toBe(true);
 
@@ -474,7 +555,7 @@ describe('Acceso al pedido', () => {
         name: 'Invitada',
         shippingAddress: address,
       })
-      .expect(503);
+      .expect(200);
 
     const url = `/api/marketplace/orders/${created.body.orderId}`;
     await request(app).get(url).expect(403);
