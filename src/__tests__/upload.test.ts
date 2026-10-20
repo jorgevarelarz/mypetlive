@@ -2,6 +2,7 @@ import request from 'supertest';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
+import sharp from 'sharp';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 
@@ -45,17 +46,46 @@ describe('Subida de ficheros', () => {
   });
 
   it('acepta un PNG real y lo sirve con el Content-Type correcto, nunca text/html', async () => {
-    // Cabecera PNG mínima válida (firma de 8 bytes que `detectFileType` reconoce).
-    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    const png = await sharp({ create: { width: 3000, height: 1500, channels: 3, background: '#ffaa55' } }).png().toBuffer();
     const uploaded = await request(app)
       .post('/api/uploads')
       .set(uploadHeaders)
       .attach('file', png, { filename: 'foto.png', contentType: 'image/png' })
       .expect(200);
 
-    expect(uploaded.body.filename).toMatch(/\.png$/);
-    const served = await request(app).get(`/uploads/${uploaded.body.filename}`).expect(200);
-    expect(served.headers['content-type']).toMatch(/^image\/png/);
+    const filename = path.join(process.cwd(), 'uploads', uploaded.body.filename);
+    try {
+      expect(uploaded.body.filename).toMatch(/\.webp$/);
+      const served = await request(app).get(`/uploads/${uploaded.body.filename}`).expect(200);
+      expect(served.headers['content-type']).toMatch(/^image\/webp/);
+      const metadata = await sharp(filename).metadata();
+      expect(metadata.width).toBe(2048);
+      expect(metadata.height).toBe(1024);
+    } finally { await fs.promises.unlink(filename); }
+  });
+
+  it('rechaza una cabecera PNG sin contenido real', async () => {
+    await request(app).post('/api/uploads').set(uploadHeaders)
+      .attach('file', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'falsa.png')
+      .expect(400);
+  });
+
+  it('no guarda ningún archivo cuando un lote contiene una imagen inválida', async () => {
+    const dir = path.join(process.cwd(), 'uploads');
+    const before = (await fs.promises.readdir(dir)).sort();
+    const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: 'red' } }).png().toBuffer();
+    await request(app).post('/api/uploads/images').set(uploadHeaders)
+      .attach('files', png, 'valida.png')
+      .attach('files', Buffer.from('<script>alert(1)</script>'), 'falsa.png').expect(400);
+    expect((await fs.promises.readdir(dir)).sort()).toEqual(before);
+  });
+
+  it('permite documentos PDF pero los rechaza en la galería de imágenes', async () => {
+    const pdf = Buffer.from('%PDF-1.4\n%%EOF');
+    await request(app).post('/api/uploads/images').set(uploadHeaders).attach('files', pdf, 'documento.pdf').expect(400);
+    const res = await request(app).post('/api/uploads').set(uploadHeaders).attach('file', pdf, 'documento.pdf').expect(200);
+    try { expect(res.body.filename).toMatch(/\.pdf$/); }
+    finally { await fs.promises.unlink(path.join(process.cwd(), 'uploads', res.body.filename)); }
   });
 
   it('el nombre servido nunca es el original: una extensión .html en el nombre no sobrevive', async () => {
