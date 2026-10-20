@@ -60,6 +60,15 @@ async function notifyMatchingAlerts(animal: any) {
 
 export async function create(req: Request, res: Response) {
   const b: any = req.body || {};
+  const user: any = (req as any).user;
+  const actorId = String(user?._id || user?.id || '');
+  if (user?.role !== 'admin' && b.shelter && String(b.shelter) !== actorId) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  if (user?.role === 'admin' && b.shelter && String(b.shelter) !== actorId) {
+    const shelter = await User.exists({ _id: b.shelter, role: 'landlord' });
+    if (!shelter) return res.status(400).json({ error: 'invalid_shelter' });
+  }
   // Si no viene, por defecto asignamos la protectora actual
   if (!b.shelter) {
     const u: any = (req as any).user;
@@ -192,6 +201,9 @@ export async function getTimeline(req: Request, res: Response) {
   if (!normalized) return res.status(400).json({ error: 'invalid_code' });
   const animal: any = await Animal.findOne({ code: normalized }).lean();
   if (!animal) return res.status(404).json({ error: 'not_found' });
+  if (animal.status === 'borrador' && !canManageAnimal((req as any).user, animal)) {
+    return res.status(404).json({ error: 'not_found' });
+  }
 
   const viewer: any = (req as any).user;
   const viewerId = String(viewer?._id || viewer?.id || '');

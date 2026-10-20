@@ -125,6 +125,29 @@ describe('Animal discovery', () => {
 // CUALQUIERA, y un borrador se veía igual que uno publicado con solo conocer
 // (o adivinar) su ID.
 describe('Visibilidad pública de animales', () => {
+  it('impide publicar usando la verificación y la identidad de otra protectora', async () => {
+    const { Verification } = await import('../models/verification.model');
+    await Verification.create({ userId, status: 'verified' });
+    await request(app).post('/api/animals').set(shelterHeaders).send({
+      shelter: userId, name: 'Ajeno', species: 'cat', sex: 'male', age: '2', size: 'small', status: 'publicado',
+    }).expect(403);
+    const { Animal } = await import('../models/animal.model');
+    expect(await Animal.countDocuments()).toBe(0);
+  });
+
+  it('protege también el historial de un borrador y permite previsualizarlo al dueño', async () => {
+    const { Animal } = await import('../models/animal.model');
+    const animal = await Animal.create({
+      shelter: shelterId, name: 'Borrador privado', species: 'cat', age: '2',
+      createdByRole: 'protectora', status: 'borrador',
+      vetHistory: [{ date: new Date(), note: 'Nota privada de prueba' }],
+    });
+    await request(app).get(`/api/animals/${animal.code}/timeline`).expect(404);
+    await request(app).get(`/api/animals/${animal.code}/timeline`).set(userHeaders).expect(404);
+    const owner = await request(app).get(`/api/animals/${animal.code}/timeline`).set(shelterHeaders).expect(200);
+    expect(owner.body.timeline.some((e: any) => e.detail === 'Nota privada de prueba')).toBe(true);
+  });
+
   it('esconde un borrador de cualquiera que no sea su protectora', async () => {
     const created = await request(app)
       .post('/api/animals')
