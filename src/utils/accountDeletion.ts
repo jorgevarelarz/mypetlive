@@ -8,6 +8,7 @@ import { VetAppointment } from '../models/vetAppointment.model';
 import { Order } from '../models/order.model';
 import { Product } from '../models/product.model';
 import { PushSubscription } from '../models/pushSubscription.model';
+import { NativePushToken } from '../models/nativePushToken.model';
 import { AnimalFavorite } from '../models/animalFavorite.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { WelcomePlan } from '../models/welcomePlan.model';
@@ -122,6 +123,7 @@ export async function deleteAccount(userId: string): Promise<void> {
     // 3) Lo que solo existe para esta persona.
     await Promise.all([
       PushSubscription.deleteMany({ userId }, opts),
+      NativePushToken.deleteMany({ userId }, opts),
       AnimalFavorite.deleteMany({ userId: id }, opts),
       AnimalAlert.deleteMany({ userId: id }, opts),
       WelcomePlan.deleteMany({ ownerId: id }, opts),

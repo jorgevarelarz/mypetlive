@@ -9,6 +9,7 @@ import {
   SocialProvider,
   bootstrapAuthHeader,
 } from "../api/auth";
+import { nativePushAvailable, disableNativePush, refreshNativePush } from '../utils/nativePush';
 import {
   LegalStatus,
   getLegalStatus,
@@ -106,6 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     sessionGeneration.current += 1;
+    // Este móvil deja de recibir los avisos de la cuenta que sale.
+    if (nativePushAvailable()) void disableNativePush(user?.token);
     apiLogout();
     // clear() cancela consultas: una respuesta de A no repuebla la caché de B.
     queryClient.clear();
@@ -114,6 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLegalStatusError(false);
     setLegalStatusLoading(false);
   };
+
+  // App de iPhone con sesión y permiso ya dado: renovar el token de notificaciones.
+  useEffect(() => {
+    if (user?.token && nativePushAvailable()) void refreshNativePush().catch(() => undefined);
+  }, [user?.token]);
 
   // Mezcla cambios en el usuario en memoria + localStorage (preserva el token).
   const updateUser = useCallback((patch: Partial<User>) => {
