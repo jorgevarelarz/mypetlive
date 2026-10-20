@@ -8,14 +8,16 @@ import MobileBottomNav from '../../components/MobileBottomNav';
 import PublicHeader from '../../components/PublicHeader';
 import CountUp from '../../components/CountUp';
 import { getPublicStats } from '../../api/publicStats';
+import ErrorCard from '../../components/ui/ErrorCard';
+import { speciesLabel, statusLabel } from '../../styles/mypetlive';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
 const FONT_MONO = "'JetBrains Mono', monospace";
 
 const C = {
-  bg: '#F6F3EC', ink: '#3F4A3C', teal: '#1F6F6F', coral: '#E8654A', olive: '#6A7B4F',
-  gold: '#E9A93C', muted: '#6B7464', faint: '#98A088', border: '#E5E1D6', panel: '#EFEADF', teal100: '#E2EEEC',
+  bg: '#F6F3EC', ink: '#3F4A3C', teal: '#1F6F6F', coral: '#C0512F', olive: '#6A7B4F',
+  gold: '#E9A93C', muted: '#6B7464', faint: '#6B7464', border: '#E5E1D6', panel: '#EFEADF', teal100: '#E2EEEC',
 };
 
 function Paw({ size = 24, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -42,7 +44,7 @@ const SIZE_LABEL: Record<string, string> = { small: 'Pequeño', medium: 'Mediano
 
 export default function Landing() {
   const { openAuth } = useAuthModal();
-  const { data } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['landing-featured'],
     queryFn: () => searchAnimals({ limit: 4, page: 1, sort: 'createdAt', dir: 'desc' }),
     staleTime: 60_000,
@@ -101,7 +103,9 @@ export default function Landing() {
           .lp-cta-section{padding:0 20px 88px!important;margin-bottom:0!important;}
           .lp-cta-band{display:grid!important;padding:28px!important;border-radius:22px!important;}
           .lp-cta-band h2{font-size:28px!important;letter-spacing:0!important;}
-          .lp-footer{display:none!important;}
+          .lp-footer{padding-bottom:88px;}
+          .lp-footer > div{padding:28px 20px!important;}
+          .lp-footer > div > div{grid-template-columns:1fr 1fr!important;flex-wrap:wrap;gap:24px!important;}
         }
       `}</style>
 
@@ -166,19 +170,23 @@ export default function Landing() {
             </div>
             <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Ver compañeros →</Link>
           </div>
-          {pets.length === 0 ? (
+          {isPending ? (
+            <p role="status" style={{ color: C.muted }}>Buscando compañeros…</p>
+          ) : isError ? (
+            <ErrorCard message="No pudimos cargar los compañeros. Inténtalo de nuevo." onRetry={() => { void refetch(); }} />
+          ) : pets.length === 0 ? (
             <div style={{ color: C.muted, padding: '24px 0' }}>Pronto verás aquí los animales destacados.</div>
           ) : (
             <div className="lp-pets-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
               {pets.map((p: any) => {
                 const img = Array.isArray(p.images) ? p.images[0] : null;
-                const meta = [p.species, SIZE_LABEL[p.size] || p.size].filter(Boolean).join(' · ');
+                const meta = [speciesLabel(p.species), SIZE_LABEL[p.size] || p.size, p.city].filter(Boolean).join(' · ');
                 const tags = Array.isArray(p.personality) ? p.personality.slice(0, 2) : [];
                 return (
                   <Link key={p._id || p.id} className="lp-card" to={`/animals/${p._id || p.id}`} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, overflow: 'hidden', boxShadow: '0 1px 3px rgba(31,55,40,.06),0 8px 24px -16px rgba(31,55,40,.18)', display: 'block' }}>
                     <div className={img ? '' : 'lp-ph'} style={{ height: 190, backgroundColor: '#E6E0D2', position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: 12, overflow: 'hidden' }}>
                       {img && <img src={toAbsoluteUrl(img)} alt={p.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-                      <span style={{ position: 'relative', background: C.teal100, color: '#176363', fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8 }}>● Publicado</span>
+                      <span style={{ position: 'relative', background: C.teal100, color: '#176363', fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8 }}>{statusLabel(p.status)}</span>
                     </div>
                     <div style={{ padding: '16px 18px 20px' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>

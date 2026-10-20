@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { useQueryClient } from '@tanstack/react-query';
 import {
   User,
   getStoredUser,
@@ -32,6 +33,8 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx>(null!);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+  const sessionGeneration = useRef(0);
   const [user, setUser] = useState<User | null>(getStoredUser());
   const [legalStatus, setLegalStatus] = useState<LegalStatus | null>(null);
   const [legalStatusLoading, setLegalStatusLoading] = useState(false);
@@ -42,12 +45,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLegalStatus(null);
       return;
     }
+    const generation = sessionGeneration.current;
     try {
       setLegalStatusLoading(true);
       const status = await getLegalStatus();
+      if (generation !== sessionGeneration.current) return;
       setLegalStatus(status);
       setLegalStatusError(false);
     } catch (error) {
+      if (generation !== sessionGeneration.current) return;
       // Falla EN CERRADO: si no sabemos si aceptó, no se le deja pasar. Antes
       // el error se tragaba aquí, legalStatus quedaba null y la comprobación
       // de ProtectedRoute lo interpretaba como "no hay nada pendiente".
@@ -55,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLegalStatus(null);
       setLegalStatusError(true);
     } finally {
-      setLegalStatusLoading(false);
+      if (generation === sessionGeneration.current) setLegalStatusLoading(false);
     }
   }, [user?.token]);
 
@@ -78,22 +84,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const u = await apiLogin(email, password);
+    sessionGeneration.current += 1;
+    queryClient.clear();
+    setLegalStatus(null);
+    setLegalStatusError(false);
+    setLegalStatusLoading(true);
     setUser(u);
-    await refreshLegalStatus();
     return u;
   };
 
   const loginWithProvider = async (provider: SocialProvider, idToken: string, name?: string) => {
     const u = await apiSocialLogin(provider, idToken, name);
+    sessionGeneration.current += 1;
+    queryClient.clear();
+    setLegalStatus(null);
+    setLegalStatusError(false);
+    setLegalStatusLoading(true);
     setUser(u);
-    await refreshLegalStatus();
     return u;
   };
 
   const logout = () => {
+    sessionGeneration.current += 1;
     apiLogout();
+    // clear() cancela consultas: una respuesta de A no repuebla la caché de B.
+    queryClient.clear();
     setUser(null);
     setLegalStatus(null);
+    setLegalStatusError(false);
+    setLegalStatusLoading(false);
   };
 
   // Mezcla cambios en el usuario en memoria + localStorage (preserva el token).

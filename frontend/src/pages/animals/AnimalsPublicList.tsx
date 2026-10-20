@@ -124,7 +124,7 @@ export default function AnimalsPublicList() {
     setSp(next, { replace: false });
   };
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['animals-public', { q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }],
     queryFn: () => searchAnimals({ q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }),
     placeholderData: keepPreviousData,
@@ -398,8 +398,8 @@ export default function AnimalsPublicList() {
 
             {isLoading ? (
               <SkeletonGrid />
-            ) : (data as any)?.error ? (
-              <ErrorCard message={(data as any)?.error || 'No se pudo cargar el listado'} />
+            ) : isError ? (
+              <ErrorCard message="No pudimos cargar los animales. Comprueba tu conexión e inténtalo de nuevo." onRetry={() => { void refetch(); }} />
             ) : items.length === 0 ? (
               <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 32, textAlign: 'center' }}>
                 <div style={{ fontSize: 38, marginBottom: 8 }}>🐾</div>

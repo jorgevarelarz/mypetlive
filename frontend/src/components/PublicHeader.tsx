@@ -1,6 +1,6 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { LogOut, UserRound } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { LogOut, UserRound, Menu, X } from 'lucide-react';
 import { useAuthModal } from '../context/AuthModalContext';
 import { useAuth } from '../context/AuthContext';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
@@ -8,6 +8,9 @@ import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetli
 export default function PublicHeader() {
   const { openAuth } = useAuthModal();
   const { user, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.key]);
   const panelPath = user?.role === 'tenant'
     ? '/home'
     : user?.role === 'landlord'
@@ -20,6 +23,7 @@ export default function PublicHeader() {
 
   return (
     <div
+      onKeyDown={event => { if (event.key === 'Escape') setMenuOpen(false); }}
       style={{
         position: 'sticky',
         top: 0,
@@ -33,14 +37,18 @@ export default function PublicHeader() {
         .public-header a{color:inherit;text-decoration:none;}
         .public-header-link:hover{color:${MPL.teal}!important;}
         .public-header-cta:hover{filter:brightness(1.05);}
+        .public-header-menu-button{display:none!important;}
+        .public-header-mobile-menu{display:none;}
         @media (max-width: 900px){
           .public-header-nav{display:none!important;}
-          .public-header-topbar{width:100vw!important;max-width:100vw!important;padding:14px 20px!important;overflow:hidden;}
+          .public-header-menu-button{display:inline-flex!important;}
+          .public-header-mobile-menu{display:flex;flex-wrap:wrap;gap:16px;padding:16px 20px;font-family:${MPL_FONT_BODY};background:${MPL.bg};border-top:1px solid ${MPL.border};}
+          .public-header-mobile-menu a{color:${MPL.tealDark};font-weight:700;text-decoration:none;padding:8px;}
+          .public-header-topbar{width:100%!important;padding:14px 16px!important;gap:8px;}
+          .public-header-cta{display:none!important;}
         }
         @media (max-width: 520px){
-          .public-header-login{display:none!important;}
-          .public-header-topbar{position:relative;}
-          .public-header-cta{position:absolute;right:20px;display:inline-flex!important;padding:10px 16px!important;}
+          .public-header-account-name{display:none;}
         }
       `}</style>
       <div
@@ -87,11 +95,11 @@ export default function PublicHeader() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {user ? (
             <>
-              <Link className="public-header-login" to={panelPath} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14.5, fontWeight: 700 }}>
+              <Link className="public-header-login" to={panelPath} aria-label="Mi panel" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14.5, fontWeight: 700 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center', background: MPL.teal100, color: MPL.teal }}>
                   <UserRound size={17} />
                 </span>
-                <span>{user.name || 'Mi panel'}</span>
+                <span className="public-header-account-name">{user.name || 'Mi panel'}</span>
               </Link>
               <button type="button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}>
                 <LogOut size={17} />
@@ -123,8 +131,18 @@ export default function PublicHeader() {
               </Link>
             </>
           )}
+          <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
+      {menuOpen && <nav id="public-mobile-menu" className="public-header-mobile-menu" aria-label="Menú principal">
+        <Link to="/animals">Adoptar</Link>
+        <Link to="/#como">Cómo funciona</Link>
+        <Link to="/#impacto">Impacto</Link>
+        <a href="mailto:soporte@mypetlive.es?subject=Alta%20profesional">Alta profesional</a>
+        <Link to="/legal/privacy">Privacidad</Link>
+      </nav>}
     </div>
   );
 }
