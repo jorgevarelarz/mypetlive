@@ -1,16 +1,35 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 
 // En la app no hay botón «atrás» de navegador: las pantallas que van fuera del
 // AppShell (sin barra inferior) necesitan este para poder salir. Si se entró
 // directo (enlace, QR), no hay historial y vuelve al inicio.
-export default function BackButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+export function useGoBack() {
   const nav = useNavigate();
-  const back = () => {
+  const { pathname } = useLocation();
+  return useCallback(() => {
     if ((window.history.state?.idx ?? 0) > 0) nav(-1);
-    else nav('/', { replace: true });
-  };
+    else if (pathname !== '/') nav('/', { replace: true });
+  }, [nav, pathname]);
+}
+
+/**
+ * Gesto de deslizar desde el borde izquierdo en la app de iPhone: la parte
+ * nativa (MainViewController) dispara «nativeback» y aquí se vuelve igual que
+ * con el botón. Se monta una vez, dentro del router.
+ */
+export function NativeBackListener() {
+  const goBack = useGoBack();
+  useEffect(() => {
+    window.addEventListener('nativeback', goBack);
+    return () => window.removeEventListener('nativeback', goBack);
+  }, [goBack]);
+  return null;
+}
+
+export default function BackButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  const back = useGoBack();
   return (
     <button
       type="button"

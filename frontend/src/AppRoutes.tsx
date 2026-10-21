@@ -5,6 +5,7 @@ import { AuthModalProvider } from "./context/AuthModalContext";
 import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
 import HashScroll from "./components/HashScroll";
+import { NativeBackListener } from "./components/BackButton";
 import Landing from "./pages/home/Landing";
 import AppWelcome from "./pages/home/AppWelcome";
 import { isNativeApp } from "./utils/native";
@@ -86,6 +87,7 @@ export default function AppRoutes() {
       <AuthModalProvider>
         <BrowserRouter>
           <HashScroll />
+          <NativeBackListener />
           <Routes>
             <Route path="/" element={<HomeGate />} />
             <Route path="/sistema" element={<Sistema />} />
