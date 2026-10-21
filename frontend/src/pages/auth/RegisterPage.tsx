@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { register as apiRegister } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
 import SocialAuthButtons from "../../components/auth/SocialAuthButtons";
+import LegalCheckbox from "../../components/auth/LegalCheckbox";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const [password2, setPassword2] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
   const { login } = useAuth();
@@ -29,9 +31,13 @@ export default function RegisterPage() {
       setErr('Las dos contraseñas no coinciden.');
       return;
     }
+    if (!acceptedLegal) {
+      setErr('Tienes que aceptar los términos y la política de privacidad.');
+      return;
+    }
     setLoading(true);
     try {
-      await apiRegister(name.trim(), email.trim(), password);
+      await apiRegister(name.trim(), email.trim(), password, true);
       const user = await login(email.trim(), password);
       const destination = explicitNext || (user?.role === 'tenant' ? '/home' : '/');
       nav(destination, { replace: true });
@@ -88,8 +94,9 @@ export default function RegisterPage() {
             Las dos contraseñas no coinciden.
           </p>
         )}
+        <LegalCheckbox checked={acceptedLegal} onChange={setAcceptedLegal} />
         {err && <p className="auth-error" style={{ color: '#b91c1c' }}>{err}</p>}
-        <button type="submit" className="auth-button" disabled={loading || mismatch}>
+        <button type="submit" className="auth-button" disabled={loading || mismatch || !acceptedLegal}>
           {loading ? 'Creando…' : 'Crear cuenta'}
         </button>
       </form>

@@ -68,8 +68,10 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
-export async function register(name: string, email: string, password: string) {
-  await axios.post("/api/auth/register", { name, email, password });
+// acceptLegal: la casilla «Acepto…» del formulario; el servidor guarda la
+// aceptación de los textos vigentes en el mismo alta.
+export async function register(name: string, email: string, password: string, acceptLegal = false) {
+  await axios.post("/api/auth/register", { name, email, password, acceptLegal });
 }
 
 export type SocialProvider = "google" | "apple";

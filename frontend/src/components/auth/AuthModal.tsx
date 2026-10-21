@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { register as apiRegister } from '../../api/auth';
+import LegalCheckbox from './LegalCheckbox';
 import Brand from '../Brand';
 import { toast } from 'react-hot-toast';
 
@@ -49,7 +50,7 @@ export default function AuthModal() {
       if (mode === 'register') {
         if (!name.trim()) throw new Error('Indica tu nombre');
         if (!acceptedLegal) throw new Error('Tienes que aceptar los términos y la política de privacidad');
-        await apiRegister(name.trim(), email.trim(), password);
+        await apiRegister(name.trim(), email.trim(), password, true);
         await login(email.trim(), password);
         toast.success('¡Cuenta creada! Bienvenido/a 🐾');
       } else {
@@ -131,25 +132,7 @@ export default function AuthModal() {
             <PasswordField className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : undefined} maxLength={72} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
           </label>
           {mode === 'register' && <p className="text-xs" style={{ color: '#7A8273' }}>Usa entre 12 y 72 caracteres.</p>}
-          {mode === 'register' && (
-            // La casilla va SIN marcar y sin ella no se envía el formulario:
-            // un consentimiento premarcado no es válido.
-            <label className="flex items-start gap-2 text-sm" style={{ color: '#5C6455' }}>
-              <input
-                type="checkbox"
-                checked={acceptedLegal}
-                onChange={e => setAcceptedLegal(e.target.checked)}
-                required
-                className="mt-1"
-              />
-              <span>
-                He leído y acepto los{' '}
-                <a href="/legal/terms" target="_blank" rel="noreferrer" className="underline">términos y condiciones</a>
-                {' '}y la{' '}
-                <a href="/legal/privacy" target="_blank" rel="noreferrer" className="underline">política de privacidad</a>.
-              </span>
-            </label>
-          )}
+          {mode === 'register' && <LegalCheckbox checked={acceptedLegal} onChange={setAcceptedLegal} />}
           <button
             type="submit"
             disabled={busy || (mode === 'register' && !acceptedLegal)}

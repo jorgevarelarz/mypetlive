@@ -8,6 +8,7 @@ import { resetPasswordEmail } from '../utils/emailTemplates';
 import getRequestLogger from '../utils/requestLogger';
 import { AppError, badRequest, isAppError } from '../utils/errors';
 
+import { getLatestLegalDoc, recordLegalAcceptance } from '../utils/legalDocs';
 import { getJwtSecret } from '../config/jwt';
 
 const normalizeEmail = (value: unknown) =>
@@ -78,6 +79,16 @@ export const register = async (req: Request, res: Response) => {
     // Save new user with hashed password
     const user = new User({ name: rawName, email: rawEmail, passwordHash, role: normalizedRole });
     await user.save();
+    // Casilla «Acepto los términos y la privacidad» del formulario: se guarda
+    // aquí, con IP y dispositivo, para no mandar a nadie a la pantalla de
+    // aceptación justo después de registrarse. Es opcional para no romper las
+    // versiones de la app ya instaladas; sin ella, /legal-consent la pide.
+    if (req.body?.acceptLegal === true) {
+      for (const slug of ['terms', 'privacy'] as const) {
+        const latest = await getLatestLegalDoc(slug);
+        if (latest) await recordLegalAcceptance(user._id, slug, latest.version, req);
+      }
+    }
     const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       token,
