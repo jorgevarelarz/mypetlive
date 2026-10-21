@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { SocialProvider } from "../../api/auth";
-import { isNativeApp } from "../../utils/native";
+import { isNativeApp, openPaymentPage, webUrl } from "../../utils/native";
 
 /**
  * Botones de "Continuar con Google / Apple".
@@ -189,6 +189,13 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
 
   if (!native && !GOOGLE_CLIENT_ID && !APPLE_CLIENT_ID) return null;
 
+  // En la app un target=_blank no abre nada: el texto va en Safari por encima.
+  const openLegal = (path: string) => (e: React.MouseEvent) => {
+    if (!native) return;
+    e.preventDefault();
+    void openPaymentPage(webUrl(path));
+  };
+
   const showGoogle = native || Boolean(GOOGLE_CLIENT_ID);
   const showApple = native || Boolean(APPLE_CLIENT_ID);
   const pill: React.CSSProperties = {
@@ -261,6 +268,15 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
           </button>
         )}
       </div>
+
+      {/* Aviso de aceptación: quien entra con Apple/Google no pasa por la
+          casilla del registro. El front manda acceptLegal en socialLogin. */}
+      <p style={{ fontSize: 12.5, lineHeight: 1.45, color: "#6B7464", textAlign: "center", margin: "12px auto 0", maxWidth: 300 }}>
+        Al continuar con {showApple && showGoogle ? "Apple o Google" : showApple ? "Apple" : "Google"} aceptas los{" "}
+        <a href="/legal/terms" target="_blank" rel="noreferrer" onClick={openLegal("/legal/terms")} style={{ textDecoration: "underline" }}>términos y condiciones</a>
+        {" "}y la{" "}
+        <a href="/legal/privacy" target="_blank" rel="noreferrer" onClick={openLegal("/legal/privacy")} style={{ textDecoration: "underline" }}>política de privacidad</a>.
+      </p>
 
       {err && (
         <p className="auth-error" style={{ color: "#b91c1c", textAlign: "center", marginTop: 12 }}>

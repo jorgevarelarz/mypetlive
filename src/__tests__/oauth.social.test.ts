@@ -52,6 +52,18 @@ const googleClaims = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('Login con Google/Apple', () => {
+  it('con acceptLegal graba términos y privacidad una sola vez', async () => {
+    mockVerify.mockResolvedValue(googleClaims() as any);
+    const { LegalAcceptance } = await import('../models/legalAcceptance.model');
+    const res = await request(app).post('/api/auth/oauth/google').send({ idToken: 't', acceptLegal: true }).expect(200);
+    await request(app).post('/api/auth/oauth/google').send({ idToken: 't', acceptLegal: true }).expect(200);
+    const rows = await LegalAcceptance.find({ userId: res.body.user._id }).lean();
+    expect(rows.map((r: any) => r.slug).sort()).toEqual(['privacy', 'terms']);
+    const saved: any = await User.findById(res.body.user._id).lean();
+    expect(saved.termsVersionAccepted).toBeTruthy();
+    expect(saved.privacyVersionAccepted).toBeTruthy();
+  });
+
   it('acepta varias audiencias separadas por comas (web e iOS)', async () => {
     const previo = process.env.GOOGLE_CLIENT_ID;
     process.env.GOOGLE_CLIENT_ID = 'web.apps.googleusercontent.com, ios.apps.googleusercontent.com';

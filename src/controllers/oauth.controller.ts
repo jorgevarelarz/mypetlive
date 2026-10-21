@@ -5,6 +5,7 @@ import { getJwtSecret } from '../config/jwt';
 import { AppError, badRequest, isAppError } from '../utils/errors';
 import getRequestLogger from '../utils/requestLogger';
 import { APPLE_OIDC, GOOGLE_OIDC, verifyIdToken, OidcClaims } from '../utils/oidc';
+import { getLatestLegalDoc, recordLegalAcceptance } from '../utils/legalDocs';
 
 const JWT_SECRET = getJwtSecret();
 
@@ -127,6 +128,18 @@ export const socialLogin = async (req: Request, res: Response) => {
         role: 'tenant',
         authProviders: [{ provider, sub: claims.sub }],
       });
+    }
+
+    // Junto a los botones va «Al continuar aceptas los términos y la política
+    // de privacidad»: el front manda acceptLegal y se graba como la casilla
+    // del registro. Solo si falta esa versión, para no apuntar una fila por
+    // cada vez que alguien entra.
+    if (req.body?.acceptLegal === true) {
+      for (const slug of ['terms', 'privacy'] as const) {
+        const latest = await getLatestLegalDoc(slug);
+        const accepted = slug === 'terms' ? (user as any).termsVersionAccepted : (user as any).privacyVersionAccepted;
+        if (latest && accepted !== latest.version) await recordLegalAcceptance(user._id, slug, latest.version, req);
+      }
     }
 
     const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
