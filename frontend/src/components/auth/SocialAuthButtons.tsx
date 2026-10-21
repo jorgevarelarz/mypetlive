@@ -199,20 +199,20 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
   const showGoogle = native || Boolean(GOOGLE_CLIENT_ID);
   const showApple = native || Boolean(APPLE_CLIENT_ID);
   const pill: React.CSSProperties = {
-    width: 300, maxWidth: "100%", height: 44, padding: 0, borderRadius: 999,
+    width: "100%", height: 44, padding: 0, borderRadius: 999,
     display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
     fontSize: 15, fontWeight: 600, cursor: "pointer",
   };
 
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ marginTop: 16 }}>
       <div
         aria-hidden
         style={{
           display: "flex",
           alignItems: "center",
           gap: 12,
-          margin: "4px 0 16px",
+          margin: "2px 0 12px",
           color: "rgba(63,74,60,.55)",
           fontSize: ".85rem",
         }}
@@ -230,7 +230,7 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
             disabled={busy === "apple"}
             className="auth-button"
             style={{
-              width: 300,
+              width: native ? "100%" : 300,
               maxWidth: "100%",
               height: native ? 44 : 40, // el botón web de Google mide 40
               boxShadow: "none",

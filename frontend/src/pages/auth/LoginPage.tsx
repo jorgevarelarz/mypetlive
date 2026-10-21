@@ -34,6 +34,11 @@ export default function LoginPage() {
     <>
       <h1 className="auth-title">Inicia sesión</h1>
       <p className="auth-subtitle">Entra para cuidar de tus mascotas y seguir su día a día.</p>
+      {(loc.state as any)?.message && (
+        <p style={{ margin: '0 0 18px', padding: '12px 14px', borderRadius: 12, background: '#E2EEEC', color: '#176363', fontSize: 14, fontWeight: 600 }}>
+          {(loc.state as any).message}
+        </p>
+      )}
       <form className="auth-form" onSubmit={submit} noValidate>
         <label className="auth-label" htmlFor="email">
           Correo electrónico
@@ -75,23 +80,13 @@ export default function LoginPage() {
 
       {/* Los primeros usuarios pedían que se viera el alta: mucha gente llegaba
           al login sin cuenta e intentaba entrar igualmente. */}
-      <div
-        className="auth-footer"
-        style={{
-          marginTop: 24,
-          padding: '14px 16px',
-          border: '1px solid var(--border)',
-          borderRadius: 14,
-          background: 'rgba(255,255,255,.6)',
-          fontSize: '1rem',
-        }}
-      >
+      <div className="auth-footer" style={{ marginTop: 20, textAlign: 'center', fontSize: '1rem' }}>
         ¿No tienes cuenta?{' '}
-        <Link to="/register" className="auth-link" style={{ fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 4 }}>
+        <Link to={`/register${loc.search}`} state={loc.state} className="auth-link" style={{ fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 4 }}>
           Regístrate gratis
         </Link>
       </div>
-      <div className="auth-cta" style={{ marginTop: 24, textAlign: 'center', color: '#3F4A3C' }}>
+      <div className="auth-cta auth-pro" style={{ marginTop: 24, textAlign: 'center', color: '#3F4A3C' }}>
         <p style={{ fontWeight: 600 }}>¿Eres protectora, veterinario o tienda?</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>Hablemos y te activamos como profesional.</p>
         <a

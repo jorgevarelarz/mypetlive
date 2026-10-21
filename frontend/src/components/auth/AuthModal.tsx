@@ -1,158 +1,29 @@
-import React, { useState } from 'react';
-import PasswordField from './PasswordField';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthModal } from '../../context/AuthModalContext';
-import { register as apiRegister } from '../../api/auth';
-import LegalCheckbox from './LegalCheckbox';
-import Brand from '../Brand';
-import { toast } from 'react-hot-toast';
 
-const palette = {
-  text: '#3F4A3C',
-  border: '#E7E1D5',
-  accent: '#6A7B4F',
-  surface: '#FFFFFF',
-};
-
+/**
+ * Antes era una ventana emergente propia para entrar o crear cuenta, con otro
+ * diseño que las pantallas /login y /register y sin Apple, Google ni la casilla
+ * de legales. Ahora `openAuth()` lleva a esas pantallas (una sola forma de
+ * entrar en toda la web y la app) y, al terminar, se vuelve a donde se estaba.
+ * El mensaje de quien la abre («Entra para canjear el cupón…») viaja en el
+ * state de la navegación y lo enseña la pantalla.
+ */
 export default function AuthModal() {
-  const { open, mode, message, closeAuth, setMode, fireSuccess } = useAuthModal();
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const { open, mode, message, closeAuth } = useAuthModal();
+  const nav = useNavigate();
+  const loc = useLocation();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [acceptedLegal, setAcceptedLegal] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  if (!open) return null;
-
-  const reset = () => {
-    setName('');
-    setEmail('');
-    setPassword('');
-    setAcceptedLegal(false);
-    setBusy(false);
-  };
-
-  const done = () => {
-    reset();
-    fireSuccess();
+  useEffect(() => {
+    if (!open) return;
+    const here = loc.pathname + loc.search;
+    const target = mode === 'login' ? '/login' : '/register';
+    const onAuthPage = loc.pathname === '/login' || loc.pathname === '/register';
+    const query = here !== '/' && !onAuthPage ? `?redirect=${encodeURIComponent(here)}` : '';
     closeAuth();
-  };
+    nav(`${target}${query}`, { state: message ? { message } : undefined });
+  }, [open, mode, message, closeAuth, nav, loc.pathname, loc.search]);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    try {
-      if (mode === 'register') {
-        if (!name.trim()) throw new Error('Indica tu nombre');
-        if (!acceptedLegal) throw new Error('Tienes que aceptar los términos y la política de privacidad');
-        await apiRegister(name.trim(), email.trim(), password, true);
-        await login(email.trim(), password);
-        toast.success('¡Cuenta creada! Bienvenido/a 🐾');
-      } else {
-        await login(email.trim(), password);
-        toast.success('Sesión iniciada');
-      }
-      done();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'No se pudo completar';
-      toast.error(msg);
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(31,35,28,0.45)' }}
-      onClick={closeAuth}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl shadow-xl p-6 grid gap-4"
-        style={{ background: palette.surface, color: palette.text }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between">
-          <div className="grid gap-1">
-            <Brand size={18} />
-            <h2 className="text-xl font-semibold">{mode === 'register' ? 'Crear cuenta' : 'Entrar'}</h2>
-          </div>
-          <button onClick={closeAuth} aria-label="Cerrar" className="text-xl leading-none" style={{ color: '#9AA08F' }}>×</button>
-        </div>
-
-        {message && (
-          <p className="text-sm rounded-lg px-3 py-2" style={{ background: '#F1F3E8', color: '#5F6B3D' }}>{message}</p>
-        )}
-
-        {/* Tabs */}
-        <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: palette.border }}>
-          <button
-            type="button"
-            className="flex-1 py-2 text-sm"
-            style={mode === 'register' ? { background: palette.accent, color: '#fff' } : {}}
-            onClick={() => setMode('register')}
-          >
-            Crear cuenta
-          </button>
-          <button
-            type="button"
-            className="flex-1 py-2 text-sm"
-            style={mode === 'login' ? { background: palette.accent, color: '#fff' } : {}}
-            onClick={() => setMode('login')}
-          >
-            Ya tengo cuenta
-          </button>
-        </div>
-
-        <form onSubmit={onSubmit} className="grid gap-3">
-          {mode === 'register' && (
-            <>
-              <label className="grid gap-1 text-sm">
-                Nombre
-                <input className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={name} onChange={e => setName(e.target.value)} required />
-              </label>
-              <p className="text-sm rounded-lg px-3 py-2" style={{ background: '#F8F5EE', color: '#6D745F' }}>
-                Este registro es para adoptantes. ¿Eres protectora, veterinario o tienda?{' '}
-                <a href="mailto:soporte@mypetlive.es?subject=Alta%20profesional%20MyPetLive" className="underline">
-                  Solicita el alta profesional
-                </a>.
-              </p>
-            </>
-          )}
-          <label className="grid gap-1 text-sm">
-            Email
-            <input type="email" className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={email} onChange={e => setEmail(e.target.value)} required />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Contraseña
-            <PasswordField className="border rounded px-3 py-2" style={{ borderColor: palette.border }} value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : undefined} maxLength={72} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
-          </label>
-          {mode === 'register' && <p className="text-xs" style={{ color: '#7A8273' }}>Usa entre 12 y 72 caracteres.</p>}
-          {mode === 'register' && <LegalCheckbox checked={acceptedLegal} onChange={setAcceptedLegal} />}
-          <button
-            type="submit"
-            disabled={busy || (mode === 'register' && !acceptedLegal)}
-            className="mt-1 py-2.5 rounded-lg text-sm font-medium disabled:opacity-60"
-            style={{ background: palette.accent, color: '#fff' }}
-          >
-            {busy ? 'Procesando…' : mode === 'register' ? 'Crear cuenta' : 'Entrar'}
-          </button>
-          {mode === 'login' && (
-            <button
-              type="button"
-              onClick={() => { closeAuth(); navigate('/forgot-password'); }}
-              className="text-sm text-center underline"
-              style={{ color: palette.accent, textUnderlineOffset: 4 }}
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
-          )}
-        </form>
-      </div>
-    </div>
-  );
+  return null;
 }

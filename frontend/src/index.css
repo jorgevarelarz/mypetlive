@@ -370,3 +370,17 @@ form p[style] {
 
 /* Migas de pan: en la app no aportan (hay barra inferior y botón Volver). */
 .native-app .mpl-crumbs { display: none !important; }
+
+/* Acceso en el móvil: todo en una pantalla sin deslizar. Sin marco de tarjeta
+   (ocupa y no aporta), sin el logo repetido ni la frase bajo el título. */
+@media (max-width: 720px) {
+  .auth-shell { justify-content: flex-start; gap: 0; padding: 4px 16px 20px; }
+  .auth-card { background: transparent; box-shadow: none; backdrop-filter: none; padding: 4px 4px 0; border-radius: 0; }
+  .auth-logo, .auth-subtitle, .auth-hint { display: none !important; }
+  .auth-title { font-size: 1.7rem; margin: 2px 0 14px; }
+  .auth-form { gap: 10px; }
+  .auth-label { gap: 5px; }
+  .auth-input { padding: 10px 14px; }
+}
+/* En la app las cuentas profesionales no se piden desde el móvil. */
+.native-app .auth-pro { display: none !important; }

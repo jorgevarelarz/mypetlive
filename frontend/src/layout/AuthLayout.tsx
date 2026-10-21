@@ -8,7 +8,7 @@ export default function AuthLayout() {
     <div className="auth-shell">
       <BackButton className="auth-back" />
       <div className="auth-card">
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+        <div className="auth-logo" style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
           <Link to="/" aria-label="MyPetLive — inicio"><Brand size={24} /></Link>
         </div>
         <Outlet />
