@@ -7,7 +7,7 @@ import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
-import { speciesVariants } from '../utils/species';
+import { speciesFilter, speciesVariants } from '../utils/species';
 import { canPublishAnimals } from '../utils/shelterVerification';
 import { canManageAnimal } from '../utils/animalAccess';
 
@@ -623,7 +623,7 @@ export async function search(req: Request, res: Response) {
     filter.status = status && PUBLIC_STATUSES.includes(status) ? status : { $in: PUBLIC_STATUSES };
   }
 
-  if (species) filter.species = species;
+  if (species) filter.species = speciesFilter(String(species));
   if (size) filter.size = size;
   if (sex) filter.sex = sex;
   if (ageGroup) filter.ageGroup = ageGroup;

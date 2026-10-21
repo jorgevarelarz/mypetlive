@@ -63,6 +63,8 @@ export const speciesLabel = (value?: string) => {
     conejo: 'Conejo',
     bird: 'Ave',
     ave: 'Ave',
+    reptile: 'Reptil',
+    reptil: 'Reptil',
     other: 'Otro',
     otro: 'Otro',
   };

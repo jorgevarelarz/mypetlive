@@ -78,12 +78,12 @@ export default function Favorites() {
         .favorite-card{transition:transform .18s ease,box-shadow .18s ease}
         .favorite-card:hover{transform:translateY(-4px);box-shadow:0 22px 44px -24px rgba(31,55,40,.32)!important}
         @media(max-width:900px){.favorites-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media(max-width:640px){.favorites-main{padding:28px 20px 100px!important}.favorites-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.favorite-image{height:130px!important}.favorite-body{padding:13px!important}}
+        @media(max-width:640px){.favorites-main{padding:18px 20px 96px!important}.favorites-main h1{font-size:30px!important}.favorites-head{margin-bottom:16px!important}.favorites-empty{min-height:0!important;padding:24px 20px!important}.favorites-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.favorite-image{height:130px!important}.favorite-body{padding:13px!important}}
         @media(max-width:390px){.favorites-grid{grid-template-columns:1fr}}
       `}</style>
       <PublicHeader />
       <main className="favorites-main" style={{ maxWidth: 1180, margin: '0 auto', padding: '42px 32px 72px' }}>
-        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+        <div className="favorites-head" style={{ marginBottom: 28, display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
           <div>
           <div className="mpl-crumbs" style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
             <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>Inicio</Link> / Favoritos
@@ -134,7 +134,7 @@ export default function Favorites() {
             </button>
           </section>
         ) : items.length === 0 ? (
-          <section style={{ minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 32 }}>
+          <section className="favorites-empty" style={{ minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 32 }}>
             <span style={{ width: 64, height: 64, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.coral, background: '#FCE9E4', marginBottom: 18 }}>
               <Heart size={30} />
             </span>

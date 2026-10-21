@@ -50,6 +50,7 @@ const SPECIES_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'cat', label: 'Gato' },
   { value: 'rabbit', label: 'Conejo' },
   { value: 'bird', label: 'Ave' },
+  { value: 'reptile', label: 'Reptil' },
   { value: 'other', label: 'Otro' },
 ];
 

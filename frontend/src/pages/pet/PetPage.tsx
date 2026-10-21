@@ -56,6 +56,7 @@ const SPECIES_OPTIONS = [
   { value: 'dog', label: 'Perro' },
   { value: 'rabbit', label: 'Conejo' },
   { value: 'bird', label: 'Ave' },
+  { value: 'reptile', label: 'Reptil' },
   { value: 'other', label: 'Otro' },
 ];
 

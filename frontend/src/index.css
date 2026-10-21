@@ -384,3 +384,10 @@ form p[style] {
 }
 /* En la app las cuentas profesionales no se piden desde el móvil. */
 .native-app .auth-pro { display: none !important; }
+
+/* En la app el pie de enlaces legales alarga pantallas que deberían caber
+   enteras; los textos siguen en el registro y en el perfil. */
+.native-app .app-legal-footer { display: none !important; }
+
+/* Sin rebote al estirar en la app: una pantalla que cabe se queda fija. */
+html.native-app, .native-app body { overscroll-behavior: none; }

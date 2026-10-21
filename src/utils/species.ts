@@ -7,12 +7,31 @@ const CANONICAL: Record<string, string> = {
   gato: 'cat',
   dog: 'dog',
   perro: 'dog',
+  reptile: 'reptile',
+  reptil: 'reptile',
 };
 
 const SYNONYMS: Record<string, string[]> = {
   cat: ['cat', 'gato'],
   dog: ['dog', 'perro'],
+  // Reptil: categoría del filtro de Compañeros. Las variantes cubren altas en
+  // las que se escribió el animal concreto en vez de la categoría.
+  reptile: ['reptile', 'reptil', 'tortuga', 'turtle', 'lagarto', 'lizard', 'serpiente', 'snake', 'iguana', 'gecko'],
 };
+
+/**
+ * Condición de Mongo para filtrar por especie. «other» es todo lo que no es
+ * gato, perro ni reptil (aves, conejos, «otro»…): así el filtro «Otros» de
+ * Compañeros no deja fuera especies que no tienen categoría propia.
+ */
+export function speciesFilter(value?: string): any {
+  const norm = normalizeSpecies(value);
+  if (!norm) return undefined;
+  if (norm === 'other' || norm === 'otro' || norm === 'otros') {
+    return { $nin: [...SYNONYMS.cat, ...SYNONYMS.dog, ...SYNONYMS.reptile] };
+  }
+  return { $in: speciesVariants(norm) };
+}
 
 // Canoniza una especie a su forma estándar (en minúsculas). Desconocidas se
 // devuelven en minúsculas sin tocar (rabbit, bird, other, …).

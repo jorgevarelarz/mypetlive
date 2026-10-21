@@ -396,6 +396,7 @@ function SideNav() {
 function LegalLinks() {
   return (
     <footer
+      className="app-legal-footer"
       style={{
         borderTop: '1px solid rgba(63,74,60,.12)',
         marginTop: 32,

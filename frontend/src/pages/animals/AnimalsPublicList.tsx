@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bell, ChevronLeft, ChevronRight, Heart, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Bell, Cat, ChevronLeft, ChevronRight, Dog, Heart, Rabbit, Search, SlidersHorizontal, Turtle, X } from 'lucide-react';
 import { createAnimalAlert, searchAnimals, type AnimalAlertFilters } from '../../api/animals';
 import SkeletonGrid from '../../components/ui/SkeletonGrid';
 import ErrorCard from '../../components/ui/ErrorCard';
@@ -14,10 +14,13 @@ import PublicHeader from '../../components/PublicHeader';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+// Las mismas cuatro del filtro de arriba. Valores canónicos (el servidor casa
+// también las variantes en español, ver utils/species.ts).
 const speciesOptions = [
-  { label: 'Perro', value: 'perro' },
-  { label: 'Gato', value: 'gato' },
-  { label: 'Otros', value: 'other' },
+  { label: 'Gatos', value: 'cat', icon: Cat, tint: MPL.coral100, color: MPL.coral },
+  { label: 'Perros', value: 'dog', icon: Dog, tint: MPL.teal100, color: MPL.teal },
+  { label: 'Reptiles', value: 'reptile', icon: Turtle, tint: MPL.olive100, color: MPL.oliveDark },
+  { label: 'Otros', value: 'other', icon: Rabbit, tint: MPL.gold100, color: MPL.goldDark },
 ];
 
 const sizeOptions = [
@@ -77,6 +80,8 @@ export default function AnimalsPublicList() {
   const limit = Number(sp.get('limit') || '12');
   const q = sp.get('q') || undefined;
   const species = sp.get('species') || undefined;
+  // Enlaces viejos con «perro»/«gato»: la tarjeta activa se reconoce igual.
+  const normalizedSpecies = species === 'perro' ? 'dog' : species === 'gato' ? 'cat' : species === 'reptil' ? 'reptile' : species;
   const size = (sp.get('size') as 'small' | 'medium' | 'large' | null) || undefined;
   const sex = (sp.get('sex') as 'male' | 'female' | null) || undefined;
   const city = sp.get('city') || undefined;
@@ -216,6 +221,36 @@ export default function AnimalsPublicList() {
             <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
           </p>
 
+          {/* Lo primero que se elige: qué animal. Tarjetas con su dibujo; al
+              pulsar la activa se quita el filtro. */}
+          <div className="catalog-species" role="group" aria-label="Filtrar por especie" style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, maxWidth: 560 }}>
+            {speciesOptions.map(option => {
+              const Icon = option.icon;
+              const active = normalizedSpecies === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilter('species', active ? '' : option.value)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '12px 4px 10px', minWidth: 0, borderRadius: 16, cursor: 'pointer', font: 'inherit',
+                    background: active ? option.tint : '#fff',
+                    border: `1.5px solid ${active ? option.color : MPL.border}`,
+                    boxShadow: active ? 'none' : '0 1px 3px rgba(31,55,40,.05)',
+                    color: MPL.ink,
+                  }}
+                >
+                  <span style={{ width: 46, height: 46, borderRadius: 14, background: option.tint, color: option.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={28} strokeWidth={1.9} />
+                  </span>
+                  <span style={{ fontSize: 13.5, fontWeight: 800 }}>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="catalog-search" style={{ marginTop: 26, display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 14, padding: '0 18px' }}>
               <Search size={18} color={MPL.faint} />
@@ -290,7 +325,7 @@ export default function AnimalsPublicList() {
               <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Especie</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {speciesOptions.map(option => (
-                  <Chip key={option.value} active={species === option.value} onClick={() => setFilter('species', species === option.value ? '' : option.value)}>
+                  <Chip key={option.value} active={normalizedSpecies === option.value} onClick={() => setFilter('species', normalizedSpecies === option.value ? '' : option.value)}>
                     {option.label}
                   </Chip>
                 ))}
