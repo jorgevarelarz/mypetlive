@@ -12,6 +12,7 @@ import {
   type CareSupply,
 } from '../../api/animals';
 import SupplyList from './SupplyList';
+import ProductSuggestions from './ProductSuggestions';
 import { describeSupply } from '../../utils/supplies';
 import { usesLitter, usesWalks, walkKindLabel } from '../../styles/mypetlive';
 import WalkSheet, { type WalkDraft } from './WalkSheet';
@@ -189,6 +190,7 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
           foods={pantry.foods}
           litters={pantry.litters}
           showLitter={showLitter}
+          species={species}
           onChange={() => refetch()}
         />
       )}
@@ -228,6 +230,15 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
                   onAdd={addCustom}
                   disabled={foods.length >= 2}
                 />
+                {foods.length < 2 && (
+                  <ProductSuggestions
+                    q={custom}
+                    kind="food"
+                    species={species}
+                    exclude={foods}
+                    onPick={name => { toggleFood(name); setCustom(''); }}
+                  />
+                )}
               </>
             )}
 
@@ -248,11 +259,23 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
                     ))}
                   </div>
                 )}
+                {litter && !pantry.litters.some(p => p.name === litter) && (
+                  <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
+                    <Chip label={litter} active onClick={() => setLitter('')} />
+                  </div>
+                )}
                 <CustomInput
                   placeholder={pantry.litters.length ? 'Otro tipo de arena…' : 'Qué arena usas (opcional)'}
                   value={custom}
                   onChange={setCustom}
                   onAdd={addCustom}
+                />
+                <ProductSuggestions
+                  q={custom}
+                  kind="litter"
+                  species={species}
+                  exclude={litter ? [litter] : []}
+                  onPick={name => { setLitter(name); setCustom(''); }}
                 />
               </>
             )}

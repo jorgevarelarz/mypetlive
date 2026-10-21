@@ -1,4 +1,5 @@
 import React from 'react';
+import ProductSuggestions from './ProductSuggestions';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { upsertAnimalSupply, type CareSupply, type SupplyUnit } from '../../api/animals';
@@ -13,6 +14,8 @@ type Props = {
   litters: CareSupply[];
   showLitter: boolean;
   onChange: () => void;
+  /** Para que las sugerencias del catálogo sean de su especie. */
+  species?: string;
 };
 
 const MUTED = '#7A8273';
@@ -24,7 +27,7 @@ const WARN = '#8F3827';
  * Vive debajo de los botones de cuidado y no en una pantalla aparte porque la
  * pregunta ("¿queda pienso?") aparece justo cuando se va a dar de comer.
  */
-export default function SupplyList({ animalId, foods, litters, showLitter, onChange }: Props) {
+export default function SupplyList({ animalId, foods, litters, showLitter, onChange, species }: Props) {
   const [editing, setEditing] = React.useState<null | { kind: Kind; supply?: CareSupply }>(null);
 
   const save = useMutation({
@@ -136,6 +139,7 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
           // El mismo criterio que las filas: sin esto, "+ Añadir producto"
           // enseñaba el par Comida/Arena también en la ficha de un perro.
           showLitter={showLitter}
+          species={species}
           supply={editing.supply}
           busy={save.isPending}
           onCancel={() => setEditing(null)}
@@ -154,6 +158,7 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
 function SupplyForm({
   kind: initialKind,
   showLitter,
+  species,
   supply,
   busy,
   onCancel,
@@ -162,6 +167,7 @@ function SupplyForm({
 }: {
   kind: Kind;
   showLitter: boolean;
+  species?: string;
   supply?: CareSupply;
   busy?: boolean;
   onCancel: () => void;
@@ -226,6 +232,9 @@ function SupplyForm({
             style={{ borderRadius: 8, borderColor: '#D7D0C2', marginTop: 4 }}
           />
         </label>
+        {!supply && name.trim().length >= 2 && (
+          <ProductSuggestions q={name} kind={kind} species={species} onPick={setName} />
+        )}
 
         <AmountField
           label={kind === 'food' ? 'Trae el paquete' : 'Trae el saco'}

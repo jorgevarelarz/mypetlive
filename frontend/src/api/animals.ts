@@ -353,3 +353,9 @@ export async function createPersonalPet(payload: {
   const { data } = await client.post('/api/animals/personal', payload, { headers });
   return data;
 }
+
+/** Autocompletado de comida y arena (catálogo de productos, ver petCatalog del servidor). */
+export async function searchPetProducts(q: string, kind: 'food' | 'litter', species?: string) {
+  const { data } = await client.get('/api/catalog/pet-products', { params: { q, kind, species } });
+  return (data?.items || []) as Array<{ name: string; brand: string | null }>;
+}

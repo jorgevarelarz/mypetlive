@@ -32,6 +32,7 @@ import asyncHandlerApp from './utils/asyncHandler';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
 import animalRoutes from './routes/animal.routes';
 import tagRoutes from './routes/tag.routes';
+import catalogRoutes from './routes/catalog.routes';
 import adminTagsRoutes from './routes/admin.tags.routes';
 import adoptionRoutes from './routes/adoption.routes';
 import shoppingRoutes from './routes/shopping.routes';
@@ -251,6 +252,7 @@ app.use('/api/animals', animalRoutes);
 // resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
 // tiene cuenta. Cada ruta pone su propio `authenticate` donde hace falta.
 app.use('/api/tags', tagRoutes);
+app.use('/api/catalog', catalogRoutes);
 app.use('/api/adoptions', adoptionRoutes);
 // "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
 app.use('/api/shop', shoppingRoutes);

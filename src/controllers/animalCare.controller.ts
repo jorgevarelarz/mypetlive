@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { recordProductUse } from '../utils/petCatalog';
 import { Types } from 'mongoose';
 import { Animal } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
@@ -167,6 +168,7 @@ export async function markFeeding(req: Request, res: Response) {
     ...(foods.length ? { foods } : {}),
   });
 
+  if (foods.length) void recordProductUse(foods, 'food', animal.species);
   res.json({ ok: true, lastFeeding: at, entry, pantry: animal.carePantry });
 }
 
@@ -200,6 +202,7 @@ export async function markLitter(req: Request, res: Response) {
     ...(litterType ? { litterType } : {}),
   });
 
+  if (litterType) void recordProductUse([litterType], 'litter', animal.species);
   res.json({ ok: true, lastLitterChange: at, entry, pantry: animal.carePantry });
 }
 
@@ -275,6 +278,7 @@ export async function upsertSupply(req: Request, res: Response) {
 
   const name = cleanLabel(body.name);
   if (!name) return res.status(400).json({ error: 'name_required' });
+  if (body.remove !== true) void recordProductUse([name], kind, animal.species);
 
   const pantry = ensurePantry(animal);
   const list: any[] = kind === 'food' ? pantry.foods || [] : pantry.litters || [];
