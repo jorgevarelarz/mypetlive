@@ -21,6 +21,8 @@ export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 
 export interface IProduct extends Document {
   listedBy: 'partner' | 'platform';
+  /** Identificador interno de productos con lógica propia (p. ej. 'chapa-qr'). */
+  sku?: string;
   sellerId?: Types.ObjectId;
   name: string;
   description?: string;
@@ -52,6 +54,9 @@ const schema = new Schema<IProduct>(
     // no hay es la forma más rápida de acumular reembolsos.
     stock: { type: Number, default: 0, min: 0 },
     active: { type: Boolean, default: true, index: true },
+    // La chapa del collar es un producto con lógica propia: comprarla habilita
+    // registrar su código en «Mi mascota» (tag.controller.tagEligibility).
+    sku: { type: String, trim: true, index: { unique: true, sparse: true } },
   },
   { timestamps: true },
 );

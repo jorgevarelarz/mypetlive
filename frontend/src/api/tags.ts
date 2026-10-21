@@ -36,3 +36,9 @@ export async function listMyTags() {
     }>;
   };
 }
+
+/** ¿Hay chapa en la tienda y la ha comprado (pedido pagado)? Ver tag.controller.tagEligibility. */
+export async function getTagEligibility() {
+  const { data } = await client.get('/api/tags/eligibility');
+  return data as { productId: string | null; priceEur: number | null; purchased: boolean };
+}

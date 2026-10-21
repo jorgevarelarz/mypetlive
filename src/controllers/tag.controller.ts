@@ -3,6 +3,8 @@ import { Tag, generateTags, normalizeTagCode, tagStatus } from '../models/tag.mo
 import { Animal } from '../models/animal.model';
 import { canManageAnimal } from '../utils/animalAccess';
 import { logAnimalEvent } from '../utils/animalEvents';
+import { Product } from '../models/product.model';
+import { Order } from '../models/order.model';
 
 // ---------------------------------------------------------------------------
 // Chapas físicas del collar
@@ -243,4 +245,24 @@ export async function revokeTag(req: Request, res: Response) {
   await tag.save();
 
   return res.json({ ok: true, status: 'anulada', code: tag.code });
+}
+
+/** SKU del producto «chapa» en la tienda de la plataforma. */
+export const TAG_PRODUCT_SKU = 'chapa-qr';
+
+// GET /api/tags/eligibility — «Mi mascota» decide qué enseñar en la chapa:
+// sin pedido, «Pide la tuya» con el enlace al producto; con un pedido pagado
+// (o ya enviado/entregado), el campo para registrar el código.
+export async function tagEligibility(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = user?._id || user?.id;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const product = await Product.findOne({ sku: TAG_PRODUCT_SKU, active: true }).select('_id priceEur stock').lean();
+  if (!product) return res.json({ productId: null, priceEur: null, purchased: false });
+  const purchased = Boolean(await Order.exists({
+    'buyer.userId': userId,
+    status: { $in: ['paid', 'shipped', 'delivered'] },
+    'items.productId': product._id,
+  }));
+  res.json({ productId: String(product._id), priceEur: product.priceEur, purchased });
 }

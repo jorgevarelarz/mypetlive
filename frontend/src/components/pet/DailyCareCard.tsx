@@ -1,4 +1,6 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { Footprints, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import {
@@ -19,6 +21,8 @@ type Props = {
   species?: string;
   /** Para refrescar la home y la lista de mascotas, que cachean el mismo animal. */
   onMarked?: () => void;
+  /** La despensa se gestiona en «Mi mascota»; en el inicio se oculta. */
+  showPantry?: boolean;
 };
 
 const CARD: React.CSSProperties = { borderColor: '#E7E1D5', background: '#FFFFFF' };
@@ -53,7 +57,7 @@ function entryDetail(entry?: CareEntry) {
   return parts.join(' · ');
 }
 
-export default function DailyCareCard({ animalId, species, onMarked }: Props) {
+export default function DailyCareCard({ animalId, species, onMarked, showPantry = true }: Props) {
   const queryClient = useQueryClient();
   const { data, refetch } = useQuery({
     queryKey: ['animal-care', animalId],
@@ -138,7 +142,7 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
       </div>
 
       <CareLine
-        icon="🍽"
+        icon={<UtensilsCrossed size={18} />}
         title={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'}
         detail={entryDetail(lastFeed)}
         actor={lastFeed?.actorName}
@@ -147,7 +151,7 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
 
       {showWalk && (
         <CareLine
-          icon="🐾"
+          icon={<Footprints size={18} />}
           title={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'}
           detail={entryDetail(lastWalk)}
           actor={lastWalk?.actorName}
@@ -161,7 +165,7 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
 
       {showLitter && (
         <CareLine
-          icon="🪴"
+          icon={<Sparkles size={18} />}
           title={
             lastLitter
               ? `Arena cambiada ${since(lastLitter.createdAt)}`
@@ -179,15 +183,17 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
         {showLitter && <button type="button" onClick={() => setSheet('litter')} style={btnGhost}>Cambiar arena</button>}
       </div>
 
-      <SupplyList
-        animalId={animalId}
-        foods={pantry.foods}
-        litters={pantry.litters}
-        showLitter={showLitter}
-        onChange={() => refetch()}
-      />
+      {showPantry && (
+        <SupplyList
+          animalId={animalId}
+          foods={pantry.foods}
+          litters={pantry.litters}
+          showLitter={showLitter}
+          onChange={() => refetch()}
+        />
+      )}
 
-      {(sheet === 'feed' || sheet === 'litter') && (
+      {(sheet === 'feed' || sheet === 'litter') && createPortal(
         <div style={backdrop} onClick={() => !care.isPending && closeSheet()}>
           <div role="dialog" aria-modal="true" style={modal} onClick={e => e.stopPropagation()}>
             {sheet === 'feed' && (
@@ -263,7 +269,8 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       <WalkSheet
         open={sheet === 'walk'}
@@ -275,11 +282,11 @@ export default function DailyCareCard({ animalId, species, onMarked }: Props) {
   );
 }
 
-function CareLine({ icon, title, detail, actor, aside }: { icon: string; title: string; detail?: string | null; actor?: string; aside?: string }) {
+function CareLine({ icon, title, detail, actor, aside }: { icon: React.ReactNode; title: string; detail?: string | null; actor?: string; aside?: string }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-start gap-2">
-        <span aria-hidden style={{ fontSize: 18, lineHeight: 1.3 }}>{icon}</span>
+        <span aria-hidden style={{ display: 'inline-flex', color: '#1F6F6F', paddingTop: 2 }}>{icon}</span>
         <div>
           <div className="text-sm">{title}</div>
           {!!detail && <div className="text-sm" style={{ color: MUTED }}>{detail}</div>}

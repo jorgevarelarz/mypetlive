@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React from 'react';
 import { WALK_KIND_OPTIONS } from '../../styles/mypetlive';
 
@@ -48,7 +49,9 @@ export default function WalkSheet({ open, busy, petName, onCancel, onConfirm }: 
     });
   };
 
-  return (
+  // Portal a <body>: en la app el contenido se desplaza dentro de #root y un
+  // diálogo fijo ahí dentro no se dejaba desplazar en el iPhone.
+  return createPortal(
     <div style={backdrop} onClick={() => !busy && onCancel()}>
       <div role="dialog" aria-modal="true" aria-label="Marcar paseo" style={modal} onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold">Marcar paseo</h3>
@@ -104,7 +107,8 @@ export default function WalkSheet({ open, busy, petName, onCancel, onConfirm }: 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

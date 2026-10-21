@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
+import { BookOpen, Camera, CheckCircle2, MapPin, Pencil, Share2 } from 'lucide-react';
 import PetSwitcher from '../../components/pet/PetSwitcher';
 import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
 import { ageFromBirthDate, petAge } from '../../utils/age';
 import { vaccinesFor } from '../../utils/vaccines';
 import { QRCodeSVG } from 'qrcode.react';
-import { listMyTags, claimTag } from '../../api/tags';
+import { listMyTags, claimTag, getTagEligibility } from '../../api/tags';
 import { useAuth } from '../../context/AuthContext';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import {
@@ -380,6 +381,8 @@ export default function PetPage() {
 
   const petCodeActual = String(currentPet?.code || featuredAnimal?.code || '');
   const chapa = (tagsQ.data?.items || []).find(t => t.animal?.code && t.animal.code === petCodeActual);
+  // ¿Hay chapa en la tienda y ya la ha comprado? Decide qué enseña su tarjeta.
+  const tagEligQ = useQuery({ queryKey: ['chapa-eligibility'], queryFn: getTagEligibility, enabled: Boolean(authToken) });
 
   const claimMutation = useMutation({
     mutationFn: async () => claimTag(tagCode.trim(), petCodeActual),
@@ -683,93 +686,62 @@ export default function PetPage() {
         </div>
       </div>
 
-      <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-        {image ? (
-          <img src={toAbsoluteUrl(image)} alt={featuredAnimal.name} className="w-full rounded-2xl object-cover" style={{ maxHeight: 320 }} />
-        ) : canEdit ? (
-          // Sin foto, el hueco es el sitio donde la gente busca ponerla: que sea
-          // el propio botón y no un cartel muerto que dice "Sin imagen".
-          <button
-            type="button"
-            onClick={openEdit}
-            className="rounded-2xl bg-[#F1ECE4] h-48 w-full flex flex-col items-center justify-center gap-1"
+      {/* Ficha tipo carnet: la foto con sus datos encima y debajo cuatro
+          accesos. Antes eran botones con emojis repartidos en tres filas. */}
+      <div className="border rounded-2xl overflow-hidden" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+        <div className="relative" style={{ aspectRatio: '4 / 3', background: '#F1ECE4' }}>
+          {image ? (
+            <img src={toAbsoluteUrl(image)} alt={featuredAnimal.name} className="absolute inset-0 h-full w-full object-cover" />
+          ) : canEdit ? (
+            // Sin foto, el hueco es el sitio donde la gente busca ponerla.
+            <button
+              type="button"
+              onClick={openEdit}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+              style={{ padding: 0, border: 0, background: 'transparent', color: '#6B7464' }}
+            >
+              <Camera size={30} />
+              <span className="text-sm font-semibold">Añadir una foto</span>
+            </button>
+          ) : null}
+          <div
+            className="absolute inset-x-0 bottom-0 px-4 pb-3 pt-10"
+            style={{ background: image ? 'linear-gradient(to top, rgba(20,28,20,.72), rgba(20,28,20,0))' : 'transparent', color: image ? '#FFFFFF' : '#3F4A3C', pointerEvents: 'none' }}
           >
-            <span className="text-2xl">📷</span>
-            <span className="text-sm font-semibold">Añadir una foto</span>
-          </button>
-        ) : (
-          <div className="rounded-2xl bg-[#F1ECE4] h-48 flex items-center justify-center">Sin imagen</div>
-        )}
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            {featuredAnimal.name || 'Mi mascota'}
-            {code && (
-              <span className="text-xs font-semibold tracking-wide" style={{ color: '#6A7B4F' }}>{code}</span>
-            )}
-          </h1>
-          <p className="text-sm" style={{ color: '#7A8273' }}>
-            {speciesLabel(featuredAnimal.species) || 'Animal'}
-            {petAge(featuredAnimal) ? ` · ${petAge(featuredAnimal)}` : ''}
-          </p>
-          {mood && (
-            <p className="text-sm" style={{ color: '#7A8273' }}>Estado: {moodLabel(mood)} 🌱</p>
-          )}
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-2xl font-extrabold" style={{ fontFamily: '"Bricolage Grotesque", sans-serif', margin: 0 }}>
+                {featuredAnimal.name || 'Mi mascota'}
+              </h1>
+              {code && <span className="text-xs font-bold tracking-wide" style={{ opacity: 0.85 }}>{code}</span>}
+            </div>
+            <div className="text-sm font-semibold" style={{ opacity: 0.9 }}>
+              {[speciesLabel(featuredAnimal.species) || 'Animal', petAge(featuredAnimal), mood ? moodLabel(mood) : ''].filter(Boolean).join(' · ')}
+            </div>
+          </div>
         </div>
         {(petCode || canEdit) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-4" style={{ borderTop: '1px solid #E7E1D5' }}>
             {canEdit && (
-              <button
-                type="button"
-                onClick={openEdit}
-                className="px-3 py-2 rounded-xl text-sm font-semibold border"
-                style={{ borderColor: '#6A7B4F', color: '#3F4A3C', background: '#FFFFFF' }}
-              >
-                ✏️ Editar ficha y fotos
-              </button>
+              <CardAction icon={<Pencil size={20} />} label="Editar" onClick={openEdit} />
             )}
             {petCode && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)}
-                  className="px-3 py-2 rounded-xl text-sm font-semibold"
-                  style={{ background: '#1F6F6F', color: '#FFFFFF' }}
-                >
-                  📕 Ver pasaporte
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSharePassport}
-                  className="px-3 py-2 rounded-xl text-sm font-semibold border"
-                  style={{ borderColor: '#1F6F6F', color: '#1F6F6F', background: '#FFFFFF' }}
-                >
-                  🔗 Compartir
-                </button>
-              </>
+              <CardAction icon={<BookOpen size={20} />} label="Pasaporte" onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)} />
             )}
-            {/* Hasta ahora "se ha perdido" solo existía en la API: la chapa del
-                collar estaba en producción y su razón de ser no se podía activar
-                desde ninguna pantalla. */}
+            {petCode && (
+              <CardAction icon={<Share2 size={20} />} label="Compartir" onClick={handleSharePassport} />
+            )}
+            {/* «Se ha perdido» activa lo que enseña la chapa a quien la escanea. */}
             {canEdit && (
               featuredAnimal.lost?.isLost ? (
-                <button
-                  type="button"
+                <CardAction
+                  icon={<CheckCircle2 size={20} />}
+                  label={foundMutation.isPending ? 'Guardando…' : 'Ha aparecido'}
+                  color="#566A3D"
                   onClick={() => foundMutation.mutate()}
                   disabled={foundMutation.isPending}
-                  className="px-3 py-2 rounded-xl text-sm font-semibold"
-                  style={{ background: '#6A7B4F', color: '#FFFFFF' }}
-                >
-                  {foundMutation.isPending ? 'Guardando…' : '🎉 Ha aparecido'}
-                </button>
+                />
               ) : (
-                <button
-                  type="button"
-                  onClick={openLost}
-                  className="px-3 py-2 rounded-xl text-sm font-semibold border"
-                  style={{ borderColor: '#C8553D', color: '#C8553D', background: '#FFFFFF' }}
-                >
-                  📍 Se ha perdido
-                </button>
+                <CardAction icon={<MapPin size={20} />} label="Perdido" color="#C0512F" onClick={openLost} />
               )
             )}
           </div>
@@ -796,135 +768,12 @@ export default function PetPage() {
         />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <DailyCareCard
-          animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
-          species={featuredAnimal.species}
-          onMarked={invalidateAnimalCaches}
-        />
+      <DailyCareCard
+        animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+        species={featuredAnimal.species}
+        onMarked={invalidateAnimalCaches}
+      />
 
-        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">Cupones</h2>
-          {shelterId ? (
-            <>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleViewCoupons}
-                  className="text-sm"
-                  style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}
-                >
-                  Ver cupones
-                </button>
-              </div>
-              <p className="text-xs" style={{ color: '#6A7B4F' }}>
-                Al usar un cupón generas Patitas para la protectora que elijas 🤍
-                {preferredProtectora ? ` · ${preferredProtectora.name}` : ''}
-              </p>
-              {!preferredProtectora && (
-                <button
-                  type="button"
-                  className="text-xs"
-                  style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}
-                  onClick={() => {
-                    setPendingCouponsNav(false);
-                    setSelectProtectoraOpen(true);
-                  }}
-                >
-                  Elegir protectora
-                </button>
-              )}
-            </>
-          ) : (
-            <p style={{ color: '#7A8273' }}>Esta mascota no está vinculada a una protectora, por lo que no tiene cupones asociados.</p>
-          )}
-        </div>
-      </div>
-
-      {/* La chapa. Es lo único físico que tiene MyPetLive y lo que hace que el
-          pasaporte sirva de algo el día que el animal se pierde, y hasta ahora
-          la app no la mencionaba en ninguna parte. */}
-      {petCodeActual && (
-        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">La chapa de {featuredAnimal.name}</h2>
-          <div className="flex flex-wrap items-start gap-4">
-            <div style={{ background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: 12, padding: 8 }}>
-              <QRCodeSVG value={webUrl(`/p/${encodeURIComponent(petCodeActual)}`)} size={104} bgColor="#ffffff" fgColor="#2E3A2C" />
-            </div>
-            <div style={{ minWidth: 220, flex: 1 }}>
-              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
-                Quien se encuentre a {featuredAnimal.name} y escanee este código llega a su pasaporte.
-                Si está marcado como perdido, verá además cómo avisarte.
-              </p>
-              {chapa ? (
-                <p className="text-sm" style={{ color: '#6A7B4F', marginTop: 8 }}>
-                  Chapa <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{chapa.code}</strong> activada
-                  {typeof chapa.scans === 'number' ? ` · ${chapa.scans} ${chapa.scans === 1 ? 'escaneo' : 'escaneos'}` : ''}.
-                </p>
-              ) : (
-                <div className="grid gap-2" style={{ marginTop: 10 }}>
-                  <p className="text-xs" style={{ color: '#7A8273', margin: 0 }}>
-                    ¿Tienes una chapa de MyPetLive? Escribe su código para vincularla, o imprime este QR
-                    y cuélgaselo tú mismo.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      className="border rounded px-3 py-2 text-sm"
-                      style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', maxWidth: 190 }}
-                      placeholder="Código de la chapa"
-                      value={tagCode}
-                      onChange={e => { setTagCode(e.target.value); setTagError(null); }}
-                    />
-                    <button
-                      type="button"
-                      disabled={!tagCode.trim() || claimMutation.isPending}
-                      onClick={() => claimMutation.mutate()}
-                      className="px-3 py-2 rounded-xl text-sm font-semibold"
-                      style={{ background: tagCode.trim() ? '#1F6F6F' : '#C9D2C4', color: '#FFFFFF' }}
-                    >
-                      {claimMutation.isPending ? 'Activando…' : 'Activar chapa'}
-                    </button>
-                  </div>
-                  {tagError && <p className="text-xs" style={{ color: '#8F3827', margin: 0 }}>{tagError}</p>}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {petOffers.length > 0 && (
-        <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">Ofertas para {featuredAnimal.name || 'tu mascota'}</h2>
-          <p className="text-xs" style={{ color: '#7A8273' }}>Seleccionadas según el perfil de tu mascota 🤍</p>
-          <div className="grid gap-2 mt-3">
-            {petOffers.map(offer => (
-              <div
-                key={offer._id}
-                className="flex items-center gap-3 border rounded-xl px-3 py-2"
-                style={{ borderColor: '#E7E1D5' }}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold">
-                    {offer.title}
-                    {offer.sponsored && (
-                      <span className="ml-2 text-xs font-semibold" style={{ color: '#B8860B' }}>· Destacado</span>
-                    )}
-                  </div>
-                  <div className="text-xs" style={{ color: '#7A8273' }}>
-                    {offer.discount}{offer.partner?.name ? ` · ${offer.partner.name}` : ''}
-                  </div>
-                </div>
-                {offer.exact && (
-                  <span className="text-xs font-semibold rounded-full px-2 py-1" style={{ color: '#1F6F6F', background: '#D7ECEC' }}>
-                    Para {petCode}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
         <div className="flex items-center justify-between gap-3">
@@ -1017,6 +866,142 @@ export default function PetPage() {
           )
         )}
       </div>
+
+      {/* La chapa. Es lo único físico que tiene MyPetLive y lo que hace que el
+          pasaporte sirva de algo el día que el animal se pierde, y hasta ahora
+          la app no la mencionaba en ninguna parte. */}
+      {petCodeActual && (
+        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+          <h2 className="text-lg font-semibold">La chapa de {featuredAnimal.name}</h2>
+          {chapa ? (
+            // Vinculada: quien la escanee llega a su pasaporte.
+            <div className="flex items-center gap-4">
+              <div style={{ background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: 10, padding: 6, flexShrink: 0 }}>
+                <QRCodeSVG value={webUrl(`/p/${encodeURIComponent(petCodeActual)}`)} size={72} bgColor="#ffffff" fgColor="#2E3A2C" />
+              </div>
+              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
+                Chapa <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{chapa.code}</strong> activada
+                {typeof chapa.scans === 'number' ? ` · ${chapa.scans} ${chapa.scans === 1 ? 'escaneo' : 'escaneos'}` : ''}.
+                {' '}Quien se encuentre a {featuredAnimal.name} y la escanee llega a su pasaporte.
+              </p>
+            </div>
+          ) : tagEligQ.data?.purchased ? (
+            // Ya la ha comprado (pedido pagado): ahora toca registrar su código.
+            <div className="grid gap-2">
+              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
+                Escribe el código que viene grabado en la chapa para vincularla a {featuredAnimal.name}.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="border rounded px-3 py-2 text-sm"
+                  style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', flex: 1, minWidth: 0 }}
+                  placeholder="Código de la chapa"
+                  value={tagCode}
+                  onChange={e => { setTagCode(e.target.value); setTagError(null); }}
+                />
+                <button
+                  type="button"
+                  disabled={!tagCode.trim() || claimMutation.isPending}
+                  onClick={() => claimMutation.mutate()}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold"
+                  style={{ background: tagCode.trim() ? '#1F6F6F' : '#C9D2C4', color: '#FFFFFF', flexShrink: 0 }}
+                >
+                  {claimMutation.isPending ? 'Registrando…' : 'Registrar chapa'}
+                </button>
+              </div>
+              {tagError && <p className="text-xs" style={{ color: '#8F3827', margin: 0 }}>{tagError}</p>}
+            </div>
+          ) : (
+            // Sin chapa: se ofrece pedirla. Con el pedido pagado aparece el registro.
+            <div className="grid gap-3">
+              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
+                No tienes chapa de {featuredAnimal.name}. Pide la tuya ya: con ella, quien se la encuentre
+                y la escanee llega a su pasaporte y puede avisarte.
+              </p>
+              {tagEligQ.data?.productId && (
+                <button
+                  type="button"
+                  onClick={() => nav(`/tienda/${tagEligQ.data!.productId}`)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold justify-self-start"
+                  style={{ background: '#C0512F', color: '#FFFFFF' }}
+                >
+                  Pedir chapa{tagEligQ.data?.priceEur ? ` · ${tagEligQ.data.priceEur.toLocaleString('es-ES')} €` : ''}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {petOffers.length > 0 && (
+        <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+          <h2 className="text-lg font-semibold">Ofertas para {featuredAnimal.name || 'tu mascota'}</h2>
+          <p className="text-xs" style={{ color: '#7A8273' }}>Seleccionadas según el perfil de tu mascota 🤍</p>
+          <div className="grid gap-2 mt-3">
+            {petOffers.map(offer => (
+              <div
+                key={offer._id}
+                className="flex items-center gap-3 border rounded-xl px-3 py-2"
+                style={{ borderColor: '#E7E1D5' }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold">
+                    {offer.title}
+                    {offer.sponsored && (
+                      <span className="ml-2 text-xs font-semibold" style={{ color: '#B8860B' }}>· Destacado</span>
+                    )}
+                  </div>
+                  <div className="text-xs" style={{ color: '#7A8273' }}>
+                    {offer.discount}{offer.partner?.name ? ` · ${offer.partner.name}` : ''}
+                  </div>
+                </div>
+                {offer.exact && (
+                  <span className="text-xs font-semibold rounded-full px-2 py-1" style={{ color: '#1F6F6F', background: '#D7ECEC' }}>
+                    Para {petCode}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cupones solo si la mascota viene de una protectora: sin ella no hay
+          ninguno y la tarjeta solo decía eso. */}
+      {shelterId && (
+        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+          <h2 className="text-lg font-semibold">Cupones</h2>
+            <>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleViewCoupons}
+                className="text-sm"
+                style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}
+              >
+                Ver cupones
+              </button>
+            </div>
+            <p className="text-xs" style={{ color: '#6A7B4F' }}>
+              Al usar un cupón generas Patitas para la protectora que elijas 🤍
+              {preferredProtectora ? ` · ${preferredProtectora.name}` : ''}
+            </p>
+            {!preferredProtectora && (
+              <button
+                type="button"
+                className="text-xs"
+                style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}
+                onClick={() => {
+                  setPendingCouponsNav(false);
+                  setSelectProtectoraOpen(true);
+                }}
+              >
+                Elegir protectora
+              </button>
+            )}
+          </>
+        </div>
+      )}
 
       <SelectProtectoraModal
         open={selectProtectoraOpen}
@@ -1357,5 +1342,21 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
       </div>
     </div>,
     document.body,
+  );
+}
+
+// Acceso de la ficha tipo carnet: icono y texto, todos del mismo tamaño.
+function CardAction({ icon, label, onClick, color = '#1F6F6F', disabled }: { icon: React.ReactNode; label: string; onClick: () => void; color?: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center justify-center gap-1"
+      style={{ padding: '12px 4px', border: 0, background: '#FFFFFF', color, font: 'inherit', fontSize: 12.5, fontWeight: 700, minWidth: 0, cursor: 'pointer' }}
+    >
+      {icon}
+      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{label}</span>
+    </button>
   );
 }

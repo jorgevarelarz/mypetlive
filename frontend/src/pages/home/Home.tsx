@@ -1,16 +1,15 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { listMyPets, markAnimalFeeding, markAnimalLitter, markAnimalWalk } from '../../api/animals';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { listMyPets } from '../../api/animals';
 import PetSwitcher from '../../components/pet/PetSwitcher';
 import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
 import { petAge } from '../../utils/age';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import { toAbsoluteUrl } from '../../utils/media';
-import { moodLabel, speciesLabel, usesLitter, usesWalks } from '../../styles/mypetlive';
-import WalkSheet, { type WalkDraft } from '../../components/pet/WalkSheet';
+import { moodLabel, speciesLabel } from '../../styles/mypetlive';
+import DailyCareCard from '../../components/pet/DailyCareCard';
 
 const colors = {
   bg: '#F6F3EC',
@@ -124,54 +123,6 @@ export default function Home() {
     staleTime: 60_000,
   });
 
-  // La home es la superficie rápida: comida y arena se marcan de un toque, sin
-  // detalle. El paseo pide tipo, así que abre la misma hoja que la ficha.
-  const [walkOpen, setWalkOpen] = React.useState(false);
-
-  const careMutation = useMutation<any, unknown, { type: 'feed' } | { type: 'litter' } | { type: 'walk'; walk: WalkDraft }>({
-    mutationFn: async action => {
-      if (!featuredAnimal) throw new Error('missing_animal');
-      const animalId = String(featuredAnimal._id || featuredAnimal.id || '');
-      if (!animalId) throw new Error('missing_animal');
-      if (action.type === 'feed') return markAnimalFeeding(animalId);
-      if (action.type === 'litter') return markAnimalLitter(animalId);
-      return markAnimalWalk(animalId, action.walk);
-    },
-    onSuccess: (_data, action) => {
-      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
-      // El registro y el resumen semanal viven en la ficha: si se marca desde
-      // aquí, allí tiene que verse ya.
-      queryClient.invalidateQueries({ queryKey: ['animal-care'] });
-      setWalkOpen(false);
-      toast.success(
-        action.type === 'feed' ? 'Comida registrada'
-        : action.type === 'litter' ? 'Cambio de arena registrado'
-        : 'Paseo registrado 🐾',
-      );
-    },
-    onError: () => toast.error('No se pudo registrar el cuidado'),
-  });
-
-  const describeFeeding = () => {
-    if (!featuredAnimal?.lastFeeding) return 'Sin comida registrada todavía.';
-    const last = new Date(featuredAnimal.lastFeeding);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 24 ? 'Comida registrada hoy.' : 'Puede tocar rellenar comida.';
-  };
-
-  const describeLitter = () => {
-    if (!featuredAnimal?.lastLitterChange) return 'Sin cambio de arena registrado.';
-    const last = new Date(featuredAnimal.lastLitterChange);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 72 ? 'Arena en buen estado.' : 'Conviene revisar la arena pronto.';
-  };
-
-  const describeWalk = () => {
-    if (!featuredAnimal?.lastWalk) return 'Sin paseos registrados.';
-    const hours = (Date.now() - new Date(featuredAnimal.lastWalk).getTime()) / 36e5;
-    if (hours < 6) return 'Ya ha paseado hoy.';
-    return hours < 24 ? 'Puede tocar otra vuelta.' : 'Hace un día que no pasea.';
-  };
 
   const hasPet = Boolean(featuredAnimal);
   const displayName = featuredAnimal?.name || 'tu mascota';
@@ -186,8 +137,6 @@ export default function Home() {
   const displaySpecies = speciesLabel(featuredAnimal?.species);
   const displayAge = petAge(featuredAnimal);
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
-  const showLitter = usesLitter(featuredAnimal?.species);
-  const showWalk = usesWalks(featuredAnimal?.species);
 
   return (
     <main style={{ background: colors.bg, color: colors.ink, margin: '-24px -16px', minHeight: 'calc(100vh - 56px)' }}>
@@ -318,66 +267,22 @@ export default function Home() {
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr]">
-          <Card className="grid gap-5 p-5 lg:col-span-2">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em]" style={{ color: colors.soft }}>
-                  Pequeños cuidados
-                </p>
-                <h2
-                  className="mt-2 text-2xl font-extrabold"
-                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
-                >
-                  Lo importante, en dos gestos.
-                </h2>
-              </div>
-              <Link to="/adoptions/mine" className="text-sm font-bold underline" style={{ color: colors.teal, textUnderlineOffset: 4 }}>
-                Ver adopciones
-              </Link>
+          {/* El mismo cuidado diario que «Mi mascota»: pregunta qué comió, qué
+              arena y cómo fue el paseo. Antes el inicio tenía botones propios que
+              marcaban sin preguntar nada. La despensa se queda en «Mi mascota». */}
+          {featuredAnimal && (
+            <div className="lg:col-span-2">
+              <DailyCareCard
+                animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+                species={featuredAnimal.species}
+                showPantry={false}
+                onMarked={() => {
+                  queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
+                  queryClient.invalidateQueries({ queryKey: ['my-pets'] });
+                }}
+              />
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                <p className="text-sm font-bold" style={{ color: colors.soft }}>Comida</p>
-                <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeFeeding()}</p>
-                <ActionButton
-                  variant="secondary"
-                  onClick={() => careMutation.mutate({ type: 'feed' })}
-                  disabled={!featuredAnimal || careMutation.isPending}
-                >
-                  Marcar comida
-                </ActionButton>
-              </div>
-
-              {showWalk && (
-                <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                  <p className="text-sm font-bold" style={{ color: colors.soft }}>Paseo</p>
-                  <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeWalk()}</p>
-                  <ActionButton
-                    variant="ghost"
-                    onClick={() => setWalkOpen(true)}
-                    disabled={!featuredAnimal || careMutation.isPending}
-                  >
-                    Marcar paseo
-                  </ActionButton>
-                </div>
-              )}
-
-              {showLitter && (
-                <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                  <p className="text-sm font-bold" style={{ color: colors.soft }}>Arena</p>
-                  <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeLitter()}</p>
-                  <ActionButton
-                    variant="ghost"
-                    onClick={() => careMutation.mutate({ type: 'litter' })}
-                    disabled={!featuredAnimal || careMutation.isPending}
-                  >
-                    Cambiar arena
-                  </ActionButton>
-                </div>
-              )}
-            </div>
-          </Card>
+          )}
 
           <Card className="grid gap-5 p-5">
             <div>
@@ -404,13 +309,6 @@ export default function Home() {
           </Card>
         </section>
       </div>
-      <WalkSheet
-        open={walkOpen}
-        busy={careMutation.isPending}
-        petName={featuredAnimal?.name}
-        onCancel={() => setWalkOpen(false)}
-        onConfirm={walk => careMutation.mutate({ type: 'walk', walk })}
-      />
     </main>
   );
 }

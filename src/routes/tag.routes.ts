@@ -19,6 +19,7 @@ const scanLimiter = rateLimit({
 // `/mine` va antes que `/:code` — si no, la ruta dinámica se traga "mine" y
 // devuelve tag_not_found. Es exactamente el fallo que tuvo `/legal/status`.
 r.get('/mine', authenticate, asyncHandler(ctrl.listMyTags));
+r.get('/eligibility', authenticate, asyncHandler(ctrl.tagEligibility));
 r.get('/:code', scanLimiter, asyncHandler(ctrl.resolveTag));
 
 // Asignar y liberar exigen sesión y ser quien gestiona el animal.
