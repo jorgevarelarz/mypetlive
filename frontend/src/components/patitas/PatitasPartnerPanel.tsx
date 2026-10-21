@@ -9,7 +9,7 @@ import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus }
 import { getPartnerMetrics } from '../../api/metrics';
 import PatitasHistory from './PatitasHistory';
 import { MPL, MPL_FONT_DISPLAY, MPL_FONT_MONO } from '../../styles/mypetlive';
-import { openPaymentPage } from '../../utils/native';
+import { openPaymentPage, webUrl } from '../../utils/native';
 import { SALE_MAX_EUR, formatEur } from '../../utils/limits';
 
 // Carga diferida: html5-qrcode (zxing) es pesado y solo lo usan los partners al escanear.
@@ -261,7 +261,7 @@ function PosIntegration() {
 
   const generate = () => create({ label: label.trim() || undefined, mode: testMode ? 'test' : 'live' });
 
-  const guideUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://mypetlive.es'}/developers/tpv`;
+  const guideUrl = webUrl('/developers/tpv');
   const mailto = () => {
     const subject = encodeURIComponent('Conectar nuestro TPV con MyPetLive');
     const body = encodeURIComponent(

@@ -24,6 +24,7 @@ import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
+import { shareLink, webUrl } from '../../utils/native';
 
 // Lo que la familia puede apuntar. 'visit' se queda fuera a propósito: una
 // visita al veterinario la registra la clínica, con su tratamiento.
@@ -254,21 +255,13 @@ export default function PetPage() {
 
   const handleSharePassport = async () => {
     if (!petCode) return;
-    const url = `${window.location.origin}/p/${encodeURIComponent(petCode)}`;
-    const shareData = {
+    const ok = await shareLink({
       title: `Pasaporte de ${featuredAnimal?.name || 'mi mascota'}`,
       text: `Conoce el pasaporte digital de ${featuredAnimal?.name || 'mi mascota'} (${petCode}) en MyPetLive`,
-      url,
-    };
-    try {
-      if (navigator.share) await navigator.share(shareData);
-      else {
-        await navigator.clipboard.writeText(url);
-        toast.success('Enlace del pasaporte copiado');
-      }
-    } catch (error: any) {
-      if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
-    }
+      path: `/p/${encodeURIComponent(petCode)}`,
+      onCopied: () => toast.success('Enlace del pasaporte copiado'),
+    });
+    if (!ok) toast.error('No se pudo compartir');
   };
 
   // El cuidado diario (marcas, detalle, resumen semanal) vive en DailyCareCard;
@@ -842,7 +835,7 @@ export default function PetPage() {
           <h2 className="text-lg font-semibold">La chapa de {featuredAnimal.name}</h2>
           <div className="flex flex-wrap items-start gap-4">
             <div style={{ background: '#FFFFFF', border: '1px solid #E7E1D5', borderRadius: 12, padding: 8 }}>
-              <QRCodeSVG value={`${window.location.origin}/p/${encodeURIComponent(petCodeActual)}`} size={104} bgColor="#ffffff" fgColor="#2E3A2C" />
+              <QRCodeSVG value={webUrl(`/p/${encodeURIComponent(petCodeActual)}`)} size={104} bgColor="#ffffff" fgColor="#2E3A2C" />
             </div>
             <div style={{ minWidth: 220, flex: 1 }}>
               <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>

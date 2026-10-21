@@ -8,6 +8,7 @@ import { offersForAnimal } from '../../api/offers';
 import { usePageMeta } from '../../utils/usePageMeta';
 import BackButton from '../../components/BackButton';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, speciesLabel, sizeLabel, sexLabel } from '../../styles/mypetlive';
+import { webUrl } from '../../utils/native';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 
@@ -25,7 +26,9 @@ export default function AnimalPassport() {
     image: p?.images?.[0],
   });
 
-  const passportUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Siempre la dirección pública: en la app window.location es capacitor://localhost
+  // y un QR con eso no abre nada al escanearlo.
+  const passportUrl = webUrl(`/p/${encodeURIComponent(normalized)}`);
   const offers = offersQ.data?.items || [];
 
   return (

@@ -13,6 +13,7 @@ import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, spe
 import PublicHeader from '../../components/PublicHeader';
 import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
 import { usePageMeta } from '../../utils/usePageMeta';
+import { shareLink } from '../../utils/native';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -124,20 +125,13 @@ export default function AnimalDetail() {
   };
 
   const handleShareClick = async () => {
-    const shareData = {
+    const ok = await shareLink({
       title: `${data?.name || 'Compañero'} en adopción`,
       text: `Conoce a ${data?.name || 'este compañero'} en MyPetLive`,
-      url: window.location.href,
-    };
-    try {
-      if (navigator.share) await navigator.share(shareData);
-      else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success('Enlace copiado');
-      }
-    } catch (error: any) {
-      if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
-    }
+      path: `/animals/${id}`,
+      onCopied: () => toast.success('Enlace copiado'),
+    });
+    if (!ok) toast.error('No se pudo compartir');
   };
 
   const adoptionMutation = useMutation({
