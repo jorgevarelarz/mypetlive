@@ -359,3 +359,20 @@ export async function searchPetProducts(q: string, kind: 'food' | 'litter', spec
   const { data } = await client.get('/api/catalog/pet-products', { params: { q, kind, species } });
   return (data?.items || []) as Array<{ name: string; brand: string | null }>;
 }
+
+/** Producto por código de barras (lector). Null si nadie lo conoce todavía. */
+export async function lookupBarcode(code: string) {
+  try {
+    const { data } = await client.get(`/api/catalog/pet-products/barcode/${encodeURIComponent(code)}`);
+    return data as { name: string; kind: 'food' | 'litter'; brand: string | null };
+  } catch (error: any) {
+    if (error?.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Enseña al catálogo un código que no conocía, con el nombre que ha escrito la persona. */
+export async function teachBarcode(code: string, name: string, kind: 'food' | 'litter', species?: string) {
+  const { data } = await client.post(`/api/catalog/pet-products/barcode/${encodeURIComponent(code)}`, { name, kind, species });
+  return data as { name: string; kind: 'food' | 'litter' };
+}

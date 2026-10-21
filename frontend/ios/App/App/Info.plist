@@ -58,5 +58,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>MyPetLive usa la cámara para hacer fotos de tu mascota y escanear el código de barras de su comida o su arena.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyPetLive usa tus fotos para que elijas la foto de tu mascota.</string>
 </dict>
 </plist>

@@ -13,6 +13,8 @@ import {
 } from '../../api/animals';
 import SupplyList from './SupplyList';
 import ProductSuggestions from './ProductSuggestions';
+import ScanButton from './ScanButton';
+import { teachBarcode } from '../../api/animals';
 import { describeSupply } from '../../utils/supplies';
 import { usesLitter, usesWalks, walkKindLabel } from '../../styles/mypetlive';
 import WalkSheet, { type WalkDraft } from './WalkSheet';
@@ -70,6 +72,8 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
   const [foods, setFoods] = React.useState<string[]>([]);
   const [litter, setLitter] = React.useState('');
   const [custom, setCustom] = React.useState('');
+  // Código escaneado que nadie conocía: con el nombre que escriba se aprende.
+  const [pendingCode, setPendingCode] = React.useState<string | null>(null);
 
   const showLitter = usesLitter(species);
   const showWalk = usesWalks(species);
@@ -79,6 +83,7 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
   const lastOf = (type: CareEntry['type']) => items.find(e => e.type === type);
 
   const closeSheet = () => {
+    setPendingCode(null);
     setSheet(null);
     setFoods([]);
     setLitter('');
@@ -124,6 +129,10 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
   const addCustom = () => {
     const value = custom.trim();
     if (!value) return;
+    if (pendingCode) {
+      void teachBarcode(pendingCode, value, sheet === 'litter' ? 'litter' : 'food', species).catch(() => undefined);
+      setPendingCode(null);
+    }
     if (sheet === 'feed') toggleFood(value);
     else setLitter(value);
     setCustom('');
@@ -231,6 +240,15 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
                   disabled={foods.length >= 2}
                 />
                 {foods.length < 2 && (
+                  <ScanRow
+                    pending={!!pendingCode}
+                    onResult={r => {
+                      if (r.name) { toggleFood(r.name); setPendingCode(null); }
+                      else setPendingCode(r.code);
+                    }}
+                  />
+                )}
+                {foods.length < 2 && (
                   <ProductSuggestions
                     q={custom}
                     kind="food"
@@ -269,6 +287,13 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
                   value={custom}
                   onChange={setCustom}
                   onAdd={addCustom}
+                />
+                <ScanRow
+                  pending={!!pendingCode}
+                  onResult={r => {
+                    if (r.name) { setLitter(r.name); setPendingCode(null); }
+                    else setPendingCode(r.code);
+                  }}
                 />
                 <ProductSuggestions
                   q={custom}
@@ -409,3 +434,18 @@ const modal: React.CSSProperties = {
   background: '#fff', borderRadius: 12, padding: 20, width: 'min(460px, 96vw)',
   maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(15,23,42,0.25)',
 };
+
+// Escanear el paquete. Si nadie conocía el código, se pide escribir el nombre
+// una vez: con «Añadir» queda aprendido para todos.
+function ScanRow({ pending, onResult }: { pending: boolean; onResult: React.ComponentProps<typeof ScanButton>['onResult'] }) {
+  return (
+    <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+      <ScanButton onResult={onResult} />
+      {pending && (
+        <span className="text-xs" style={{ color: '#8F3827' }}>
+          No conocemos ese producto: escribe su nombre arriba y pulsa Añadir.
+        </span>
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,7 @@
 import React from 'react';
 import ProductSuggestions from './ProductSuggestions';
+import ScanButton from './ScanButton';
+import { teachBarcode } from '../../api/animals';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { upsertAnimalSupply, type CareSupply, type SupplyUnit } from '../../api/animals';
@@ -176,6 +178,8 @@ function SupplyForm({
 }) {
   const [kind, setKind] = React.useState<Kind>(initialKind);
   const [name, setName] = React.useState(supply?.name || '');
+  // Código escaneado sin nombre conocido: se enseña al guardar con el nombre escrito.
+  const [pendingCode, setPendingCode] = React.useState<string | null>(null);
   // El formulario habla en la unidad grande, que es la de la etiqueta del saco;
   // la ración se escribe en la pequeña, que es la de la báscula de cocina.
   const units = kind === 'food' ? FOOD_UNITS : LITTER_UNITS;
@@ -232,6 +236,19 @@ function SupplyForm({
             style={{ borderRadius: 8, borderColor: '#D7D0C2', marginTop: 4 }}
           />
         </label>
+        {!supply && (
+          <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+            <ScanButton
+              onResult={r => {
+                if (r.name) { setName(r.name); setPendingCode(null); }
+                else setPendingCode(r.code);
+              }}
+            />
+            {pendingCode && (
+              <span className="text-xs" style={{ color: '#8F3827' }}>No conocemos ese producto: escribe su nombre.</span>
+            )}
+          </div>
+        )}
         {!supply && name.trim().length >= 2 && (
           <ProductSuggestions q={name} kind={kind} species={species} onPick={setName} />
         )}
@@ -273,7 +290,8 @@ function SupplyForm({
             <button
               type="button"
               disabled={busy || !name.trim()}
-              onClick={() =>
+              onClick={() => {
+                if (pendingCode) void teachBarcode(pendingCode, name.trim(), kind, species).catch(() => undefined);
                 onSave({
                   kind,
                   name: name.trim(),
@@ -281,8 +299,8 @@ function SupplyForm({
                   packUnit,
                   perUse: num(perUse),
                   perUseUnit,
-                })
-              }
+                });
+              }}
               style={{ ...btnPrimary, opacity: busy || !name.trim() ? 0.5 : 1 }}
             >
               {busy ? 'Guardando…' : 'Guardar'}
