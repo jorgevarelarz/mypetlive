@@ -12,7 +12,8 @@ import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
-import { getMyCode } from '../api/patitas';
+import { getMyCode, getMyPatitas } from '../api/patitas';
+import { useQuery } from '@tanstack/react-query';
 import { BrandWordmark, MPL, PawMark } from '../styles/mypetlive';
 import { isNativeApp } from '../utils/native';
 
@@ -111,6 +112,13 @@ function Header() {
     }
     return () => {};
   }, [user?._id, showInbox]);
+  const { data: patitasData } = useQuery({
+    queryKey: ['patitas-me'],
+    queryFn: getMyPatitas,
+    enabled: user?.role === 'tenant',
+    staleTime: 60_000,
+  });
+  const patitas = patitasData?.available;
   const roleHome = user?.role === 'tenant' ? '/home'
     : user?.role === 'landlord' ? '/landlord'
     : user?.role === 'pro' ? '/pro'
@@ -153,6 +161,18 @@ function Header() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2 text-sm">
+          {/* Saldo de Patitas a la vista; el detalle está en el perfil. */}
+          {user?.role === 'tenant' && (
+            <Link
+              to="/profile"
+              aria-label={`${patitas ?? 0} Patitas disponibles`}
+              title="Tus Patitas"
+              style={{ height: 40, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 12, border: `1px solid ${MPL.border}`, background: MPL.gold100, color: MPL.goldDark, fontWeight: 800, fontSize: 15, textDecoration: 'none', fontVariantNumeric: 'tabular-nums' }}
+            >
+              <PawMark size={18} color={MPL.gold} />
+              {patitas === undefined ? '…' : patitas.toLocaleString('es-ES')}
+            </Link>
+          )}
           {user && (
             <button
               className="md:hidden inline-flex items-center justify-center"
