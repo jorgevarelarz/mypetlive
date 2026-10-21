@@ -207,8 +207,10 @@ export default function Home() {
               <ActionButton variant="primary" onClick={() => nav('/animals')}>
                 Ver animales en adopción
               </ActionButton>
+              {/* Sin mascota registrada, /pet abre el alta: el botón lo dice. Mientras
+                  carga o si falla la consulta se queda en «Ver mi mascota». */}
               <ActionButton variant="ghost" onClick={() => nav('/pet')}>
-                Ver mi mascota
+                {!isLoading && !isError && !featuredAnimal ? 'Registrar mi mascota' : 'Ver mi mascota'}
               </ActionButton>
             </div>
           </div>
