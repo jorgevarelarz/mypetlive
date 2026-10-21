@@ -56,3 +56,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 }
+
+// Controlador de la vista web. Vive aquí y no en su propio fichero para no
+// tener que tocar el proyecto de Xcode. Activa el gesto de deslizar desde el
+// borde izquierdo para volver: la app no tiene botón «atrás» de navegador y
+// sin esto había pantallas (el login) de las que no se podía salir.
+class MainViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        webView?.allowsBackForwardNavigationGestures = true
+    }
+}
