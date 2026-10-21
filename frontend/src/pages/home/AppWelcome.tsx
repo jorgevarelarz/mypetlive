@@ -5,7 +5,8 @@ import { ChevronRight, HeartHandshake, PawPrint } from 'lucide-react';
 import { searchAnimals } from '../../api/animals';
 import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
-import { BrandWordmark, MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, speciesLabel } from '../../styles/mypetlive';
+import PublicHeader from '../../components/PublicHeader';
+import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, speciesLabel } from '../../styles/mypetlive';
 
 // Inicio de la app (iOS/Android) para quien no tiene sesión. La portada web
 // (Landing) es una página de marketing: cabecera con menú, alta de
@@ -45,12 +46,7 @@ export default function AppWelcome() {
 
   return (
     <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', paddingBottom: 96 }}>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-        <BrandWordmark compact />
-        <Link to="/login" style={{ fontSize: 15, fontWeight: 700, color: MPL.teal, textDecoration: 'none', padding: '8px 4px' }}>
-          Entrar
-        </Link>
-      </header>
+      <PublicHeader />
 
       <section style={{ padding: '20px 20px 8px' }}>
         <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, lineHeight: 1.05, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 10px' }}>

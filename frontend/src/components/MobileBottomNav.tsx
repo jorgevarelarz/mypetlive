@@ -26,7 +26,7 @@ export default function MobileBottomNav() {
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 2,
-        padding: '10px 18px calc(12px + env(safe-area-inset-bottom))',
+        padding: '12px 12px calc(14px + env(safe-area-inset-bottom))',
         background: '#fff',
         borderTop: `1px solid ${MPL.border}`,
         boxShadow: '0 -12px 30px -24px rgba(31,55,40,.35)',
@@ -50,15 +50,15 @@ export default function MobileBottomNav() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 3,
+              gap: 5,
               color: isActive ? MPL.teal : MPL.faint,
               textDecoration: 'none',
-              fontSize: 10,
+              fontSize: 11.5,
               lineHeight: 1,
               fontWeight: isActive ? 800 : 700,
             })}
           >
-            <Icon size={20} strokeWidth={2.2} />
+            <Icon size={25} strokeWidth={2.1} />
             <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
           </NavLink>
         );

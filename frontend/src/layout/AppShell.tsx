@@ -13,7 +13,8 @@ import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { listConversations } from '../api/chat';
 import { getMyCode } from '../api/patitas';
-import { MPL, PawMark } from '../styles/mypetlive';
+import { BrandWordmark, MPL, PawMark } from '../styles/mypetlive';
+import { isNativeApp } from '../utils/native';
 
 type IconType = React.ComponentType<{ size?: number; strokeWidth?: number }>;
 const iconFor: Record<string, IconType> = {
@@ -125,19 +126,9 @@ function Header() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3"
         style={{ color: '#3F4A3C' }}
       >
-        {/* Hamburguesa lateral en móviles */}
-        <button
-          className="md:hidden -ml-1 inline-flex items-center justify-center"
-          style={{ padding: 8, borderRadius: 10 }}
-          onClick={() => setMenuOpen(true)}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-menu"
-          aria-label="Abrir menú"
-        >
-          <Menu size={22} strokeWidth={2.2} />
-        </button>
-
-        <Link to={roleHome} aria-label="MyPetLive — inicio"><Brand size={19} /></Link>
+        {/* Misma marca y disposición que PublicHeader: al pasar de la
+            portada o el catálogo a cupones/perfil la cabecera no cambia. */}
+        <Link to={roleHome} aria-label="MyPetLive — inicio" style={{ textDecoration: 'none' }}><BrandWordmark /></Link>
 
         <nav className="hidden md:flex items-center gap-2 text-sm">
           {generalItems.map((item: NavItem) => {
@@ -174,10 +165,10 @@ function Header() {
           )}
           {!user ? (
             <>
-              <button onClick={() => openAuth({ mode: 'login' })} className="px-3 py-1.5 rounded">Entrar</button>
+              <button onClick={() => openAuth({ mode: 'login' })} style={{ background: 'none', border: 'none', padding: '8px 4px', font: 'inherit', fontSize: 14.5, fontWeight: 600, color: MPL.ink, cursor: 'pointer' }}>Entrar</button>
               <button
                 onClick={() => openAuth({ mode: 'register' })}
-                className="px-3 py-1.5 rounded font-medium"
+                className="hidden md:inline-flex px-3 py-1.5 rounded font-medium"
                 style={{ background: '#6A7B4F', color: '#fff' }}
               >
                 Crear cuenta
@@ -186,9 +177,21 @@ function Header() {
           ) : (
             <>
               <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {labelFor[user.role] || user.role}</span>
-              <button onClick={logout} className="px-3 py-1.5 rounded">Salir</button>
+              <button onClick={logout} className="hidden md:inline-flex px-3 py-1.5 rounded">Salir</button>
             </>
           )}
+          {/* Menú lateral en móviles, a la derecha como en PublicHeader. En la
+              app y sin sesión sobra: la barra inferior ya lleva a todo. */}
+          {(user || !isNativeApp()) && <button
+            className="md:hidden inline-flex items-center justify-center"
+            style={{ width: 40, height: 40, padding: 0, flexShrink: 0, border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+            aria-label="Abrir menú"
+          >
+            <Menu size={22} strokeWidth={2.2} />
+          </button>}
         </div>
       </div>
 
@@ -436,7 +439,7 @@ export default function AppShell() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
           <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2 pb-24 md:pb-0">
-            <Breadcrumbs />
+            <div className="mpl-crumbs"><Breadcrumbs /></div>
             <Outlet />
           </main>
         </div>

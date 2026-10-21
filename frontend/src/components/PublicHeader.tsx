@@ -4,11 +4,15 @@ import { LogOut, UserRound, Menu, X } from 'lucide-react';
 import { useAuthModal } from '../context/AuthModalContext';
 import { useAuth } from '../context/AuthContext';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
+import { isNativeApp } from '../utils/native';
 
 export default function PublicHeader() {
   const { openAuth } = useAuthModal();
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  // En la app el menú solo llevaba a secciones de la portada web (cómo
+  // funciona, impacto) y la navegación ya está en la barra inferior.
+  const native = isNativeApp();
   const location = useLocation();
   useEffect(() => { setMenuOpen(false); }, [location.key]);
   const panelPath = user?.role === 'tenant'
@@ -44,7 +48,7 @@ export default function PublicHeader() {
           .public-header-menu-button{display:inline-flex!important;}
           .public-header-mobile-menu{display:flex;flex-wrap:wrap;gap:16px;padding:16px 20px;font-family:${MPL_FONT_BODY};background:${MPL.bg};border-top:1px solid ${MPL.border};}
           .public-header-mobile-menu a{color:${MPL.tealDark};font-weight:700;text-decoration:none;padding:8px;}
-          .public-header-topbar{width:100%!important;padding:14px 16px!important;gap:8px;}
+          .public-header-topbar{width:100%!important;height:56px;padding:0 16px!important;gap:8px;}
           .public-header-cta{display:none!important;}
         }
         @media (max-width: 520px){
@@ -131,9 +135,9 @@ export default function PublicHeader() {
               </Link>
             </>
           )}
-          <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 44, height: 44, padding: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
+          {!native && <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 40, height: 40, padding: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
             {menuOpen ? <X size={22} style={{ flexShrink: 0 }} /> : <Menu size={22} style={{ flexShrink: 0 }} />}
-          </button>
+          </button>}
         </div>
       </div>
       {menuOpen && <nav id="public-mobile-menu" className="public-header-mobile-menu" aria-label="Menú principal">

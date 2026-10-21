@@ -85,7 +85,7 @@ export default function Favorites() {
       <main className="favorites-main" style={{ maxWidth: 1180, margin: '0 auto', padding: '42px 32px 72px' }}>
         <div style={{ marginBottom: 28, display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
           <div>
-          <div style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+          <div className="mpl-crumbs" style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
             <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>Inicio</Link> / Favoritos
           </div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, lineHeight: 1.1, margin: '0 0 8px', fontWeight: 800 }}>Tus favoritos</h1>

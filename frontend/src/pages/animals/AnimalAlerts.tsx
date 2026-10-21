@@ -63,7 +63,7 @@ export default function AnimalAlerts() {
     <div style={{ minHeight: '100vh', background: MPL.bg, color: MPL.ink, fontFamily: MPL_FONT_BODY }}>
       <PublicHeader />
       <main style={{ maxWidth: 980, margin: '0 auto', padding: '42px 32px 100px' }}>
-        <div style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+        <div className="mpl-crumbs" style={{ color: MPL.faint, fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
           <Link to="/me/favorites" style={{ color: 'inherit', textDecoration: 'none' }}>Favoritos</Link> / Alertas
         </div>
         <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, margin: '0 0 8px' }}>Alertas de compañeros</h1>

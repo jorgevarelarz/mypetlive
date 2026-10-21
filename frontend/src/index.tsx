@@ -10,6 +10,10 @@ import axios from "axios";
 import api from "./api/client";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import { isNativeApp } from './utils/native';
+
+// Marca la app para los estilos que solo aplican dentro de ella (.native-app).
+if (isNativeApp()) document.documentElement.classList.add('native-app');
 
 // api client centralizado configura baseURL, Authorization y toasts
 axios.defaults.baseURL = (api.defaults && api.defaults.baseURL) || '';

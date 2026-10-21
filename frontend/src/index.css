@@ -367,3 +367,6 @@ form p[style] {
 @media (max-width: 720px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* Migas de pan: en la app no aportan (hay barra inferior y botón Volver). */
+.native-app .mpl-crumbs { display: none !important; }

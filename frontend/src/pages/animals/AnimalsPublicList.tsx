@@ -206,7 +206,7 @@ export default function AnimalsPublicList() {
 
       <main style={{ width: '100%', maxWidth: 1180, margin: '0 auto', boxSizing: 'border-box' }}>
         <header className="catalog-hero" style={{ width: '100%', boxSizing: 'border-box', padding: '42px 32px 28px' }}>
-          <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 8 }}>
+          <div className="mpl-crumbs" style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 8 }}>
             <Link to="/" className="catalog-link">Inicio</Link> / Compañeros
           </div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, fontWeight: 800, margin: '0 0 6px' }}>

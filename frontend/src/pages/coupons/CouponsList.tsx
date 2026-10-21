@@ -2,7 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Copy, Gift, Scissors, Shield, ShoppingBag, Star, Stethoscope, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { listCoupons, sponsorCoupon, Coupon } from '../../api/coupons';
+import { getMyCode } from '../../api/patitas';
+import { useAuthModal } from '../../context/AuthModalContext';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
@@ -26,6 +29,7 @@ function categoryLabel(type: string) {
 
 export default function CouponsList() {
   const { user } = useAuth();
+  const { openAuth } = useAuthModal();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: listCoupons });
 
@@ -70,8 +74,19 @@ export default function CouponsList() {
     setSelectorOpen(false);
   };
 
-  const copyCode = async (coupon: Coupon) => {
-    const code = coupon.targetAnimalCode || coupon._id.slice(-6).toUpperCase();
+  // El cupón se canjea en caja: la tienda identifica al cliente por su código
+  // personal y aplica el cupón. Sin sesión no hay a quién darle las Patitas,
+  // así que antes de enseñar nada se pide entrar.
+  const openCoupon = (coupon: Coupon) => {
+    if (!user) {
+      openAuth({ mode: 'login', message: 'Entra para canjear el cupón y sumar Patitas para tu protectora.' });
+      return;
+    }
+    setSelected(coupon);
+  };
+  const myCodeQ = useQuery({ queryKey: ['patitas-my-code'], queryFn: getMyCode, enabled: Boolean(selected && user), staleTime: 60_000 });
+
+  const copyCode = async (code: string) => {
     try {
       await navigator.clipboard?.writeText(code);
     } catch {
@@ -92,7 +107,7 @@ export default function CouponsList() {
       `}</style>
 
       <main className="coupon-wrap">
-        <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 14 }}>Inicio / Mi panel / Cupones</div>
+        <div className="mpl-crumbs" style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 14 }}>Inicio / Mi panel / Cupones</div>
         <div className="coupon-tabs" style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${MPL.border}`, marginBottom: 30, overflowX: 'auto' }}>
           {['Resumen', 'Mis solicitudes', 'Favoritos', 'Mis mascotas', 'Cupones', 'Patitas'].map(tab => (
             <span key={tab} style={{ fontSize: 14.5, fontWeight: tab === 'Cupones' ? 800 : 700, color: tab === 'Cupones' ? MPL.teal : MPL.muted, padding: '12px 16px', borderBottom: tab === 'Cupones' ? `2.5px solid ${MPL.teal}` : '2.5px solid transparent', whiteSpace: 'nowrap' }}>
@@ -150,7 +165,7 @@ export default function CouponsList() {
                 {activeCoupons[0].description || 'Oferta especial de bienvenida'} · genera <strong style={{ color: MPL.goldDark }}>+{activeCoupons[0].bonusPatitas || 40} Patitas</strong>
               </div>
             </div>
-            <button type="button" onClick={() => setSelected(activeCoupons[0])} style={{ background: MPL.coral, color: '#fff', fontSize: 15, fontWeight: 800, padding: '14px 26px', border: 'none', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', flex: 'none' }}>
+            <button type="button" onClick={() => openCoupon(activeCoupons[0])} style={{ background: MPL.coral, color: '#fff', fontSize: 15, fontWeight: 800, padding: '14px 26px', border: 'none', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', flex: 'none' }}>
               Canjear
             </button>
           </section>
@@ -199,7 +214,7 @@ export default function CouponsList() {
                           </button>
                         )
                       )}
-                      <button type="button" onClick={() => setSelected(coupon)} style={{ background: MPL.teal, color: '#fff', fontSize: 13.5, fontWeight: 800, padding: '10px 18px', border: 'none', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <button type="button" onClick={() => openCoupon(coupon)} style={{ background: MPL.teal, color: '#fff', fontSize: 13.5, fontWeight: 800, padding: '10px 18px', border: 'none', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
                         Canjear
                       </button>
                     </div>
@@ -237,15 +252,28 @@ export default function CouponsList() {
             </div>
             <div style={{ padding: '24px 28px 28px', textAlign: 'center' }}>
               <p style={{ fontSize: 13.5, color: MPL.muted, margin: '0 0 18px', lineHeight: 1.5 }}>{selected.description}</p>
-              <div style={{ width: 172, height: 172, margin: '0 auto 18px', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 16, background: '#fff' }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: 6, backgroundImage: `repeating-linear-gradient(0deg,${MPL.ink} 0 4px,transparent 4px 8px),repeating-linear-gradient(90deg,${MPL.ink} 0 4px,transparent 4px 8px)`, backgroundSize: '8px 8px' }} />
+              {/* QR y código personales: es lo que lee la tienda en caja. Antes
+                  aquí había un dibujo con forma de QR que no servía para nada. */}
+              <div style={{ width: 172, height: 172, margin: '0 auto 14px', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 14, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {myCodeQ.data ? (
+                  <QRCodeSVG value={myCodeQ.data.token} size={142} bgColor="#ffffff" fgColor={MPL.ink} />
+                ) : (
+                  <span style={{ fontSize: 13, color: MPL.muted }}>{myCodeQ.isError ? 'No se pudo cargar tu código' : 'Cargando tu código…'}</span>
+                )}
               </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: MPL.bg, border: '1.5px dashed #C7C1B1', borderRadius: 12, padding: '12px 18px', marginBottom: 18 }}>
-                <span style={{ fontFamily: MPL_FONT_MONO, fontWeight: 800, fontSize: 16, color: MPL.ink }}>{selected.targetAnimalCode || selected._id.slice(-6).toUpperCase()}</span>
-                <button type="button" onClick={() => copyCode(selected)} style={{ border: 0, background: 'none', color: MPL.teal, cursor: 'pointer', padding: 0, display: 'inline-flex' }} aria-label="Copiar código">
-                  <Copy size={15} />
-                </button>
-              </div>
+              {myCodeQ.data && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: MPL.bg, border: '1.5px dashed #C7C1B1', borderRadius: 12, padding: '12px 18px', marginBottom: 10 }}>
+                  <span style={{ fontFamily: MPL_FONT_MONO, fontWeight: 800, fontSize: 18, letterSpacing: 2, color: MPL.ink }}>{myCodeQ.data.code}</span>
+                  <button type="button" onClick={() => copyCode(myCodeQ.data!.code)} style={{ border: 0, background: 'none', color: MPL.teal, cursor: 'pointer', padding: 0, display: 'inline-flex' }} aria-label="Copiar código">
+                    <Copy size={15} />
+                  </button>
+                </div>
+              )}
+              <p style={{ fontSize: 13, color: MPL.muted, margin: '0 0 6px' }}>Enséñalo en caja para aplicar el cupón.</p>
+              {selected.targetAnimalCode && (
+                <p style={{ fontSize: 13, color: MPL.muted, margin: '0 0 6px' }}>Es para tu mascota <strong style={{ fontFamily: MPL_FONT_MONO, color: MPL.ink }}>{selected.targetAnimalCode}</strong>.</p>
+              )}
+              <div style={{ height: 12 }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: MPL.gold100, borderRadius: 12, padding: 11 }}>
                 <PawMark size={18} color={MPL.gold} />
                 <span style={{ fontSize: 13, fontWeight: 800, color: MPL.goldDark }}>Generará +{selected.bonusPatitas || 40} Patitas</span>
