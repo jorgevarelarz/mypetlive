@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import { toAbsoluteUrl } from '../../utils/media';
-import Brand from '../../components/Brand';
 import { moodLabel, speciesLabel, usesLitter, usesWalks } from '../../styles/mypetlive';
 import WalkSheet, { type WalkDraft } from '../../components/pet/WalkSheet';
 
@@ -178,20 +177,8 @@ export default function Home() {
           }}
         >
           <div className="grid gap-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Brand size={22} />
-              <span
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold"
-                style={{ background: '#E2EEEC', color: colors.teal }}
-              >
-                {paw} Adopción responsable
-              </span>
-            </div>
-
+            {/* Sin logo ni etiquetas: la cabecera ya lleva la marca. */}
             <div className="grid gap-4">
-              <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: colors.soft }}>
-                Home del adoptante
-              </p>
               <h1
                 className="max-w-3xl text-4xl font-extrabold leading-none sm:text-5xl lg:text-6xl"
                 style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}

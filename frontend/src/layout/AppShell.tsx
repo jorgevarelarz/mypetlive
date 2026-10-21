@@ -439,7 +439,7 @@ export default function AppShell() {
       ) : (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
-          <main className="flex-1 min-w-0 h-full overflow-y-auto pr-2 pb-24 md:pb-0">
+          <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pb-24 md:pb-0">
             <div className="mpl-crumbs"><Breadcrumbs /></div>
             <Outlet />
           </main>
