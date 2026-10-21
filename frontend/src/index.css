@@ -408,3 +408,13 @@ html.native-app #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolli
 }
 .pet-form input[type='date'] { -webkit-appearance: none; appearance: none; display: block; min-height: 42px; text-align: left; }
 .pet-form input[type='file'] { max-width: 100%; }
+
+/* Franjas de la barra de estado y de la barra de inicio en el iPhone: la app
+   ocupa toda la pantalla (contentInset 'never' + viewport-fit=cover) y cada
+   cabecera se alarga por arriba con su propio color (.safe-top). Abajo, el menú
+   ya se alarga con env(safe-area-inset-bottom). Sin esto iOS dejaba esas dos
+   zonas fuera de la web, en negro. */
+html.native-app, .native-app body { background: #F6F3EC; }
+.native-app .safe-top { padding-top: env(safe-area-inset-top, 0px) !important; }
+.native-app #mobile-menu { padding-top: env(safe-area-inset-top, 0px); }
+.native-app .app-shell-body { height: calc(100vh - 56px - env(safe-area-inset-top, 0px)) !important; }

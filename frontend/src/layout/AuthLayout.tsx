@@ -5,7 +5,7 @@ import BackButton from '../components/BackButton';
 
 export default function AuthLayout() {
   return (
-    <div className="auth-shell">
+    <div className="auth-shell safe-top">
       <BackButton className="auth-back" />
       <div className="auth-card">
         <div className="auth-logo" style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>

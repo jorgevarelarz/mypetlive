@@ -198,3 +198,18 @@ export async function revokePosKey(keyId: string) {
   const { data } = await client.delete(`/api/partners/me/pos-keys/${keyId}`);
   return data as { ok: boolean };
 }
+
+/** «Qué se ha hecho con tus Patitas» (pantalla de Patitas). Ver getMyPatitasImpact del servidor. */
+export type PatitasImpact = {
+  patitaValueEur: number;
+  earned: Array<{ source: string; amount: number; count: number }>;
+  shelters: Array<{
+    id: string; name: string; donated: number; donatedEur: number; auto: number; last: string;
+    uses: Array<{ concept: string; amount: number; valueEur: number }>;
+  }>;
+};
+
+export async function getMyPatitasImpact() {
+  const { data } = await client.get('/api/patitas/me/impact');
+  return data as PatitasImpact;
+}

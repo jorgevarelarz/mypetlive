@@ -33,7 +33,7 @@ export default function AnimalPassport() {
 
   return (
     <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
-      <header style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
+      <header className="safe-top" style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
         <div style={{ maxWidth: 920, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}>
           <BackButton style={{ color: MPL.ink, marginLeft: -6 }} />
           <Link to="/" style={{ textDecoration: 'none', color: MPL.ink, display: 'flex', alignItems: 'center', gap: 9 }}>

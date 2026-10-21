@@ -151,6 +151,61 @@ export async function getMyPatitasHistory(req: Request, res: Response) {
   res.json({ items: await fetchHistory(me, { type: type ? String(type) : undefined, limit: Number(limit) || 50 }) });
 }
 
+// GET /api/patitas/me/impact — «Qué se ha hecho con tus Patitas» en la
+// pantalla de Patitas: de dónde salieron, a qué protectoras fueron y en qué
+// las ha usado cada una. Lo último es lo que ha canjeado la protectora en
+// total: una vez donadas, las Patitas de todos se juntan en su saldo.
+export async function getMyPatitasImpact(req: Request, res: Response) {
+  const me = actorId(req);
+  if (!me) return res.status(401).json({ error: 'unauthorized' });
+  const meId = new Types.ObjectId(me);
+
+  const [earnedBySource, donatedByShelter] = await Promise.all([
+    PatitaTxn.aggregate([
+      { $match: { userId: meId, type: 'earn' } },
+      { $group: { _id: '$source', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    PatitaTxn.aggregate([
+      { $match: { userId: meId, type: 'donate', shelterId: { $ne: null } } },
+      {
+        $group: {
+          _id: '$shelterId',
+          amount: { $sum: '$amount' },
+          auto: { $sum: { $cond: [{ $eq: ['$concept', 'Auto-donación'] }, '$amount', 0] } },
+          last: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { amount: -1 } },
+    ]),
+  ]);
+
+  const shelterIds = donatedByShelter.map((d: any) => d._id);
+  const [shelters, uses] = await Promise.all([
+    User.find({ _id: { $in: shelterIds } }).select('name').lean(),
+    PatitaTxn.aggregate([
+      { $match: { type: 'redeem', shelterId: { $in: shelterIds } } },
+      { $group: { _id: { shelter: '$shelterId', concept: '$concept' }, amount: { $sum: '$amount' }, valueEur: { $sum: '$valueEur' } } },
+    ]),
+  ]);
+  const nameOf = new Map(shelters.map((u: any) => [String(u._id), u.name]));
+
+  res.json({
+    patitaValueEur: PATITA_VALUE_EUR,
+    earned: earnedBySource.map((e: any) => ({ source: e._id || 'otros', amount: e.amount, count: e.count })),
+    shelters: donatedByShelter.map((d: any) => ({
+      id: String(d._id),
+      name: nameOf.get(String(d._id)) || 'Protectora',
+      donated: d.amount,
+      donatedEur: eurFromPatitas(d.amount),
+      auto: d.auto,
+      last: d.last,
+      uses: uses
+        .filter((u: any) => String(u._id.shelter) === String(d._id))
+        .map((u: any) => ({ concept: u._id.concept || 'Canje', amount: u.amount, valueEur: u.valueEur || eurFromPatitas(u.amount) })),
+    })),
+  });
+}
+
 // Donación manual de Patitas de un usuario a una protectora.
 export async function donatePatitas(req: Request, res: Response) {
   const me = actorId(req);

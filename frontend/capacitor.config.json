@@ -3,7 +3,8 @@
   "appName": "MyPetLive",
   "webDir": "build",
   "ios": {
-    "contentInset": "automatic"
+    "contentInset": "never",
+    "backgroundColor": "#F6F3EC"
   },
   "android": {
     "allowMixedContent": false

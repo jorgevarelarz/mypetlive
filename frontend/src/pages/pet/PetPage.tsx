@@ -1042,7 +1042,7 @@ export default function PetPage() {
       )}
 
       {lostOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
+        <div className="safe-top fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
           <div
             role="dialog"
             aria-modal="true"
@@ -1155,7 +1155,7 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
   return createPortal(
     // El overlay hace scroll: en pantallas bajas el formulario no cabe entero y
     // antes los botones Cancelar/Guardar quedaban fuera, sin forma de alcanzarlos.
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
+    <div className="safe-top fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
       <div
         role="dialog"
         aria-modal="true"

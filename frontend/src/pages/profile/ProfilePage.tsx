@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -703,7 +704,13 @@ export default function ProfilePage() {
 
       <section style={{ display: 'grid', gap: 14 }}>
         <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: 0 }}>Patitas 🐾</h2>
-        {role === 'tenant' && <PatitasUserPanel />}
+        {/* Las Patitas tienen pantalla propia (/patitas, desde la cabecera). */}
+        {role === 'tenant' && (
+          <Link to="/patitas" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '16px 18px', borderRadius: 18, border: '1px solid #E5E1D6', background: '#FBEFD4', color: '#A77B1C', fontWeight: 800, textDecoration: 'none' }}>
+            <span>Tus Patitas: saldo, protectora y donaciones</span>
+            <span aria-hidden>→</span>
+          </Link>
+        )}
         {role === 'landlord' && <PatitasShelterPanel />}
         {(role === 'store' || role === 'vet') && <PatitasPartnerPanel />}
       </section>

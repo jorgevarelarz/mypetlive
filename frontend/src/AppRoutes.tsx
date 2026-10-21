@@ -61,6 +61,7 @@ import StoreProductsPage from "./pages/partners/StoreProductsPage";
 import StoreOrdersPage from "./pages/partners/StoreOrdersPage";
 import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
+import PatitasPage from "./pages/patitas/PatitasPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
 import Favorites from "./pages/Favorites";
 import AnimalAlerts from "./pages/animals/AnimalAlerts";
@@ -114,6 +115,7 @@ export default function AppRoutes() {
               <Route path="/mis-pedidos" element={<ProtectedRoute><MyOrdersPage /></ProtectedRoute>} />
 
               <Route path="/home" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><Home /></RoleGuard></ProtectedRoute>} />
+              <Route path="/patitas" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><PatitasPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/pet" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><PetPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/adoptions/mine" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><MyAdoptions /></RoleGuard></ProtectedRoute>} />
               <Route path="/adoptions/:id" element={<ProtectedRoute><AdoptionDetail /></ProtectedRoute>} />

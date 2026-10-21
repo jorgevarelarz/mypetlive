@@ -128,7 +128,7 @@ function Header() {
   return (
     <>
     <header
-      className="sticky top-0 z-20 backdrop-blur"
+      className="sticky top-0 z-20 backdrop-blur safe-top"
       style={{ background: 'rgba(246, 243, 236, 0.95)', borderBottom: '1px solid #E7E1D5' }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3"
@@ -164,7 +164,7 @@ function Header() {
           {/* Saldo de Patitas a la vista; el detalle está en el perfil. */}
           {user?.role === 'tenant' && (
             <Link
-              to="/profile"
+              to="/patitas"
               aria-label={`${patitas ?? 0} Patitas disponibles`}
               title="Tus Patitas"
               style={{ height: 40, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 12, border: `1px solid ${MPL.border}`, background: MPL.gold100, color: MPL.goldDark, fontWeight: 800, fontSize: 15, textDecoration: 'none', fontVariantNumeric: 'tabular-nums' }}
@@ -230,6 +230,7 @@ function Header() {
       {/* Drawer lateral móvil: mismos iconos y filas que el menú de la web (NavRow) */}
       <aside
         id="mobile-menu"
+        // En la app el cajón empieza bajo la barra de estado (ver .safe-top en index.css).
         className="md:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
         style={{
           width: 280,
@@ -457,7 +458,7 @@ export default function AppShell() {
           <LegalLinks />
         </>
       ) : (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
+        <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
           <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pb-24 md:pb-0">
             <div className="mpl-crumbs"><Breadcrumbs /></div>

@@ -27,6 +27,7 @@ export default function PublicHeader() {
 
   return (
     <div
+      className="safe-top"
       onKeyDown={event => { if (event.key === 'Escape') setMenuOpen(false); }}
       style={{
         position: 'sticky',

@@ -8,6 +8,7 @@ import {
   getPatitasBalance,
   getMyPatitas,
   getMyPatitasHistory,
+  getMyPatitasImpact,
   donatePatitas,
   earnVisit,
   getWalletToken,
@@ -41,6 +42,7 @@ router.get(
 // Wallet del usuario/protectora autenticado: saldo + valor € + histórico.
 router.get('/patitas/me', authenticate, asyncHandler(getMyPatitas));
 router.get('/patitas/history', authenticate, asyncHandler(getMyPatitasHistory));
+router.get('/patitas/me/impact', authenticate, asyncHandler(getMyPatitasImpact));
 
 // Usuario dona Patitas a una protectora.
 router.post('/patitas/donate', ...assertRole('tenant', 'adoptante'), asyncHandler(donatePatitas));
