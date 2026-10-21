@@ -22,7 +22,7 @@ const PATHS = [
     tint: MPL.teal100,
     color: MPL.teal,
     title: 'Ya tengo mascota',
-    desc: 'Su ficha con vacunas y desparasitaciones, las comidas y paseos del día, y modo perdido si se escapa.',
+    desc: 'Su ficha, vacunas, cuidados del día y modo perdido.',
   },
   {
     key: 'adoptar',
@@ -31,7 +31,7 @@ const PATHS = [
     tint: MPL.coral100,
     color: MPL.coral,
     title: 'Quiero adoptar',
-    desc: 'Perros y gatos de protectoras verificadas. Puedes mirar sin crear cuenta.',
+    desc: 'Animales de protectoras verificadas, sin crear cuenta.',
   },
 ];
 
@@ -45,14 +45,14 @@ export default function AppWelcome() {
   const pets = (data?.items || []).filter((p: any) => Array.isArray(p.images) && p.images[0]).slice(0, 6);
 
   return (
-    <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', paddingBottom: 96 }}>
+    <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', paddingBottom: 90 }}>
       <PublicHeader />
 
-      <section style={{ padding: '20px 20px 8px' }}>
-        <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, lineHeight: 1.05, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 10px' }}>
+      <section style={{ padding: '16px 20px 4px' }}>
+        <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, lineHeight: 1.05, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 6px' }}>
           ¿Por dónde empezamos?
         </h1>
-        <p style={{ fontSize: 15, lineHeight: 1.5, color: MPL.muted, margin: '0 0 22px' }}>
+        <p style={{ fontSize: 15, lineHeight: 1.45, color: MPL.muted, margin: '0 0 16px' }}>
           Lleva al día los cuidados de tu mascota o encuentra a la que está por llegar.
         </p>
 
@@ -64,7 +64,7 @@ export default function AppWelcome() {
                 key={p.key}
                 to={p.to}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '18px 16px',
+                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
                   background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18,
                   color: MPL.ink, textDecoration: 'none',
                   boxShadow: '0 1px 3px rgba(31,55,40,.05)',
@@ -85,7 +85,7 @@ export default function AppWelcome() {
       </section>
 
       {pets.length > 0 && (
-        <section style={{ padding: '30px 0 0' }}>
+        <section style={{ padding: '22px 0 0' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 20px', marginBottom: 12 }}>
             <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 21, fontWeight: 800, margin: 0 }}>Buscan hogar</h2>
             <Link to="/animals" style={{ fontSize: 14, fontWeight: 700, color: MPL.teal, textDecoration: 'none' }}>Ver todos</Link>
@@ -97,13 +97,13 @@ export default function AppWelcome() {
                 <Link
                   key={p._id || p.id}
                   to={`/animals/${p._id || p.id}`}
-                  style={{ width: 148, minWidth: 148, scrollSnapAlign: 'start', color: MPL.ink, textDecoration: 'none' }}
+                  style={{ width: 132, minWidth: 132, scrollSnapAlign: 'start', color: MPL.ink, textDecoration: 'none' }}
                 >
                   <img
                     src={toAbsoluteUrl(p.images[0])}
                     alt={p.name}
                     loading="lazy"
-                    style={{ display: 'block', width: 148, height: 172, objectFit: 'cover', borderRadius: 16, background: MPL.panel }}
+                    style={{ display: 'block', width: 132, height: 132, objectFit: 'cover', borderRadius: 16, background: MPL.panel }}
                   />
                   <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 17, fontWeight: 800, margin: '8px 0 1px' }}>{p.name}</div>
                   <div style={{ fontSize: 12.5, color: MPL.muted }}>{meta}</div>
@@ -114,14 +114,6 @@ export default function AppWelcome() {
         </section>
       )}
 
-      <p style={{ textAlign: 'center', fontSize: 14, color: MPL.muted, margin: '32px 20px 10px' }}>
-        ¿Ya tienes cuenta? <Link to="/login" style={{ color: MPL.teal, fontWeight: 700, textDecoration: 'none' }}>Entrar</Link>
-      </p>
-      <p style={{ textAlign: 'center', fontSize: 12, color: MPL.faint, margin: 0 }}>
-        <Link to="/legal/privacy" style={{ color: 'inherit' }}>Privacidad</Link>
-        {' · '}
-        <Link to="/legal/terms" style={{ color: 'inherit' }}>Términos</Link>
-      </p>
 
       <MobileBottomNav />
     </div>
