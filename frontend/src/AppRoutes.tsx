@@ -6,6 +6,8 @@ import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
 import HashScroll from "./components/HashScroll";
 import Landing from "./pages/home/Landing";
+import AppWelcome from "./pages/home/AppWelcome";
+import { isNativeApp } from "./utils/native";
 import Sistema from "./pages/Sistema";
 import AnimalPassport from "./pages/passport/AnimalPassport";
 import TagLanding from "./pages/tag/TagLanding";
@@ -66,10 +68,16 @@ const tenantHome = <Navigate to="/home" replace />;
 const protectoraHome = <Navigate to="/landlord" replace />;
 const adminHome = <Navigate to="/admin" replace />;
 
-// Entrada pública: usuarios anónimos ven la landing; los logueados van a su panel.
+// En desarrollo, `/?vista=app` enseña en el navegador el inicio de la app.
+const previewApp = () =>
+  process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).get('vista') === 'app';
+
+// Entrada pública: usuarios anónimos ven la landing (en la app, su propia
+// bienvenida); los logueados van a su panel.
 function HomeGate() {
   const { user } = useAuth();
-  return user ? <RedirectHome /> : <Landing />;
+  if (user) return <RedirectHome />;
+  return isNativeApp() || previewApp() ? <AppWelcome /> : <Landing />;
 }
 
 export default function AppRoutes() {

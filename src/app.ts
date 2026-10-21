@@ -179,7 +179,15 @@ app.use(hpp({ checkBody: false, checkQuery: true }));
 app.use(mongoSanitize);
 // Serve uploaded files (fotos de animales, etc.): inmutables en la práctica,
 // así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
+// CORP cross-origin: helmet pone same-origin a todo, y la app de iPhone
+// (origen capacitor://localhost) se quedaba sin ver ninguna foto subida.
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, '../uploads'), {
+    maxAge: '7d',
+    setHeaders: res => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  }),
+);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

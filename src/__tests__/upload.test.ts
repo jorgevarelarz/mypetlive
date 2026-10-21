@@ -58,6 +58,8 @@ describe('Subida de ficheros', () => {
       expect(uploaded.body.filename).toMatch(/\.webp$/);
       const served = await request(app).get(`/uploads/${uploaded.body.filename}`).expect(200);
       expect(served.headers['content-type']).toMatch(/^image\/webp/);
+      // La app de iPhone carga las fotos desde capacitor://localhost.
+      expect(served.headers['cross-origin-resource-policy']).toBe('cross-origin');
       const metadata = await sharp(filename).metadata();
       expect(metadata.width).toBe(2048);
       expect(metadata.height).toBe(1024);
