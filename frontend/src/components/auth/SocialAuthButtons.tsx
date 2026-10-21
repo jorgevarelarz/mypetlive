@@ -232,7 +232,8 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
             style={{
               width: 300,
               maxWidth: "100%",
-              height: 44,
+              height: native ? 44 : 40, // el botón web de Google mide 40
+              boxShadow: "none",
               borderRadius: 999,
               background: "#000",
               color: "#fff",
