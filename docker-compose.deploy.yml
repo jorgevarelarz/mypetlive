@@ -64,6 +64,9 @@ services:
       APNS_TEAM_ID: "CDR8TRU744"
       APNS_KEY_PATH: "/app/secrets/apns.p8"
       APNS_TOPIC: "es.mypetlive.app"
+      # Acceso con Google (client ids web e iOS, separados por comas) y Apple (bundle id de la app).
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      APPLE_CLIENT_ID: "${APPLE_CLIENT_ID}"
     # Las fotos subidas (uploads) viven en el host: sin este volumen se pierden
     # cada vez que se recrea el contenedor.
     volumes:

@@ -52,6 +52,18 @@ const googleClaims = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('Login con Google/Apple', () => {
+  it('acepta varias audiencias separadas por comas (web e iOS)', async () => {
+    const previo = process.env.GOOGLE_CLIENT_ID;
+    process.env.GOOGLE_CLIENT_ID = 'web.apps.googleusercontent.com, ios.apps.googleusercontent.com';
+    mockVerify.mockResolvedValue(googleClaims() as any);
+    try {
+      await request(app).post('/api/auth/oauth/google').send({ idToken: 'token-valido' }).expect(200);
+      expect(mockVerify.mock.calls[0][1].audience).toEqual(['web.apps.googleusercontent.com', 'ios.apps.googleusercontent.com']);
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = previo;
+    }
+  });
+
   it('da de alta un adoptante nuevo sin contraseña', async () => {
     mockVerify.mockResolvedValue(googleClaims() as any);
 

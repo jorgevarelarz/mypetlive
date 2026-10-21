@@ -14,7 +14,8 @@ export type OidcProviderConfig = {
   jwksUrl: string;
   /** Google emite `iss` con y sin esquema, por eso admite lista. */
   issuer: string | readonly [string, ...string[]];
-  audience: string;
+  /** Varias cuando el mismo proveedor firma para web y app (client ids distintos). */
+  audience: string | [string, ...string[]];
 };
 
 export type OidcClaims = {

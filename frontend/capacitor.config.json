@@ -7,5 +7,15 @@
   },
   "android": {
     "allowMixedContent": false
+  },
+  "plugins": {
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "apple": true,
+        "facebook": false,
+        "twitter": false
+      }
+    }
   }
 }

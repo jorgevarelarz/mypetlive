@@ -36,7 +36,9 @@ let profile = null;
 for (const p of existing.filter((p) => p.attributes.name === PROFILE_NAME)) {
   const certs = (await api("GET", `/profiles/${p.id}/certificates`)).data.map((c) => c.id);
   // Un perfil anterior a activar las notificaciones no las lleva: se rehace
-  const conPush = Buffer.from(p.attributes.profileContent ?? "", "base64").toString("latin1").includes("aps-environment");
+  // y lo mismo con Sign in with Apple (activado el 21 oct 2026).
+  const contenido = Buffer.from(p.attributes.profileContent ?? "", "base64").toString("latin1");
+  const conPush = contenido.includes("aps-environment") && contenido.includes("com.apple.developer.applesignin");
   if (p.attributes.profileState === "ACTIVE" && certs.includes(DIST_CERT_ID) && conPush) profile = p;
   else await api("DELETE", `/profiles/${p.id}`);
 }

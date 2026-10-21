@@ -10,16 +10,22 @@ const JWT_SECRET = getJwtSecret();
 
 export type SocialProvider = 'google' | 'apple';
 
+// Lista separada por comas: cada plataforma tiene su client id y el token
+// lleva el de quien lo pidió. Google: el de web y el de iOS. Apple: el bundle
+// id de la app (es.mypetlive.app) y, si algún día se monta en la web, su
+// Services ID.
+function audiences(raw: string | undefined): [string, ...string[]] | null {
+  const list = (raw || '').split(',').map(s => s.trim()).filter(Boolean);
+  return list.length ? (list as [string, ...string[]]) : null;
+}
+
 function providerConfig(provider: SocialProvider) {
   if (provider === 'google') {
-    const audience = process.env.GOOGLE_CLIENT_ID;
+    const audience = audiences(process.env.GOOGLE_CLIENT_ID);
     if (!audience) return null;
     return { ...GOOGLE_OIDC, audience };
   }
-  // En Apple el "client id" es el Services ID del sitio web, que no coincide
-  // con el bundle id de la app móvil: si algún día se firma también desde la
-  // app nativa habrá que aceptar las dos audiencias.
-  const audience = process.env.APPLE_CLIENT_ID;
+  const audience = audiences(process.env.APPLE_CLIENT_ID);
   if (!audience) return null;
   return { ...APPLE_OIDC, audience };
 }

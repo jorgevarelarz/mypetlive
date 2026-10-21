@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { SocialProvider } from "../../api/auth";
+import { isNativeApp } from "../../utils/native";
 
 /**
  * Botones de "Continuar con Google / Apple".
@@ -14,6 +15,31 @@ import { SocialProvider } from "../../api/auth";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 const APPLE_CLIENT_ID = process.env.REACT_APP_APPLE_CLIENT_ID || "";
+
+// En la app (iOS) se usan los SDK nativos vía @capgo/capacitor-social-login:
+// los botones web de Google y Apple no funcionan dentro del WebView. Los client
+// id son públicos (van en cualquier app); el servidor acepta los dos de Google.
+const NATIVE_GOOGLE_IOS_CLIENT_ID = "268255224468-l3i8165nkj06mkkdn9g043codg2ibca5.apps.googleusercontent.com";
+const NATIVE_GOOGLE_WEB_CLIENT_ID = "268255224468-ur6nibvuiteejblsfde57gu4iaade233.apps.googleusercontent.com";
+
+let nativeInit: Promise<any> | null = null;
+function nativeSocialLogin() {
+  if (!nativeInit) {
+    nativeInit = import("@capgo/capacitor-social-login").then(async ({ SocialLogin }) => {
+      await SocialLogin.initialize({
+        apple: { clientId: "es.mypetlive.app" },
+        google: {
+          iOSClientId: NATIVE_GOOGLE_IOS_CLIENT_ID,
+          iOSServerClientId: NATIVE_GOOGLE_WEB_CLIENT_ID,
+          mode: "online",
+        },
+      });
+      return SocialLogin;
+    });
+    nativeInit.catch(() => { nativeInit = null; });
+  }
+  return nativeInit;
+}
 
 const GOOGLE_SRC = "https://accounts.google.com/gsi/client";
 const APPLE_SRC =
@@ -75,10 +101,35 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
     [loginWithProvider, nav, redirectTo],
   );
 
+  const native = isNativeApp();
+
+  const nativeSignIn = useCallback(async (provider: SocialProvider) => {
+    setErr(null);
+    try {
+      const SocialLogin = await nativeSocialLogin();
+      const res: any = await SocialLogin.login(
+        provider === "apple"
+          ? { provider: "apple", options: { scopes: ["email", "name"] } }
+          : { provider: "google", options: { scopes: ["email", "profile"] } },
+      );
+      const idToken = res?.result?.idToken;
+      if (!idToken) throw new Error("no_token");
+      // Apple solo da el nombre la primera vez: se aprovecha para el alta.
+      const p = res?.result?.profile || {};
+      const name = `${p.givenName || ""} ${p.familyName || ""}`.trim() || undefined;
+      await enter(provider, idToken, name);
+    } catch (e: any) {
+      const msg = String(e?.message || e?.code || "");
+      // Cerrar la hoja de Apple/Google no es un error que merezca aviso.
+      if (/cancel/i.test(msg) || /1001|-5/.test(msg)) return;
+      setErr(`No hemos podido entrar con ${provider === "apple" ? "Apple" : "Google"}. Inténtalo de nuevo.`);
+    }
+  }, [enter]);
+
   // Google pinta su propio botón oficial (es requisito de su marca) dentro del
   // div que le pasamos.
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
+    if (native || !GOOGLE_CLIENT_ID) return;
     let cancelled = false;
     loadScript(GOOGLE_SRC)
       .then(() => {
@@ -106,7 +157,7 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [enter]);
+  }, [enter, native]);
 
   const appleSignIn = useCallback(async () => {
     setErr(null);
@@ -136,7 +187,15 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
     }
   }, [enter]);
 
-  if (!GOOGLE_CLIENT_ID && !APPLE_CLIENT_ID) return null;
+  if (!native && !GOOGLE_CLIENT_ID && !APPLE_CLIENT_ID) return null;
+
+  const showGoogle = native || Boolean(GOOGLE_CLIENT_ID);
+  const showApple = native || Boolean(APPLE_CLIENT_ID);
+  const pill: React.CSSProperties = {
+    width: 300, maxWidth: "100%", height: 44, padding: 0, borderRadius: 999,
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+    fontSize: 15, fontWeight: 600, cursor: "pointer",
+  };
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -156,17 +215,17 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
       </div>
 
       <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
-        {GOOGLE_CLIENT_ID && <div ref={googleRef} />}
-        {APPLE_CLIENT_ID && (
+        {!native && showGoogle && <div ref={googleRef} />}
+        {showApple && (
           <button
             type="button"
-            onClick={appleSignIn}
+            onClick={native ? () => nativeSignIn("apple") : appleSignIn}
             disabled={busy === "apple"}
             className="auth-button"
             style={{
               width: 300,
               maxWidth: "100%",
-              height: 40,
+              height: 44,
               borderRadius: 999,
               background: "#000",
               color: "#fff",
@@ -175,14 +234,30 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              fontSize: 14,
-              fontWeight: 500,
+              fontSize: 15,
+              fontWeight: 600,
             }}
           >
             <svg width="15" height="18" viewBox="0 0 14 17" aria-hidden fill="currentColor">
               <path d="M11.6 9c0-1.6.8-2.5 2.1-3.2-.7-1-1.8-1.6-3.2-1.7-1.4-.1-2.9.8-3.4.8-.6 0-1.8-.8-2.9-.8C2.3 4.2.7 5.3.7 7.7c0 .9.2 1.9.5 2.9.5 1.3 2 4.5 3.6 4.4.8 0 1.4-.6 2.5-.6s1.6.6 2.5.6c1.6 0 3-2.9 3.4-4.2-2.1-1-3.6-1.3-3.6-1.8zM9.4 3c.8-.9 1.2-2 1-3.1-.9.1-1.9.6-2.5 1.3-.7.7-1.1 1.8-1 2.9 1 .1 2-.4 2.5-1.1z" />
             </svg>
             {busy === "apple" ? "Entrando…" : "Continuar con Apple"}
+          </button>
+        )}
+        {native && showGoogle && (
+          <button
+            type="button"
+            onClick={() => nativeSignIn("google")}
+            disabled={busy === "google"}
+            style={{ ...pill, background: "#fff", color: "#1f1f1f", border: "1px solid #747775" }}
+          >
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            {busy === "google" ? "Entrando…" : "Continuar con Google"}
           </button>
         )}
       </div>
