@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams, Link, Navigate, useNavigate } from 'react-router-dom';
+import BackButton from '../../components/BackButton';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { PawPrint, Tag as TagIcon, AlertCircle } from 'lucide-react';
 import { resolveTag, claimTag } from '../../api/tags';
@@ -71,7 +72,8 @@ export default function TagLanding() {
   const shell = (children: React.ReactNode) => (
     <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
       <header style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: '14px 20px' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}>
+          <BackButton style={{ color: MPL.ink, marginLeft: -6 }} />
           <Link to="/" style={{ textDecoration: 'none', color: MPL.ink, display: 'flex', alignItems: 'center', gap: 9 }}>
             <PawPrint size={22} color={MPL.teal} />
             <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800 }}>MyPet<span style={{ color: MPL.coral }}>Live</span></span>

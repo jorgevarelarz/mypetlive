@@ -6,6 +6,7 @@ import { PawPrint, MapPin, ShieldCheck, Stethoscope, Heart, Tag } from 'lucide-r
 import { getAnimalPassport } from '../../api/animals';
 import { offersForAnimal } from '../../api/offers';
 import { usePageMeta } from '../../utils/usePageMeta';
+import BackButton from '../../components/BackButton';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, speciesLabel, sizeLabel, sexLabel } from '../../styles/mypetlive';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
@@ -30,7 +31,8 @@ export default function AnimalPassport() {
   return (
     <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
       <header style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
-        <div style={{ maxWidth: 920, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 9 }}>
+        <div style={{ maxWidth: 920, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}>
+          <BackButton style={{ color: MPL.ink, marginLeft: -6 }} />
           <Link to="/" style={{ textDecoration: 'none', color: MPL.ink, display: 'flex', alignItems: 'center', gap: 9 }}>
             <PawPrint size={22} color={MPL.teal} />
             <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800 }}>MyPet<span style={{ color: MPL.coral }}>Live</span></span>
