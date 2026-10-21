@@ -399,3 +399,12 @@ html.native-app, .native-app body { overscroll-behavior: none; }
    hueco de la barra de estado y la cabecera se mete debajo. */
 html.native-app, html.native-app body { height: 100%; overflow: hidden; }
 html.native-app #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+/* Formulario de mascota: en el iPhone los desplegables y sobre todo el campo de
+   fecha tienen un ancho mínimo propio y se salían del diálogo. */
+.pet-form label, .pet-form .grid > * { min-width: 0; }
+.pet-form input:not([type='file']):not([type='checkbox']), .pet-form select {
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; background: #fff;
+}
+.pet-form input[type='date'] { -webkit-appearance: none; appearance: none; display: block; min-height: 42px; text-align: left; }
+.pet-form input[type='file'] { max-width: 100%; }

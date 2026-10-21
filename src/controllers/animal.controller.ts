@@ -8,6 +8,7 @@ import { sendEmail } from '../utils/notification';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesFilter, speciesVariants } from '../utils/species';
+import { ageFromBirthDate, parseBirthDate } from '../utils/age';
 import { canPublishAnimals } from '../utils/shelterVerification';
 import { canManageAnimal } from '../utils/animalAccess';
 
@@ -697,16 +698,22 @@ export async function createPersonal(req: Request, res: Response) {
   const userId = user?._id || user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
 
-  const { name, species, age, images, mood, sex, size } = req.body as {
+  const { name, species, age: rawAge, birthDate: rawBirth, images, mood, sex, size } = req.body as {
     name?: string;
     species?: string;
     age?: string;
+    birthDate?: string;
     images?: string[];
     mood?: string;
     sex?: 'male' | 'female';
     size?: 'small' | 'medium' | 'large';
   };
 
+  // La app manda la fecha de nacimiento; la edad en texto queda para clientes
+  // viejos. Con fecha, la edad se calcula de ella.
+  const birthDate = rawBirth !== undefined ? parseBirthDate(rawBirth) : null;
+  if (rawBirth !== undefined && !birthDate) return res.status(400).json({ error: 'invalid_birth_date' });
+  const age = birthDate ? ageFromBirthDate(birthDate) : rawAge;
   if (!name?.trim() || !species?.trim() || !age?.trim()) {
     return res.status(400).json({ error: 'missing_fields' });
   }
@@ -719,6 +726,7 @@ export async function createPersonal(req: Request, res: Response) {
     name: name.trim(),
     species: species.trim(),
     age: age.trim(),
+    birthDate: birthDate || undefined,
     images: Array.isArray(images) ? images : [],
     mood: mood || undefined,
     sex: sex || undefined,
@@ -754,7 +762,14 @@ export async function updateMine(req: Request, res: Response) {
 
   // `personalPetUpdateSchema` ya ha dejado en el cuerpo solo campos editables.
   for (const [field, value] of Object.entries(req.body as Record<string, unknown>)) {
+    if (field === 'birthDate') continue;
     animal[field] = value;
+  }
+  if ((req.body as any).birthDate !== undefined) {
+    const birthDate = parseBirthDate((req.body as any).birthDate);
+    if (!birthDate) return res.status(400).json({ error: 'invalid_birth_date' });
+    animal.birthDate = birthDate;
+    animal.age = ageFromBirthDate(birthDate);
   }
   await animal.save();
 

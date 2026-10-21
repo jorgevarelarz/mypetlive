@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { markAnimalFeeding, markAnimalLitter, markAnimalWalk } from '../../api/animals';
+import { listMyPets, markAnimalFeeding, markAnimalLitter, markAnimalWalk } from '../../api/animals';
+import PetSwitcher from '../../components/pet/PetSwitcher';
+import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
+import { petAge } from '../../utils/age';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
@@ -103,9 +106,21 @@ export default function Home() {
 
   const assignedAnimalId = (user as any)?.assignedAnimalId || (user as any)?.animalId || (user as any)?.petId || null;
 
+  // Todas sus mascotas: con varias se elige cuál se ve (la elegida se comparte
+  // con «Mi mascota», ver utils/selectedPet).
+  const { data: myPets } = useQuery({ queryKey: ['my-pets'], queryFn: listMyPets, staleTime: 60_000 });
+  const pets = React.useMemo(() => (myPets?.items || []).map(item => item.animal).filter(Boolean), [myPets?.items]);
+  const [selectedPetId, setSelectedPetIdState] = React.useState<string | null>(() => loadSelectedPet());
+  const selectPet = (id: string) => {
+    setSelectedPetIdState(id);
+    saveSelectedPet(id);
+  };
+  const petIds = pets.map((p: any) => String(p._id || p.id));
+  const currentId = selectedPetId && petIds.includes(selectedPetId) ? selectedPetId : petIds[0] || null;
+
   const { data: featuredAnimal, isLoading, isError, refetch } = useQuery({
-    queryKey: ['tenant-featured-animal', assignedAnimalId],
-    queryFn: () => fetchFeaturedAnimal(assignedAnimalId),
+    queryKey: ['tenant-featured-animal', currentId || assignedAnimalId],
+    queryFn: () => fetchFeaturedAnimal(currentId || assignedAnimalId),
     staleTime: 60_000,
   });
 
@@ -123,7 +138,7 @@ export default function Home() {
       return markAnimalWalk(animalId, action.walk);
     },
     onSuccess: (_data, action) => {
-      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal', assignedAnimalId] });
+      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
       // El registro y el resumen semanal viven en la ficha: si se marca desde
       // aquí, allí tiene que verse ya.
       queryClient.invalidateQueries({ queryKey: ['animal-care'] });
@@ -160,8 +175,16 @@ export default function Home() {
 
   const hasPet = Boolean(featuredAnimal);
   const displayName = featuredAnimal?.name || 'tu mascota';
+  // Título: el nombre con una mascota, los nombres con dos o tres, el número
+  // con cuatro o más; sin ninguna, «tu mascota».
+  const names = pets.map((p: any) => p.name).filter(Boolean) as string[];
+  const titleTarget = names.length >= 4
+    ? `tus ${names.length} mascotas`
+    : names.length >= 2
+      ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`
+      : names[0] || displayName;
   const displaySpecies = speciesLabel(featuredAnimal?.species);
-  const displayAge = featuredAnimal?.age || '';
+  const displayAge = petAge(featuredAnimal);
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
   const showLitter = usesLitter(featuredAnimal?.species);
   const showWalk = usesWalks(featuredAnimal?.species);
@@ -183,7 +206,7 @@ export default function Home() {
                 className="max-w-3xl text-4xl font-extrabold leading-none sm:text-5xl lg:text-6xl"
                 style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}
               >
-                Cuida, sigue y acompaña a {displayName}.
+                Cuida, sigue y acompaña a {titleTarget}.
               </h1>
               <p className="max-w-2xl text-base leading-7 sm:text-lg" style={{ color: colors.muted }}>
                 Tu espacio para ver cómo está tu mascota, apoyar a su protectora y registrar pequeños cuidados sin ruido.
@@ -202,6 +225,12 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Sin mascota registrada no se enseña: el botón de arriba ya invita a registrarla. */}
+          {(isLoading || isError || featuredAnimal) && (
+          <div className="grid gap-3">
+          {pets.length > 1 && (
+            <PetSwitcher pets={pets} selectedId={currentId} onSelect={selectPet} onAdd={() => nav('/pet?nueva=1')} />
+          )}
           <Card className="overflow-hidden">
             <div className="relative aspect-[4/3]" style={{ background: colors.panel }}>
               {isLoading ? (
@@ -284,6 +313,8 @@ export default function Home() {
               </div>
             )}
           </Card>
+          </div>
+          )}
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr]">

@@ -146,6 +146,8 @@ const animalSchema = new Schema(
     // `animalCreateSchema` exige los dos campos.
     sex: { type: String, enum: ['male', 'female', null] },
     age: { type: String, required: true },
+    // Mascotas de usuarios: con ella `age` se recalcula (utils/age).
+    birthDate: { type: Date },
     ageGroup: { type: String, enum: ['puppy', 'young', 'adult', 'senior'] },
     city: { type: String, trim: true, index: true },
     size: { type: String, enum: ['small', 'medium', 'large', null] },
@@ -170,7 +172,7 @@ const animalSchema = new Schema(
     healthHistory: { type: [healthEntrySchema], default: [] },
     likes: { type: [String], default: [] },
     environment: { type: [String], default: [] },
-    mood: { type: String, enum: ['relajado', 'timido', 'energico', 'en_adaptacion', null], default: null },
+    mood: { type: String, enum: ['relajado', 'timido', 'energico', 'en_adaptacion', 'carinoso', 'independiente', null], default: null },
     // Caché del último cuidado de cada tipo: la verdad está en `CareLog`, pero la
     // ficha y la home solo necesitan "cuándo fue la última vez" y no van a pagar
     // una consulta al registro para pintar una frase.

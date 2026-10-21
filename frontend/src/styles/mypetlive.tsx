@@ -102,10 +102,12 @@ export const sexLabel = (value?: string) => {
 
 export const moodLabel = (value?: string | null) => {
   const labels: Record<string, string> = {
-    relajado: 'Relajado',
+    relajado: 'Tranquilo',
     timido: 'Tímido',
     energico: 'Enérgico',
     en_adaptacion: 'En adaptación',
+    carinoso: 'Cariñoso',
+    independiente: 'Independiente',
   };
   return value ? labels[String(value).toLowerCase()] || value : '';
 };

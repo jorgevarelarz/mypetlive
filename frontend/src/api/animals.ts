@@ -8,7 +8,7 @@ export type AnimalStatus =
   | 'adoptado'
   | 'no_disponible'
   | 'archivado';
-export type AnimalMood = 'relajado' | 'timido' | 'energico' | 'en_adaptacion';
+export type AnimalMood = 'relajado' | 'timido' | 'energico' | 'en_adaptacion' | 'carinoso' | 'independiente';
 
 export type AnimalSearchParams = {
   q?: string;
@@ -304,6 +304,7 @@ export type PersonalPetUpdate = {
   species?: string;
   breed?: string;
   age?: string;
+  birthDate?: string;
   mood?: AnimalMood | null;
   sex?: 'male' | 'female' | null;
   size?: 'small' | 'medium' | 'large' | null;
@@ -340,7 +341,9 @@ export async function listMyPets() {
 export async function createPersonalPet(payload: {
   name: string;
   species: string;
-  age: string;
+  age?: string;
+  /** AAAA-MM-DD: el servidor calcula la edad con ella. */
+  birthDate?: string;
   images?: string[];
   mood?: string;
   sex?: 'male' | 'female';

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
 const statusEnum = z.enum(['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado']);
-const moodEnum = z.enum(['relajado', 'timido', 'energico', 'en_adaptacion']);
+const moodEnum = z.enum(['relajado', 'timido', 'energico', 'en_adaptacion', 'carinoso', 'independiente']);
 
 export const animalCreateSchema = z.object({
   shelter: objectId,
@@ -57,6 +57,8 @@ export const personalPetUpdateSchema = z.object({
   species: z.string().trim().min(1).max(40).optional(),
   breed: z.string().trim().max(80).optional(),
   age: z.string().trim().min(1).max(40).optional(),
+  // AAAA-MM-DD; el controlador la valida de verdad (parseBirthDate) y recalcula `age`.
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   // `nullable` como `mood`: quien se equivocó al darla de alta tiene que poder
   // dejarlo en blanco otra vez, no solo cambiarlo por el otro valor.
   sex: z.enum(['male', 'female']).nullable().optional(),

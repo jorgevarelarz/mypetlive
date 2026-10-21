@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import PetSwitcher from '../../components/pet/PetSwitcher';
+import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
+import { ageFromBirthDate, petAge } from '../../utils/age';
+import { vaccinesFor } from '../../utils/vaccines';
 import { QRCodeSVG } from 'qrcode.react';
 import { listMyTags, claimTag } from '../../api/tags';
 import { useAuth } from '../../context/AuthContext';
@@ -46,9 +51,11 @@ const DEFAULT_REPEAT_HINT: Partial<Record<HealthCategory, string>> = {
 
 const MOOD_OPTIONS: Array<{ value: '' | AnimalMood; label: string }> = [
   { value: '', label: 'Sin especificar' },
-  { value: 'relajado', label: 'Relajado' },
-  { value: 'timido', label: 'Tímido' },
+  { value: 'relajado', label: 'Tranquilo' },
+  { value: 'carinoso', label: 'Cariñoso' },
   { value: 'energico', label: 'Enérgico' },
+  { value: 'timido', label: 'Tímido' },
+  { value: 'independiente', label: 'Independiente' },
   { value: 'en_adaptacion', label: 'En adaptación' },
 ];
 
@@ -81,12 +88,15 @@ const REGISTER_INITIAL = {
   name: '',
   species: 'cat',
   age: '',
+  // Fecha de nacimiento (AAAA-MM-DD): la edad sale de ella.
+  birthDate: '',
   sex: '' as '' | 'male' | 'female',
   size: '' as '' | 'small' | 'medium' | 'large',
   mood: '' as '' | AnimalMood,
   // Solo en el alta: la fecha de la última vacuna. No es un campo del animal,
   // es la semilla del pasaporte — ver `registerMutation`.
   lastVaccine: '',
+  lastVaccineType: '',
   images: [] as string[],
 };
 
@@ -99,6 +109,7 @@ function formFromAnimal(animal: any): RegisterForm {
     name: animal?.name || '',
     species: animal?.species || 'cat',
     age: animal?.age || '',
+    birthDate: animal?.birthDate ? String(animal.birthDate).slice(0, 10) : '',
     sex: (animal?.sex || '') as '' | 'male' | 'female',
     size: (animal?.size || '') as '' | 'small' | 'medium' | 'large',
     mood: (animal?.mood || '') as '' | AnimalMood,
@@ -106,6 +117,7 @@ function formFromAnimal(animal: any): RegisterForm {
     // está el formulario de la propia ficha, que además admite todas las
     // categorías y no solo la vacuna.
     lastVaccine: '',
+    lastVaccineType: '',
     images: Array.isArray(animal?.images) ? animal.images.filter(Boolean) : [],
   };
 }
@@ -118,7 +130,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 function validateRegisterForm(form: RegisterForm): string | null {
   if (!form.name.trim()) return 'Escribe el nombre de tu mascota.';
   if (!form.species.trim()) return 'Elige la especie de tu mascota.';
-  if (!form.age.trim()) return 'Indica la edad, por ejemplo «2 años» o «8 meses».';
+  if (!form.birthDate && !form.age.trim()) return 'Indica su fecha de nacimiento.';
   return null;
 }
 
@@ -161,8 +173,23 @@ export default function PetPage() {
   const { user, token: authToken } = useAuth();
   const nav = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
-  const [registerOpen, setRegisterOpen] = useState(false);
+  // La elegida se recuerda (la comparte el inicio, ver utils/selectedPet).
+  const [selectedPetId, setSelectedPetIdState] = useState<string | null>(() => loadSelectedPet());
+  const setSelectedPetId = (id: string | null) => {
+    setSelectedPetIdState(id);
+    saveSelectedPet(id);
+  };
+  // «+ Añadir» del inicio llega con ?nueva=1 y abre el alta directamente.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [registerOpen, setRegisterOpen] = useState(() => searchParams.get('nueva') === '1');
+  useEffect(() => {
+    if (searchParams.get('nueva') === '1') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('nueva');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [registerForm, setRegisterForm] = useState<RegisterForm>(REGISTER_INITIAL);
   const [preferredProtectora, setPreferredProtectoraState] = useState<PreferredProtectora | null>(() => loadPreferredProtectora());
   const [selectProtectoraOpen, setSelectProtectoraOpen] = useState(false);
@@ -428,7 +455,8 @@ export default function PetPage() {
       const creada = await createPersonalPet({
         name: registerForm.name.trim(),
         species: registerForm.species.trim(),
-        age: registerForm.age.trim(),
+        birthDate: registerForm.birthDate || undefined,
+        age: registerForm.birthDate ? undefined : registerForm.age.trim(),
         images: registerForm.images,
         // Vacío = no se manda el campo. El modelo ya no rellena por su cuenta.
         sex: registerForm.sex || undefined,
@@ -450,7 +478,7 @@ export default function PetPage() {
         try {
           await addHealthRecord(String(creada.code), {
             category: 'vaccine',
-            note: 'Vacunación',
+            note: registerForm.lastVaccineType ? `Vacuna: ${registerForm.lastVaccineType}` : 'Vacunación',
             date: new Date(`${registerForm.lastVaccine}T09:00:00`).toISOString(),
           });
         } catch {
@@ -498,7 +526,9 @@ export default function PetPage() {
       return updateMyPet(id, {
         name: editForm.name.trim(),
         species: editForm.species.trim(),
-        age: editForm.age.trim(),
+        // Con fecha, el servidor recalcula la edad; sin ella (fichas viejas) se
+        // conserva el texto que tuviera.
+        ...(editForm.birthDate ? { birthDate: editForm.birthDate } : { age: editForm.age.trim() }),
         images: editForm.images,
         // `null` borra el ánimo: sin él, quien lo puso por error no podía quitarlo.
         mood: editForm.mood || null,
@@ -562,7 +592,7 @@ export default function PetPage() {
     }
   };
 
-  const showChips = petItems.length > 0;
+  const showChips = petItems.length > 1;
 
   if (isLoading) return <div className="p-4">Cargando…</div>;
 
@@ -631,27 +661,11 @@ export default function PetPage() {
     <div className="p-4 grid gap-4" style={{ color: '#3F4A3C' }}>
       <div className="flex flex-wrap items-center gap-3">
         {showChips && (
-          <div className="flex flex-wrap gap-2">
-            {petItems.map(item => {
-              const animal = item.animal;
-              const id = String(animal?._id || animal?.id || '');
-              if (!id) return null;
-              const active = selectedPetId === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setSelectedPetId(id)}
-                  className={`px-3 py-1 rounded-full border text-sm ${active ? 'bg-teal-100 border-teal text-teal-700' : 'border-gray-300 text-gray-600'}`}
-                >
-                  {animal?.name || 'Mascota'}
-                  {animal?.code && (
-                    <span className="ml-2 text-xs" style={{ color: '#6A7B4F' }}>{animal.code}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <PetSwitcher
+            pets={petItems.map(item => item.animal).filter(Boolean)}
+            selectedId={selectedPetId}
+            onSelect={setSelectedPetId}
+          />
         )}
         {/* flex-wrap: por debajo de 380 px los dos botones no caben en una línea. */}
         <div className="flex flex-wrap items-center gap-3">
@@ -695,7 +709,7 @@ export default function PetPage() {
           </h1>
           <p className="text-sm" style={{ color: '#7A8273' }}>
             {speciesLabel(featuredAnimal.species) || 'Animal'}
-            {featuredAnimal.age ? ` · ${featuredAnimal.age}` : ''}
+            {petAge(featuredAnimal) ? ` · ${petAge(featuredAnimal)}` : ''}
           </p>
           {mood && (
             <p className="text-sm" style={{ color: '#7A8273' }}>Estado: {moodLabel(mood)} 🌱</p>
@@ -1151,7 +1165,9 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
       ...prev,
       images: [prev.images[index], ...prev.images.filter((_, i) => i !== index)],
     }));
-  return (
+  // Portal a <body>: dentro de la app el contenido se desplaza en #root y el
+  // iPhone no dejaba desplazar este diálogo fijo metido ahí dentro.
+  return createPortal(
     // El overlay hace scroll: en pantallas bajas el formulario no cabe entero y
     // antes los botones Cancelar/Guardar quedaban fuera, sin forma de alcanzarlos.
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:items-center">
@@ -1159,7 +1175,7 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-2xl bg-white p-5 border"
+        className="pet-form w-full max-w-md rounded-2xl bg-white p-5 border"
         style={{ borderColor: '#E7E1D5' }}
       >
         <h2 className="text-xl font-semibold" style={{ color: '#3F4A3C' }}>{title}</h2>
@@ -1175,7 +1191,7 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
           </label>
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
             Especie
-            <select className="border rounded px-3 py-2" value={form.species} onChange={e => onChange(prev => ({ ...prev, species: e.target.value }))}>
+            <select className="border rounded px-3 py-2" value={form.species} onChange={e => onChange(prev => ({ ...prev, species: e.target.value, lastVaccineType: vaccinesFor(e.target.value).includes(prev.lastVaccineType) ? prev.lastVaccineType : '' }))}>
               {SPECIES_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
@@ -1211,14 +1227,22 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
             </label>
           </div>
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
-            Edad
-            {/* `age` es texto libre en el modelo: se acepta "8 meses" o "2 años". */}
+            Fecha de nacimiento
+            {/* La edad se calcula de aquí y se actualiza sola en cada cumpleaños. */}
             <input
+              type="date"
               className="border rounded px-3 py-2"
-              value={form.age}
-              placeholder="Ej.: 2 años"
-              onChange={e => onChange(prev => ({ ...prev, age: e.target.value }))}
+              max={new Date().toISOString().slice(0, 10)}
+              value={form.birthDate}
+              onChange={e => onChange(prev => ({ ...prev, birthDate: e.target.value }))}
             />
+            <span className="text-xs" style={{ color: '#7A8273' }}>
+              {form.birthDate
+                ? `Tiene ${ageFromBirthDate(form.birthDate).toLowerCase()}.`
+                : isEdit && form.age
+                  ? `Ahora pone «${form.age}». Si no sabes el día exacto, una fecha aproximada vale.`
+                  : 'Si no sabes el día exacto, una fecha aproximada vale.'}
+            </span>
           </label>
           {/* Solo en el alta. Es la única pregunta del formulario que no describe
               al animal sino que ARRANCA algo: con ella el pasaporte nace con un
@@ -1234,6 +1258,18 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
                 value={form.lastVaccine}
                 onChange={e => onChange(prev => ({ ...prev, lastVaccine: e.target.value }))}
               />
+              {/* Las opciones dependen de la especie elegida arriba. */}
+              <select
+                className="border rounded px-3 py-2"
+                aria-label="Tipo de vacuna"
+                value={form.lastVaccineType}
+                onChange={e => onChange(prev => ({ ...prev, lastVaccineType: e.target.value }))}
+              >
+                <option value="">Tipo de vacuna (opcional)</option>
+                {vaccinesFor(form.species).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
               <span className="text-xs" style={{ color: '#7A8273' }}>
                 Opcional. Si la pones, te avisamos una semana antes de la siguiente y su pasaporte
                 empieza con su primer hito de salud.
@@ -1241,7 +1277,7 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
             </label>
           )}
           <label className="grid gap-1" style={{ color: '#3F4A3C' }}>
-            Estado emocional
+            ¿Qué carácter tiene?
             <select className="border rounded px-3 py-2" value={form.mood} onChange={e => onChange(prev => ({ ...prev, mood: e.target.value as '' | AnimalMood }))}>
               {MOOD_OPTIONS.map(option => (
                 <option key={option.value || 'none'} value={option.value}>{option.label}</option>
@@ -1319,6 +1355,7 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
