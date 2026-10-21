@@ -21,6 +21,14 @@ export function useGoBack() {
  */
 export function NativeBackListener() {
   const goBack = useGoBack();
+  const { pathname } = useLocation();
+  // En la app el contenido se desplaza dentro de #root (index.css): al cambiar
+  // de pantalla se vuelve arriba, como en cualquier app.
+  useEffect(() => {
+    if (document.documentElement.classList.contains('native-app')) {
+      document.getElementById('root')?.scrollTo(0, 0);
+    }
+  }, [pathname]);
   useEffect(() => {
     window.addEventListener('nativeback', goBack);
     return () => window.removeEventListener('nativeback', goBack);

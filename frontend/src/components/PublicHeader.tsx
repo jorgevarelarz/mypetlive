@@ -32,7 +32,7 @@ export default function PublicHeader() {
         position: 'sticky',
         top: 0,
         zIndex: 30,
-        background: 'rgba(246,243,236,.86)',
+        background: 'rgba(246,243,236,.97)',
         backdropFilter: 'blur(10px)',
         borderBottom: `1px solid ${MPL.border}`,
       }}

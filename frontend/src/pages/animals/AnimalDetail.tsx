@@ -118,6 +118,8 @@ export default function AnimalDetail() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    // En la app lo que se desplaza es #root (ver index.css).
+    document.getElementById('root')?.scrollTo(0, 0);
   }, [id]);
 
   const handleFavoriteClick = () => {

@@ -67,12 +67,6 @@ class MainViewController: CAPBridgeViewController, UIGestureRecognizerDelegate {
     override func capacitorDidLoad() {
         guard let webView = webView else { return }
         webView.allowsBackForwardNavigationGestures = false
-        // Sin rebote al llegar arriba o abajo: en las pantallas que desplazan
-        // la página entera (inicio, compañeros, favoritos) el rebote arrastraba
-        // también la barra inferior fija. overscroll-behavior en CSS no basta
-        // en el WebView. Los bloques con scroll propio siguen funcionando.
-        webView.scrollView.bounces = false
-        webView.scrollView.alwaysBounceVertical = false
         let edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwipe(_:)))
         edge.edges = .left
         edge.delegate = self

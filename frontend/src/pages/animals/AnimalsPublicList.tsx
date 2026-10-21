@@ -183,7 +183,7 @@ export default function AnimalsPublicList() {
   };
 
   return (
-    <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh', overflowX: 'hidden' }}>
+    <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh', overflowX: 'clip' }}>
       <style>{`
         .catalog-link{color:inherit;text-decoration:none;}
         .catalog-link:hover{color:${MPL.teal};}

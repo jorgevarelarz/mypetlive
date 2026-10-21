@@ -391,3 +391,11 @@ form p[style] {
 
 /* Sin rebote al estirar en la app: una pantalla que cabe se queda fija. */
 html.native-app, .native-app body { overscroll-behavior: none; }
+
+/* En la app la página no se desplaza: lo hace #root por dentro, como ya pasaba
+   en Cupones (scroll interior del AppShell). Si se desplaza el documento, el
+   rebote de iOS arrastra la barra inferior fija y la cabecera. Quitar el
+   rebote en nativo (scrollView.bounces) no vale: iOS deja de respetar el
+   hueco de la barra de estado y la cabecera se mete debajo. */
+html.native-app, html.native-app body { height: 100%; overflow: hidden; }
+html.native-app #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
