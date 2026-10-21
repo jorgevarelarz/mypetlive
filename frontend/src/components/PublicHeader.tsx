@@ -101,7 +101,7 @@ export default function PublicHeader() {
                 </span>
                 <span className="public-header-account-name">{user.name || 'Mi panel'}</span>
               </Link>
-              <button type="button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}>
+              <button type="button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión" style={{ padding: 0, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}>
                 <LogOut size={17} />
               </button>
             </>

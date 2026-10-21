@@ -262,10 +262,10 @@ export default function AnimalDetail() {
                 )}
                 {images.length > 1 && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 14, pointerEvents: 'none' }}>
-                    <button type="button" aria-label="Imagen anterior" onClick={() => setActiveIndex(prev => (prev - 1 + images.length) % images.length)} style={{ pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <button type="button" aria-label="Imagen anterior" onClick={() => setActiveIndex(prev => (prev - 1 + images.length) % images.length)} style={{ padding: 0, pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <ChevronLeft size={18} />
                     </button>
-                    <button type="button" aria-label="Imagen siguiente" onClick={() => setActiveIndex(prev => (prev + 1) % images.length)} style={{ pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <button type="button" aria-label="Imagen siguiente" onClick={() => setActiveIndex(prev => (prev + 1) % images.length)} style={{ padding: 0, pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <ChevronRight size={18} />
                     </button>
                   </div>
@@ -297,21 +297,21 @@ export default function AnimalDetail() {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {a.code && (
-                    <button type="button" onClick={() => nav(`/p/${encodeURIComponent(a.code)}`)} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Ver pasaporte" title="Ver pasaporte">
+                    <button type="button" onClick={() => nav(`/p/${encodeURIComponent(a.code)}`)} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Ver pasaporte" title="Ver pasaporte">
                       <ScrollText size={18} />
                     </button>
                   )}
-                  <button type="button" onClick={handleShareClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
+                  <button type="button" onClick={handleShareClick} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
                     <Share2 size={18} />
                   </button>
-                  <button type="button" onClick={handleFavoriteClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                  <button type="button" onClick={handleFavoriteClick} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                     <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
                   </button>
                   {/* Recargar la ficha solo le sirve a quien la mantiene. Para
                       un visitante era un botón que aparentaba hacer algo y no
                       cambiaba nada en pantalla. */}
                   {canManageAnimal && (
-                    <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha" title="Actualizar ficha">
+                    <button type="button" onClick={() => refetch()} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha" title="Actualizar ficha">
                       <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
                     </button>
                   )}
@@ -405,10 +405,10 @@ export default function AnimalDetail() {
             {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
           </button>
         )}
-        <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
+        <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ padding: 0, width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
           <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />
         </button>
-        <button type="button" onClick={handleShareClick} aria-label="Compartir compañero" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: 'pointer' }}>
+        <button type="button" onClick={handleShareClick} aria-label="Compartir compañero" style={{ padding: 0, width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: 'pointer' }}>
           <Share2 size={21} />
         </button>
       </div>

@@ -186,7 +186,7 @@ export default function Favorites() {
                     title="Quitar de favoritos"
                     onClick={() => removeFavorite(id, animal.name)}
                     disabled={favorites.isPending(id)}
-                    style={{ position: 'absolute', top: 12, right: 12, width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: MPL.coral, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: favorites.isPending(id) ? 'progress' : 'pointer', opacity: favorites.isPending(id) ? .6 : 1 }}
+                    style={{ padding: 0, position: 'absolute', top: 12, right: 12, width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: MPL.coral, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: favorites.isPending(id) ? 'progress' : 'pointer', opacity: favorites.isPending(id) ? .6 : 1 }}
                   >
                     <Heart size={21} fill="currentColor" />
                   </button>

@@ -131,7 +131,7 @@ export default function AnimalAlerts() {
                     disabled={deleteMutation.isPending}
                     aria-label="Eliminar alerta"
                     title="Eliminar alerta"
-                    style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.coral, borderRadius: 12, cursor: deleteMutation.isPending ? 'progress' : 'pointer', opacity: deleteMutation.isPending ? .6 : 1 }}
+                    style={{ padding: 0, width: 42, height: 42, display: 'grid', placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.coral, borderRadius: 12, cursor: deleteMutation.isPending ? 'progress' : 'pointer', opacity: deleteMutation.isPending ? .6 : 1 }}
                   >
                     <Trash2 size={17} />
                   </button>

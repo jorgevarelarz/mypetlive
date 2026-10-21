@@ -280,7 +280,7 @@ export default function AnimalsPublicList() {
                     Limpiar
                   </button>
                 )}
-                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ width: 36, height: 36, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 11, color: MPL.muted }}>
+                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ padding: 0, width: 36, height: 36, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 11, color: MPL.muted }}>
                   <X size={17} />
                 </button>
               </div>
@@ -465,7 +465,7 @@ export default function AnimalsPublicList() {
                           title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
                           onClick={() => favorites.toggle(id)}
                           disabled={favorites.isPending(id)}
-                          style={{ position: 'absolute', top: 12, right: 12, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: favorite ? MPL.coral : MPL.muted, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
+                          style={{ padding: 0, position: 'absolute', top: 12, right: 12, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: favorite ? MPL.coral : MPL.muted, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
                         >
                           <Heart size={20} fill={favorite ? 'currentColor' : 'none'} />
                         </button>
@@ -480,14 +480,14 @@ export default function AnimalsPublicList() {
                   </button>
                   {/* Ventana alrededor de la página actual (antes solo se veían la 1-3). */}
                   {Array.from({ length: Math.min(3, pages) }, (_, i) => Math.max(1, Math.min(page - 1, pages - 2)) + i).map(n => (
-                    <button key={n} type="button" onClick={() => setFilterPage(n)} aria-current={page === n ? 'page' : undefined} style={{ width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
+                    <button key={n} type="button" onClick={() => setFilterPage(n)} aria-current={page === n ? 'page' : undefined} style={{ padding: 0, width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
                       {n}
                     </button>
                   ))}
                   {pages > 3 && (
                     <span style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, padding: '0 4px' }}>de {pages}</span>
                   )}
-                  <button type="button" onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages} aria-label="Página siguiente" style={{ width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? .5 : 1 }}>
+                  <button type="button" onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages} aria-label="Página siguiente" style={{ padding: 0, width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? .5 : 1 }}>
                     <ChevronRight size={17} />
                   </button>
                 </nav>

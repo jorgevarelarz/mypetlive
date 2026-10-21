@@ -226,7 +226,7 @@ export default function CouponsList() {
                 control, y en un móvil a plena luz no se veía. Círculo blanco
                 sólido con el aspa en coral oscuro: 4,7:1. */}
             <div style={{ background: MPL.coral, padding: '26px 28px 22px', color: '#fff', position: 'relative' }}>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Cerrar cupón" style={{ position: 'absolute', top: 16, right: 16, width: 34, height: 34, borderRadius: 999, border: 'none', background: '#fff', color: MPL.coralDark, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(31,55,40,.2)' }}>
+              <button type="button" onClick={() => setSelected(null)} aria-label="Cerrar cupón" style={{ padding: 0, position: 'absolute', top: 16, right: 16, width: 34, height: 34, borderRadius: 999, border: 'none', background: '#fff', color: MPL.coralDark, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(31,55,40,.2)' }}>
                 <X size={18} strokeWidth={2.5} />
               </button>
               {/* Hueco para el aspa: si no, un texto largo se le mete por debajo. */}

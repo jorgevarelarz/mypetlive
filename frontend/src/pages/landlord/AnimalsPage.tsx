@@ -354,7 +354,7 @@ function ImageUploader({
                 type="button"
                 aria-label="Quitar imagen"
                 onClick={() => onRemove(idx)}
-                style={{ position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: 999, border: 'none', background: MPL.coral, color: '#fff', cursor: 'pointer', fontWeight: 800, lineHeight: 1 }}
+                style={{ padding: 0, position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: 999, border: 'none', background: MPL.coral, color: '#fff', cursor: 'pointer', fontWeight: 800, lineHeight: 1 }}
               >
                 ×
               </button>
