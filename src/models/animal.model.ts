@@ -131,6 +131,56 @@ const lostSchema = new Schema(
   { _id: false },
 );
 
+// Recordatorios de comida, arena y paseos. Por mascota: cada una tiene su
+// rutina. Con `times` vacío el aviso es «por olvido» (lleva demasiado sin
+// marcarse); con horas, avisa a esas horas. `off` lo apaga.
+// Las horas son «HH:MM» de hora española: es la que tiene en la cabeza la
+// familia, y el servidor corre en UTC.
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const careTimesSchema = new Schema(
+  {
+    off: { type: Boolean, default: false },
+    times: {
+      type: [{ type: String, match: HHMM }],
+      default: [],
+      validate: [(val: string[]) => val.length <= 4, 'too_many_times'],
+    },
+  },
+  { _id: false },
+);
+const careRemindersSchema = new Schema(
+  {
+    feed: { type: careTimesSchema, default: () => ({}) },
+    walk: { type: careTimesSchema, default: () => ({}) },
+    litter: {
+      type: new Schema(
+        {
+          off: { type: Boolean, default: false },
+          // Cada cuántos días toca y a qué hora avisar. Sin `everyDays`: por olvido.
+          everyDays: { type: Number, min: 1, max: 14 },
+          time: { type: String, match: HHMM },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+    // Estado del trabajo, no de la familia: qué hueco ya se avisó (idempotencia
+    // entre pasadas) y cuándo se avisó por olvido (uno por despiste, no uno
+    // cada cinco minutos).
+    sent: {
+      type: new Schema(
+        {
+          feedSlot: String, walkSlot: String, litterSlot: String,
+          feedLate: Date, walkLate: Date, litterLate: Date,
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+  },
+  { _id: false },
+);
+
 const animalSchema = new Schema(
   {
     shelter: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -197,6 +247,7 @@ const animalSchema = new Schema(
       ),
       default: () => ({ foods: [], litters: [] }),
     },
+    careReminders: { type: careRemindersSchema, default: () => ({}) },
     code: { type: String, unique: true, uppercase: true, index: true },
     lost: {
       type: lostSchema,

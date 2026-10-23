@@ -424,5 +424,59 @@ export async function listCare(req: Request, res: Response) {
       litterChange: animal.lastLitterChange,
       walk: animal.lastWalk,
     },
+    reminders: publicReminders(animal),
   });
+}
+
+/** Lo que la familia configura; el estado interno del trabajo (`sent`) no sale. */
+function publicReminders(animal: any) {
+  const r = animal.careReminders || {};
+  return {
+    feed: { off: Boolean(r.feed?.off), times: r.feed?.times || [] },
+    walk: { off: Boolean(r.walk?.off), times: r.walk?.times || [] },
+    litter: { off: Boolean(r.litter?.off), everyDays: r.litter?.everyDays ?? null, time: r.litter?.time ?? null },
+  };
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Horas válidas, sin repetir, ordenadas y como mucho cuatro. */
+function cleanTimes(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const times = [...new Set(value.map(v => String(v).trim()))];
+  if (times.some(t => !HHMM.test(t)) || times.length > 4) return null;
+  return times.sort();
+}
+
+// PUT /api/animals/:id/care/reminders — horarios de comida, paseo y arena.
+// Se manda la configuración entera (es una pantalla con los tres bloques).
+export async function updateCareReminders(req: Request, res: Response) {
+  const { id } = req.params;
+  const user: any = (req as any).user;
+  const animal: any = await animalIfAllowed(id, user);
+  if (!animal) return denyCare(res, id);
+
+  const body = req.body || {};
+  const feedTimes = cleanTimes(body.feed?.times);
+  const walkTimes = cleanTimes(body.walk?.times);
+  if (!feedTimes || !walkTimes) return res.status(400).json({ error: 'invalid_times' });
+
+  const everyDays = body.litter?.everyDays == null || body.litter?.everyDays === '' ? undefined : Number(body.litter.everyDays);
+  if (everyDays !== undefined && (!Number.isInteger(everyDays) || everyDays < 1 || everyDays > 14)) {
+    return res.status(400).json({ error: 'invalid_every_days' });
+  }
+  const litterTime = body.litter?.time ? String(body.litter.time).trim() : undefined;
+  if (litterTime && !HHMM.test(litterTime)) return res.status(400).json({ error: 'invalid_times' });
+
+  const sent = animal.careReminders?.sent;
+  animal.careReminders = {
+    feed: { off: Boolean(body.feed?.off), times: feedTimes },
+    walk: { off: Boolean(body.walk?.off), times: walkTimes },
+    litter: { off: Boolean(body.litter?.off), everyDays, time: everyDays ? litterTime || '19:00' : undefined },
+    // Cambiar el horario no debe repetir el aviso que ya salió hoy.
+    ...(sent ? { sent } : {}),
+  };
+  await animal.save();
+  res.json({ ok: true, reminders: publicReminders(animal) });
 }

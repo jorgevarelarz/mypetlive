@@ -29,6 +29,7 @@ import { toAbsoluteUrl } from '../../utils/media';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
+import CareRemindersCard from '../../components/pet/CareRemindersCard';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
 import { shareLink, webUrl, openPaymentPage, isNativeApp } from '../../utils/native';
@@ -824,6 +825,14 @@ export default function PetPage() {
         species={featuredAnimal.species}
         onMarked={invalidateAnimalCaches}
       />
+
+      {canEdit && (
+        <CareRemindersCard
+          animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+          species={featuredAnimal.species}
+          petName={featuredAnimal.name}
+        />
+      )}
 
 
       <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>

@@ -5,7 +5,7 @@ import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/animal.controller';
 import { animalCreateSchema, animalUpdateSchema, animalStatusSchema, personalPetUpdateSchema } from '../validators/animal.schema';
 import asyncHandler from '../utils/asyncHandler';
-import { markFeeding, markLitter, markWalk, listCare, upsertSupply } from '../controllers/animalCare.controller';
+import { markFeeding, markLitter, markWalk, listCare, upsertSupply, updateCareReminders } from '../controllers/animalCare.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import * as favoriteCtrl from '../controllers/animalFavorite.controller';
 import * as alertCtrl from '../controllers/animalAlert.controller';
@@ -70,5 +70,7 @@ r.get('/:id/care', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), a
 // Despensa: alta, edición, reposición y baja de un producto (para saber para
 // cuántas comidas queda, no solo cómo se llama).
 r.put('/:id/care/supplies', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(upsertSupply));
+// Recordatorios de comida, paseo y arena (notificación al móvil, ver jobs/careReminders).
+r.put('/:id/care/reminders', ...assertRole('tenant', 'landlord', 'protectora', 'admin'), asyncHandler(updateCareReminders));
 
 export default r;

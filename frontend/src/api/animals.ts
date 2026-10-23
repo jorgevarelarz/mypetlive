@@ -290,7 +290,23 @@ export async function getAnimalCare(id: string) {
     summary: CareSummary;
     pantry: CarePantry;
     last: { feeding?: string; litterChange?: string; walk?: string };
+    reminders?: CareReminders;
   };
+}
+
+/**
+ * Avisos de cuidado al móvil. Sin horas = «por olvido» (avisa si lleva mucho
+ * sin marcarse); `off` = nada. Horas «HH:MM» de hora española.
+ */
+export type CareReminders = {
+  feed: { off: boolean; times: string[] };
+  walk: { off: boolean; times: string[] };
+  litter: { off: boolean; everyDays: number | null; time: string | null };
+};
+
+export async function updateCareReminders(id: string, reminders: CareReminders) {
+  const { data } = await client.put(`/api/animals/${id}/care/reminders`, reminders);
+  return data as { ok: boolean; reminders: CareReminders };
 }
 
 export type UserPet = {

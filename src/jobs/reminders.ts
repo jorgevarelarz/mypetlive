@@ -7,6 +7,7 @@ import { brandedEmail } from '../utils/emailTemplates';
 import { sendPushToUser, type PushPayload } from '../utils/push';
 import logger from '../utils/logger';
 import { sendSupplyAlerts } from './supplyAlerts';
+import { sendCareReminders } from './careReminders';
 
 const H24_MS = 24 * 60 * 60 * 1000;
 const WELCOME_NUDGE_AFTER_DAYS = 3;
@@ -245,5 +246,10 @@ export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   };
   // Primera pasada poco después de arrancar (deja respirar la conexión a Mongo).
   setTimeout(run, 30_000);
+  // Comida, arena y paseos van aparte y más a menudo: «hora de cenar» tiene que
+  // llegar a su hora, no un cuarto de hora tarde.
+  const care = () => sendCareReminders().catch(err => logger.error({ err }, '[reminders] pasada de cuidado falló'));
+  setTimeout(care, 45_000);
+  setInterval(care, 5 * 60 * 1000);
   return setInterval(run, intervalMs);
 }
