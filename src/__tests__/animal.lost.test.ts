@@ -8,7 +8,12 @@ jest.mock('../utils/notification', () => ({
   sendSms: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../utils/push', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { sendEmail } from '../utils/notification';
+import { sendPushToUser } from '../utils/push';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -141,6 +146,12 @@ describe('Modo perdido', () => {
     expect(subject).toContain('Luna');
     expect(body).toContain('43.3568');
     expect(body).toContain('vecino@test.com');
+    // Y al móvil, que es lo urgente: al tocarla abre esta mascota con sus avisos.
+    const push = (sendPushToUser as jest.Mock).mock.calls.at(-1);
+    expect(push[1].title).toContain('Luna');
+    expect(push[1].body).toContain('Bebiendo en la fuente');
+    expect(push[1].url).toBe(`/pet?mascota=${pet._id}`);
+    expect(body).toContain(`/pet?mascota=${pet._id}`);
 
     const mine = await request(app).get(`/api/animals/${pet._id}/sightings`).set(familyH).expect(200);
     expect(mine.body.items).toHaveLength(1);

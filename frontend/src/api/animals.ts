@@ -328,6 +328,21 @@ export async function markPetLost(id: string, payload: { area?: string; notes?: 
   return data;
 }
 
+export type PetSighting = {
+  at: string;
+  lat?: number;
+  lng?: number;
+  accuracy?: number;
+  note?: string;
+  contact?: string;
+};
+
+/** Avisos de quien ha escaneado la chapa mientras está perdido. Solo la familia. */
+export async function listPetSightings(id: string) {
+  const { data } = await client.get(`/api/animals/${id}/sightings`);
+  return data as { items: PetSighting[] };
+}
+
 export async function markPetFound(id: string) {
   const { data } = await client.post(`/api/animals/${id}/found`, {});
   return data;

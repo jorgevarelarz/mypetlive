@@ -6,6 +6,7 @@ import AuthModal from "./components/auth/AuthModal";
 import AppShell from "./layout/AppShell";
 import HashScroll from "./components/HashScroll";
 import { NativeBackListener } from "./components/BackButton";
+import NotificationsPrompt from "./components/NotificationsPrompt";
 import Landing from "./pages/home/Landing";
 import AppWelcome from "./pages/home/AppWelcome";
 import { isNativeApp } from "./utils/native";
@@ -89,6 +90,7 @@ export default function AppRoutes() {
         <BrowserRouter>
           <HashScroll />
           <NativeBackListener />
+          <NotificationsPrompt />
           <Routes>
             <Route path="/" element={<HomeGate />} />
             <Route path="/sistema" element={<Sistema />} />

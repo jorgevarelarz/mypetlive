@@ -5,6 +5,7 @@ import { Adoption } from '../models/adoption.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
+import { sendPushToUser } from '../utils/push';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesFilter, speciesVariants } from '../utils/species';
@@ -52,11 +53,18 @@ async function notifyMatchingAlerts(animal: any) {
   if (!matching.length) return;
   const users = await User.find({ _id: { $in: matching.map(alert => alert.userId) } }).select('email name').lean();
   const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://mypetlive.es';
-  await Promise.allSettled(users.map(user => sendEmail(
-    user.email,
-    `Nuevo compañero compatible: ${animal.name}`,
-    `Hola ${user.name || ''}, ${animal.name} coincide con una de tus alertas de MyPetLive. Puedes conocerlo aquí: ${baseUrl}/animals/${animal._id}`,
-  )));
+  await Promise.allSettled(users.flatMap(user => [
+    sendEmail(
+      user.email,
+      `Nuevo compañero compatible: ${animal.name}`,
+      `Hola ${user.name || ''}, ${animal.name} coincide con una de tus alertas de MyPetLive. Puedes conocerlo aquí: ${baseUrl}/animals/${animal._id}`,
+    ),
+    sendPushToUser(String(user._id), {
+      title: `Nuevo compañero compatible: ${animal.name}`,
+      body: 'Coincide con una de tus alertas. Toca para conocerle.',
+      url: `/animals/${animal._id}`,
+    }),
+  ]));
 }
 
 export async function create(req: Request, res: Response) {
@@ -560,8 +568,18 @@ export async function reportSighting(req: Request, res: Response) {
 async function notifySighting(animal: any, sighting: any) {
   const ownerId = animal.ownerId || animal.shelter;
   if (!ownerId) return;
-  const owner: any = await User.findById(ownerId).select('email name').lean();
-  if (!owner?.email) return;
+  const owner: any = await User.findById(ownerId).select('email name role').lean();
+  if (!owner) return;
+
+  // Lo más urgente de la app: va al móvil antes que al correo. Al tocarlo se
+  // abre la ficha con los avisos (ubicación, mensaje, contacto).
+  const petPath = owner.role === 'landlord' ? '/landlord/animals' : `/pet?mascota=${animal._id}`;
+  const pushBody = sighting.note
+    ? `«${String(sighting.note).slice(0, 120)}»`
+    : sighting.lat !== undefined ? 'Ha compartido dónde está. Toca para verlo en el mapa.' : 'Te ha dejado un aviso. Toca para verlo.';
+  await sendPushToUser(String(owner._id), { title: `📍 Han visto a ${animal.name}`, body: pushBody, url: petPath }).catch(() => undefined);
+
+  if (!owner.email) return;
 
   const baseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://mypetlive.es';
   const lines = [
@@ -578,7 +596,7 @@ async function notifySighting(animal: any, sighting: any) {
   }
   if (sighting.note) lines.push('', `Mensaje: ${sighting.note}`);
   if (sighting.contact) lines.push('', `Puedes contactar con esta persona en: ${sighting.contact}`);
-  lines.push('', `Todos los avisos de ${animal.name}: ${baseUrl}/pets/${animal._id}`);
+  lines.push('', `Todos los avisos de ${animal.name}: ${baseUrl}${petPath}`);
 
   await sendEmail(
     owner.email,

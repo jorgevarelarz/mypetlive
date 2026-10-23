@@ -17,6 +17,15 @@ import {
   statusBeforeAutoClose,
 } from '../utils/adoptionUndo';
 import logger from '../utils/logger';
+import { sendPushToUser, type PushPayload } from '../utils/push';
+
+// Aviso al móvil junto al correo. Sin esperar: la respuesta no depende de Apple.
+function pushTo(userId: unknown, payload: PushPayload) {
+  if (!userId) return;
+  void sendPushToUser(String(userId), payload).catch(err =>
+    logger.error({ err, userId: String(userId) }, '[adopciones] fallo al enviar push'),
+  );
+}
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -93,6 +102,11 @@ export async function create(req: Request, res: Response) {
             `Revísala en tu panel: ${baseUrl}/landlord/adoptions`,
         );
       }
+      pushTo(animal.shelter, {
+        title: `Nueva solicitud para ${animal.name}`,
+        body: `${(adopter as any)?.name || 'Un adoptante'} quiere adoptarle.`,
+        url: '/landlord/adoptions',
+      });
     }
   } catch {}
 
@@ -256,6 +270,11 @@ async function closeSiblingApplications(approved: any, animal: any, actorId: str
       });
       await sibling.save();
 
+      pushTo(sibling.adopterId, {
+        title: 'Tu solicitud de adopción se ha cerrado',
+        body: `${animal.name} ya ha encontrado hogar. Gracias por querer adoptar.`,
+        url: '/adoptions/mine',
+      });
       const adopter = await User.findById(sibling.adopterId).select('email').lean();
       if (!adopter?.email) continue;
       await sendEmail(
@@ -346,6 +365,10 @@ export async function setStatus(req: Request, res: Response) {
     await closeSiblingApplications(app, animal, String(userId));
   }
 
+  pushTo(app.adopterId, status === 'aprobada'
+    ? { title: '¡Adopción aprobada! 🎉', body: `${animal.name} se viene a casa contigo.`, url: `/adoptions/${app._id}` }
+    : { title: `Tu solicitud para ${animal.name}`, body: `Ahora está: ${STATUS_LABEL_ES[status] || status}.`, url: `/adoptions/${app._id}` });
+
   try {
     const adopter = await User.findById(app.adopterId);
     if (status === 'aprobada') {
@@ -417,6 +440,11 @@ async function reopenSiblingApplications(approved: any, animal: any, actorId: st
       await sibling.save();
       reopened += 1;
 
+      pushTo(sibling.adopterId, {
+        title: 'Tu solicitud de adopción vuelve a estar abierta',
+        body: `La adopción de ${animal.name} no ha seguido adelante: tu solicitud sigue en marcha.`,
+        url: `/adoptions/${sibling._id}`,
+      });
       const adopter = await User.findById(sibling.adopterId).select('email').lean();
       if (!adopter?.email) continue;
       await sendEmail(
@@ -542,6 +570,11 @@ export async function undoApproval(req: Request, res: Response) {
   const reopened = await reopenSiblingApplications(app, animal, String(userId));
 
   // 6. El adoptante se entera por nosotros, no por encontrarse la ficha cambiada.
+  pushTo(adopterId, {
+    title: `Se ha revertido la adopción de ${animal.name}`,
+    body: `Tu solicitud vuelve a estar preaprobada. Motivo: ${trimmedReason.slice(0, 120)}`,
+    url: `/adoptions/${app._id}`,
+  });
   try {
     const adopter = adopterId ? await User.findById(adopterId).select('email').lean() : null;
     if (adopter?.email) {
@@ -597,6 +630,13 @@ export async function cancelByAdopter(req: Request, res: Response) {
   }
 
   // Aviso a la protectora de que el adoptante retiró la solicitud.
+  if (animal?.shelter) {
+    pushTo(animal.shelter, {
+      title: 'Solicitud de adopción cancelada',
+      body: `El adoptante ha retirado su solicitud para ${animal.name}.`,
+      url: '/landlord/adoptions',
+    });
+  }
   try {
     if (animal?.shelter) {
       const shelter = await User.findById(animal.shelter);

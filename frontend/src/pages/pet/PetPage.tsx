@@ -15,6 +15,7 @@ import {
   listMyPets,
   createPersonalPet,
   markPetLost,
+  listPetSightings,
   markPetFound,
   updateMyPet,
   addHealthRecord,
@@ -30,7 +31,7 @@ import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
-import { shareLink, webUrl } from '../../utils/native';
+import { shareLink, webUrl, openPaymentPage, isNativeApp } from '../../utils/native';
 
 // Lo que la familia puede apuntar. 'visit' se queda fuera a propósito: una
 // visita al veterinario la registra la clínica, con su tratamiento.
@@ -181,12 +182,16 @@ export default function PetPage() {
     saveSelectedPet(id);
   };
   // «+ Añadir» del inicio llega con ?nueva=1 y abre el alta directamente.
+  // Una notificación («Han visto a Luna») llega con ?mascota=<id> y la deja elegida.
   const [searchParams, setSearchParams] = useSearchParams();
   const [registerOpen, setRegisterOpen] = useState(() => searchParams.get('nueva') === '1');
   useEffect(() => {
-    if (searchParams.get('nueva') === '1') {
+    const fromPush = searchParams.get('mascota');
+    if (fromPush) setSelectedPetId(fromPush);
+    if (searchParams.get('nueva') === '1' || fromPush) {
       const next = new URLSearchParams(searchParams);
       next.delete('nueva');
+      next.delete('mascota');
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -597,6 +602,17 @@ export default function PetPage() {
 
   const showChips = petItems.length > 1;
 
+  // Mientras está perdido, los avisos de quien escanea la chapa (la notificación
+  // «Han visto a…» trae aquí). Se refrescan solos: es cuando más se mira.
+  const lostPetId = currentPetEntry && currentPet?.lost?.isLost ? String(currentPet._id || currentPet.id || '') : '';
+  const sightingsQ = useQuery({
+    queryKey: ['pet-sightings', lostPetId],
+    queryFn: () => listPetSightings(lostPetId),
+    enabled: Boolean(lostPetId),
+    refetchInterval: 60_000,
+  });
+  const sightings = sightingsQ.data?.items || [];
+
   if (isLoading) return <div className="p-4">Cargando…</div>;
 
   // Un fallo al cargar las mascotas no puede disfrazarse de "no tienes mascota".
@@ -758,6 +774,41 @@ export default function PetPage() {
             {featuredAnimal.lost.contact ? ` tu contacto (${featuredAnimal.lost.contact})` : ' el formulario de aviso'}
             {' '}a quien escanee su chapa. Cuando aparezca, dale a «Ha aparecido» y deja de mostrarse.
           </p>
+          {lostPetId && (
+            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+              <div className="text-sm font-semibold" style={{ color: '#3F4A3C' }}>
+                {sightings.length
+                  ? `Avisos de que le han visto (${sightings.length})`
+                  : 'Aún no hay avisos. Te mandaremos una notificación en cuanto alguien escanee su chapa.'}
+              </div>
+              {sightings.map((s, i) => {
+                const mapUrl = s.lat !== undefined && s.lng !== undefined
+                  ? `https://www.google.com/maps?q=${s.lat},${s.lng}`
+                  : null;
+                return (
+                  <div key={`${s.at}-${i}`} className="rounded-xl border bg-white p-3 text-sm" style={{ borderColor: '#E7E1D5', color: '#3F4A3C' }}>
+                    <div className="text-xs" style={{ color: '#7A8273' }}>
+                      {new Date(s.at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </div>
+                    {s.note && <div style={{ marginTop: 4 }}>«{s.note}»</div>}
+                    {s.contact && <div style={{ marginTop: 4 }}>Contacto: <strong>{s.contact}</strong></div>}
+                    {mapUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => (isNativeApp() ? void openPaymentPage(mapUrl) : window.open(mapUrl, '_blank', 'noopener'))}
+                        className="font-semibold"
+                        style={{ marginTop: 6, padding: 0, background: 'none', border: 0, color: '#1F6F6F' }}
+                      >
+                        📍 Ver dónde en el mapa{s.accuracy ? ` (±${Math.round(s.accuracy)} m)` : ''}
+                      </button>
+                    ) : (
+                      <div className="text-xs" style={{ marginTop: 4, color: '#7A8273' }}>No compartió su ubicación.</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

@@ -17,6 +17,7 @@ import {
 } from '../utils/marketplace';
 import { normalizeSpecies, speciesVariants } from '../utils/species';
 import { sendEmail } from '../utils/notification';
+import { sendPushToUser } from '../utils/push';
 import logger from '../utils/logger';
 import { withRequiredTxn } from '../utils/txn';
 import { AppError } from '../utils/errors';
@@ -528,6 +529,13 @@ export async function markShipped(req: Request, res: Response) {
       `Tu pedido ${order.reference} va de camino`,
       `Buenas noticias: tu pedido ya ha salido.${tracking}\n\n${orderLink}`,
     );
+    if (order.buyer.userId) {
+      await sendPushToUser(String(order.buyer.userId), {
+        title: 'Tu pedido va de camino 📦',
+        body: order.tracking?.code ? `Seguimiento: ${order.tracking.carrier || ''} ${order.tracking.code}`.trim() : `Pedido ${order.reference}`,
+        url: `/pedido/${order._id}`,
+      });
+    }
   } catch (err) {
     logger.error({ err, orderId: String(order._id) }, '[marketplace] no se pudo avisar del envío');
   }
@@ -567,7 +575,19 @@ export async function fulfillPaidOrder(orderId: string, paymentRef?: string): Pr
         `Se enviará a: ${order.shippingAddress.line1}, ${order.shippingAddress.postalCode} ${order.shippingAddress.city}\n\n` +
         orderLink,
     );
+    if (order.buyer.userId) {
+      await sendPushToUser(String(order.buyer.userId), {
+        title: 'Pedido confirmado',
+        body: `${order.reference} · ${order.totalEur.toFixed(2)} €`,
+        url: `/pedido/${order._id}`,
+      });
+    }
     if (order.sellerId) {
+      await sendPushToUser(String(order.sellerId), {
+        title: 'Nuevo pedido que preparar',
+        body: order.items.map(i => `${i.qty} × ${i.name}`).join(', ').slice(0, 140),
+        url: '/partner/pedidos',
+      });
       const seller = await User.findById(order.sellerId).select('email').lean();
       if (seller?.email) {
         await sendEmail(

@@ -6,6 +6,7 @@ import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
+import { sendPushToUser } from '../utils/push';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { withRequiredTxn, withTxnIfAvailable } from '../utils/txn';
 import { AppError } from '../utils/errors';
@@ -27,8 +28,19 @@ function fmtDate(d?: Date | string) {
   return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
 }
 
-// Notifica por email a la parte indicada. Best-effort: nunca rompe el flujo.
-async function notify(to: string | undefined, subject: string, body: string) {
+// Notifica por email a la parte indicada y, si se pasa `push`, también a su
+// móvil (abre la agenda al tocarlo). Best-effort: nunca rompe el flujo.
+async function notify(
+  to: string | undefined,
+  subject: string,
+  body: string,
+  push?: { userId: unknown; title: string; body?: string },
+) {
+  if (push?.userId) {
+    void sendPushToUser(String(push.userId), { title: push.title, body: push.body, url: '/citas' }).catch(err =>
+      logger.error({ err }, '[vet-appointments] fallo al enviar push'),
+    );
+  }
   if (!to) return;
   try {
     await sendEmail(to, subject, body);
@@ -219,6 +231,7 @@ export async function createAppointment(req: Request, res: Response) {
     'Nueva solicitud de cita en MyPetLive',
     `${(owner as any)?.name || 'Un cliente'} ha solicitado una cita para el ${fmtDate(when)}.\n` +
       `Motivo: ${cleanReason}${service ? `\nServicio: ${service.name}${service.priceEur != null ? ` (${service.priceEur} €${service.pricingType === 'fijo' ? '' : ', orientativo'})` : ' (presupuesto)'}` : ''}${code ? `\nMascota: ${code}` : ''}\n\nRevísala en tu panel de MyPetLive.`,
+    { userId: vetId, title: 'Nueva solicitud de cita', body: `${(owner as any)?.name || 'Un cliente'} pide cita para el ${fmtDate(when)}.` },
   );
 
   res.status(201).json(appt);
@@ -370,10 +383,24 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
     // Avisar a la otra parte de quien canceló.
     const cancelledByOwner = isOwner && !isVet && !isAdmin;
     const to = cancelledByOwner ? (vetUser as any)?.email : (owner as any)?.email;
-    await notify(to, 'Cita cancelada — MyPetLive', `La cita del ${fmtDate(appt.scheduledAt || appt.requestedAt)} ha sido cancelada.${appt.cancelReason ? `\nMotivo: ${appt.cancelReason}` : ''}`);
+    const when = fmtDate(appt.scheduledAt || appt.requestedAt);
+    await notify(to, 'Cita cancelada — MyPetLive', `La cita del ${when} ha sido cancelada.${appt.cancelReason ? `\nMotivo: ${appt.cancelReason}` : ''}`, {
+      userId: cancelledByOwner ? appt.vetId : appt.userId,
+      title: 'Cita cancelada',
+      body: `La cita del ${when}${appt.cancelReason ? `. Motivo: ${appt.cancelReason}` : ''}`,
+    });
   } else if (STATUS_TEXT[status]) {
     // Confirmaciones/reprogramaciones/completar las hace el vet → avisar al dueño.
-    await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status]);
+    const PUSH_TITLE: Record<string, string> = {
+      confirmed: 'Cita confirmada ✅',
+      rescheduled: 'Nueva fecha para tu cita',
+      completed: 'Cita completada',
+    };
+    await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status], {
+      userId: appt.userId,
+      title: PUSH_TITLE[status],
+      body: STATUS_TEXT[status],
+    });
   }
 
   res.json({ ...appt.toObject(), clinicalRecordAdded, patitasSettlementFailed });

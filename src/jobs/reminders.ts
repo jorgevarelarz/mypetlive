@@ -4,6 +4,7 @@ import { User } from '../models/user.model';
 import { Animal } from '../models/animal.model';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
+import { sendPushToUser, type PushPayload } from '../utils/push';
 import logger from '../utils/logger';
 import { sendSupplyAlerts } from './supplyAlerts';
 
@@ -45,6 +46,17 @@ async function notify(to: string | undefined | null, subject: string, body: stri
   }
 }
 
+// El mismo aviso en el móvil. Corto: la notificación se lee en la pantalla
+// bloqueada, el detalle está al tocarla.
+async function push(userId: unknown, payload: PushPayload) {
+  if (!userId) return;
+  try {
+    await sendPushToUser(String(userId), payload);
+  } catch (err) {
+    logger.error({ err, userId: String(userId) }, '[reminders] fallo al enviar push');
+  }
+}
+
 /**
  * Recordatorio 24h antes de la cita veterinaria (confirmadas o reprogramadas),
  * a dueño y vet. Idempotente: marca `reminder24SentAt` en la cita.
@@ -77,14 +89,16 @@ export async function sendAppointmentReminders(now = new Date()): Promise<number
       owner?.email,
       `Recordatorio: cita veterinaria el ${when}`,
       `Te recordamos la cita de ${petLabel} con ${vetName}${serviceLine}: ${when}.\n` +
-        `Si no puedes asistir, cancélala o reprográmala desde MyPetLive: ${FRONTEND_URL()}/vets/appointments`,
+        `Si no puedes asistir, cancélala o reprográmala desde MyPetLive: ${FRONTEND_URL()}/citas`,
     );
+    await push(appt.userId, { title: `Cita de ${petLabel} con ${vetName}`, body: when, url: '/citas' });
     await notify(
       vet?.email,
       `Recordatorio: cita el ${when}`,
       `Tienes una cita con ${owner?.name || 'un cliente'} para ${petLabel}${serviceLine}: ${when}.\n` +
-        `Consulta tu agenda en ${FRONTEND_URL()}/vet/appointments`,
+        `Consulta tu agenda en ${FRONTEND_URL()}/citas`,
     );
+    await push(appt.vetId, { title: `Cita con ${owner?.name || 'un cliente'} (${petLabel})`, body: when, url: '/citas' });
 
     (appt as any).reminder24SentAt = new Date();
     await appt.save();
@@ -174,7 +188,7 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
     // de enviar sigue siendo lo correcto (un fallo de correo pierde un aviso, y
     // eso es mejor que repetirlo cada cuarto de hora), pero solo cuando hay a
     // quién enviárselo.
-    const owner: any = await User.findById(animal.ownerId || animal.shelter).select('email').lean();
+    const owner: any = await User.findById(animal.ownerId || animal.shelter).select('email role').lean();
     if (!owner?.email) continue;
 
     for (const h of due) h.reminderSentAt = new Date();
@@ -182,6 +196,8 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
 
     const petName = animal.name || 'tu mascota';
     const base = FRONTEND_URL();
+    // La familia lo lleva en «Mi mascota»; una protectora, en su lista de animales.
+    const petPath = owner.role === 'landlord' ? '/landlord/animals' : '/pet';
     // "Pendiente" y no "le toca pronto" cuando la fecha ya pasó. Desde que el
     // alta pregunta por la última vacuna, entran fechas históricas: una vacuna
     // de hace catorce meses programa un aviso ya vencido, y decirle a alguien
@@ -194,7 +210,7 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
     const text =
       `A ${petName} le toca pronto:\n` +
       due.map((h: any) => `- ${linea(h)}`).join('\n') +
-      `\n\nApúntalo cuando lo hagáis en su pasaporte: ${base}/pets`;
+      `\n\nApúntalo cuando lo hagáis en su pasaporte: ${base}${petPath}`;
     const html = brandedEmail({
       preheader: `A ${petName} le toca ${HEALTH_LABELS[due[0].type] || 'una revisión'}`,
       heading: `A ${petName} le toca pronto`,
@@ -203,11 +219,16 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
         due.map((h: any) => `<li style="margin:0 0 10px;">${linea(h)}</li>`).join('') +
         `</ul>` +
         `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;">Cuando lo hagáis, apúntalo en su pasaporte y te avisamos la próxima vez.</p>`,
-      button: { text: `Ver el pasaporte de ${petName}`, url: `${base}/pets` },
+      button: { text: `Ver el pasaporte de ${petName}`, url: `${base}${petPath}` },
       footnote: 'Te avisamos una semana antes de cada cita que anotes en el pasaporte.',
     });
 
     await notify(owner.email, `A ${petName} le toca pronto 🐾`, text, html);
+    await push(owner._id, {
+      title: `A ${petName} le toca pronto 🐾`,
+      body: due.map((h: any) => { const l = linea(h); return l[0].toUpperCase() + l.slice(1); }).join('\n'),
+      url: petPath,
+    });
     sent += 1;
   }
   if (sent) logger.info({ sent }, '[reminders] recordatorios de salud enviados');

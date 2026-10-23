@@ -17,6 +17,7 @@ import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 import DeleteAccountPanel from '../../components/account/DeleteAccountPanel';
 import { openPaymentPage } from '../../utils/native';
 import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
+import { nativePushAvailable } from '../../utils/nativePush';
 
 const roleLabel: Record<string, string> = {
   tenant: 'Adoptante',
@@ -152,7 +153,9 @@ function PushPanel() {
       }
     } catch (e: any) {
       toast.error(e?.message === 'permission_denied'
-        ? 'Permiso denegado. Actívalo en los ajustes del navegador.'
+        ? (nativePushAvailable()
+          ? 'Permiso denegado. Actívalo en Ajustes del iPhone › MyPetLive › Notificaciones.'
+          : 'Permiso denegado. Actívalo en los ajustes del navegador.')
         : 'No se pudieron activar las notificaciones');
     } finally {
       setBusy(false);
@@ -186,7 +189,8 @@ function PushPanel() {
       ) : (
         <>
           <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-            Recibe un aviso en este dispositivo cuando te llegue un mensaje nuevo.
+            Recibe un aviso en este dispositivo de mensajes nuevos, citas y vacunas, adopciones,
+            pedidos y si alguien encuentra a tu mascota.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" onClick={toggle} disabled={busy}
