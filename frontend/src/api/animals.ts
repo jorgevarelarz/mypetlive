@@ -356,6 +356,18 @@ export type PetSighting = {
   contact?: string;
 };
 
+/**
+ * Quien encuentra a un animal perdido avisa desde su pasaporte, sin cuenta. El
+ * servidor hace de relé: la familia recibe el aviso y quien avisa no ve sus datos.
+ */
+export async function reportSighting(
+  code: string,
+  sighting: { lat?: number; lng?: number; accuracy?: number; note?: string; contact?: string },
+) {
+  const { data } = await client.post(`/api/animals/passport/${encodeURIComponent(code)}/sighting`, sighting);
+  return data as { ok: boolean };
+}
+
 /** Avisos de quien ha escaneado la chapa mientras está perdido. Solo la familia. */
 export async function listPetSightings(id: string) {
   const { data } = await client.get(`/api/animals/${id}/sightings`);

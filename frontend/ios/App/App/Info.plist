@@ -60,6 +60,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>MyPetLive usa la cámara para hacer fotos de tu mascota y escanear el código de barras de su comida o su arena.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Si encuentras una mascota perdida, MyPetLive envía a su familia dónde la has visto. Solo cuando tú lo pides.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>MyPetLive usa tus fotos para que elijas la foto de tu mascota.</string>
 </dict>

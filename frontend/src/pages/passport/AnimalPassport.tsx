@@ -10,6 +10,7 @@ import BackButton from '../../components/BackButton';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, speciesLabel, sizeLabel, sexLabel } from '../../styles/mypetlive';
 import { webUrl } from '../../utils/native';
 import MemorialMural from '../../components/memorial/MemorialMural';
+import SightingForm from '../../components/passport/SightingForm';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 
@@ -80,9 +81,11 @@ export default function AnimalPassport() {
                   </div>
                 ) : (
                   <div style={{ marginTop: 10, fontSize: 14.5, color: MPL.muted }}>
-                    Su familia no ha dejado un teléfono aquí. Avísala desde el formulario de esta misma página.
+                    Su familia no ha dejado un teléfono aquí. Avísala con el formulario de aquí abajo.
                   </div>
                 )}
+                {/* También con teléfono: la ubicación exacta le sirve más que una llamada. */}
+                <SightingForm code={p.code} name={p.name} />
               </div>
             )}
 
