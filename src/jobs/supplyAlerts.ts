@@ -120,6 +120,7 @@ export async function sendSupplyAlerts(): Promise<number> {
   // que predecir y no hay a quién avisar.
   const animals = await Animal.find({
     $or: [{ 'carePantry.foods.perUse': { $gt: 0 } }, { 'carePantry.litters.perUse': { $gt: 0 } }],
+    'memorial.active': { $ne: true },
   }).limit(500);
 
   let sent = 0;

@@ -131,8 +131,9 @@ export async function sendWelcomeReminders(now = new Date()): Promise<number> {
 
     const [owner, animal] = await Promise.all([
       User.findById(plan.ownerId).select('email').lean(),
-      Animal.findById(plan.animalId).select('name').lean(),
+      Animal.findById(plan.animalId).select('name memorial.active').lean(),
     ]);
+    if ((animal as any)?.memorial?.active) continue;
     if (!owner?.email) continue;
     const petName = animal?.name || 'tu mascota';
     const base = FRONTEND_URL();
@@ -174,6 +175,9 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
   const horizon = new Date(now.getTime() + HEALTH_NOTICE_DAYS * H24_MS);
   const animals = await Animal.find({
     healthHistory: { $elemMatch: { nextDueAt: { $ne: null, $lte: horizon }, reminderSentAt: { $exists: false } } },
+    // Una vacuna «pendiente» de una mascota que ya no está es lo último que
+    // debe llegarle a nadie.
+    'memorial.active': { $ne: true },
   });
 
   let sent = 0;

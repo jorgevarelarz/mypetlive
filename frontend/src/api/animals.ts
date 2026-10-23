@@ -1,3 +1,4 @@
+import type { PublicMemorial } from './memorial';
 import { api as client } from './client';
 
 export type AnimalStatus =
@@ -152,6 +153,8 @@ export type AnimalPassport = {
   };
   health: { vetVisits: number; healthMilestones: number };
   timeline: AnimalTimelineItem[];
+  // Mascota fallecida: el pasaporte se convierte en su mural.
+  memorial?: PublicMemorial | null;
 };
 
 // Pasaporte público por código (sin datos personales del dueño).

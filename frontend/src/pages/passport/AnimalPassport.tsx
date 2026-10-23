@@ -9,6 +9,7 @@ import { usePageMeta } from '../../utils/usePageMeta';
 import BackButton from '../../components/BackButton';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, speciesLabel, sizeLabel, sexLabel } from '../../styles/mypetlive';
 import { webUrl } from '../../utils/native';
+import MemorialMural from '../../components/memorial/MemorialMural';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 
@@ -17,12 +18,14 @@ export default function AnimalPassport() {
   const normalized = code.trim().toUpperCase();
 
   const passQ = useQuery({ queryKey: ['passport', normalized], queryFn: () => getAnimalPassport(normalized), enabled: !!normalized, retry: false });
-  const offersQ = useQuery({ queryKey: ['offers-animal', normalized], queryFn: () => offersForAnimal(normalized), enabled: !!normalized, retry: false });
-
   const p = passQ.data;
+  const memorial = p?.memorial?.active ? p.memorial : null;
+  // Nada de ofertas en el mural de una mascota que ha fallecido.
+  const offersQ = useQuery({ queryKey: ['offers-animal', normalized], queryFn: () => offersForAnimal(normalized), enabled: !!normalized && !!p && !memorial, retry: false });
+
   usePageMeta({
-    title: p ? `${p.name} · Pasaporte MyPetLive (${p.code})` : 'Pasaporte · MyPetLive',
-    description: p ? `${speciesLabel(p.species)} · ${p.age || ''} · pasaporte digital en MyPetLive` : 'Pasaporte digital de mascota',
+    title: memorial && p ? `En memoria de ${p.name} · MyPetLive` : p ? `${p.name} · Pasaporte MyPetLive (${p.code})` : 'Pasaporte · MyPetLive',
+    description: memorial && p ? (memorial.epitaph || `El mural de ${p.name}`) : p ? `${speciesLabel(p.species)} · ${p.age || ''} · pasaporte digital en MyPetLive` : 'Pasaporte digital de mascota',
     image: p?.images?.[0],
   });
 
@@ -52,6 +55,8 @@ export default function AnimalPassport() {
             <p style={{ color: MPL.muted }}>No existe ningún animal con el código <strong>{normalized}</strong>.</p>
             <Link to="/animals" style={{ color: MPL.teal, fontWeight: 800 }}>Ver animales en adopción →</Link>
           </div>
+        ) : memorial ? (
+          <MemorialMural code={p.code} name={p.name} image={p.images?.[0]} memorial={memorial} />
         ) : (
           <>
             {/* Se ha perdido. Va lo primero y en rojo porque esta página, cuando

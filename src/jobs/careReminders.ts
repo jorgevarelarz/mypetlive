@@ -90,6 +90,8 @@ export async function sendCareReminders(now = new Date()): Promise<number> {
   const animals = await Animal.find({
     ownerId: { $ne: null },
     status: { $ne: 'archivado' },
+    // Despedida: ni un aviso más (ver memorial.controller).
+    'memorial.active': { $ne: true },
     $or: [
       { 'careReminders.feed.times.0': { $exists: true } },
       { 'careReminders.walk.times.0': { $exists: true } },

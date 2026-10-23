@@ -6,6 +6,7 @@ import { AnimalAlert } from '../models/animalAlert.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { sendPushToUser } from '../utils/push';
+import { publicMemorial, memorialStats, publishedMessages } from './memorial.controller';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesFilter, speciesVariants } from '../utils/species';
@@ -378,6 +379,18 @@ export async function getPassport(req: Request, res: Response) {
   const vetCount = (animal.vetHistory || []).length;
   const healthCount = (animal.healthHistory || []).length;
 
+  // Mascota fallecida: el QR enseña su mural. Solo los mensajes que la familia publicó.
+  const memorial = animal.memorial?.active
+    ? {
+      ...publicMemorial(animal),
+      stats: await memorialStats(animal),
+      messages: await publishedMessages(animal._id),
+      by: responsable ? nombreDePila(responsable) : null,
+      // La fecha de nacimiento solo sale en el mural: «2014 — 2026» bajo su nombre.
+      bornAt: animal.birthDate || null,
+    }
+    : null;
+
   res.json({
     code: animal.code,
     name: animal.name,
@@ -414,6 +427,7 @@ export async function getPassport(req: Request, res: Response) {
       }
       : { isLost: false },
     timeline: buildTimeline(animal, events, false),
+    memorial,
   });
 }
 
@@ -840,6 +854,10 @@ export async function listMine(req: Request, res: Response) {
     ...personal.map(animal => ({ type: 'personal', animal })),
     ...adopted,
   ];
+  // Las que ya no están, al final: la primera es la que se elige al abrir la
+  // app, y tiene que ser una que sigue en casa.
+  const inMemory = (item: any) => (item.animal?.memorial?.active ? 1 : 0);
+  items.sort((a, b) => inMemory(a) - inMemory(b));
 
   res.json({ items });
 }

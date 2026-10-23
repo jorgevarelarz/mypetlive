@@ -108,7 +108,10 @@ export default function Home() {
   // Todas sus mascotas: con varias se elige cuál se ve (la elegida se comparte
   // con «Mi mascota», ver utils/selectedPet).
   const { data: myPets } = useQuery({ queryKey: ['my-pets'], queryFn: listMyPets, staleTime: 60_000 });
-  const pets = React.useMemo(() => (myPets?.items || []).map(item => item.animal).filter(Boolean), [myPets?.items]);
+  // Las que ya han fallecido no salen en el inicio (es el sitio del cuidado de
+  // cada día); su mural vive en «Mi mascota».
+  const allPets = React.useMemo(() => (myPets?.items || []).map(item => item.animal).filter(Boolean), [myPets?.items]);
+  const pets = React.useMemo(() => allPets.filter((p: any) => !p.memorial?.active), [allPets]);
   const [selectedPetId, setSelectedPetIdState] = React.useState<string | null>(() => loadSelectedPet());
   const selectPet = (id: string) => {
     setSelectedPetIdState(id);
@@ -117,11 +120,12 @@ export default function Home() {
   const petIds = pets.map((p: any) => String(p._id || p.id));
   const currentId = selectedPetId && petIds.includes(selectedPetId) ? selectedPetId : petIds[0] || null;
 
-  const { data: featuredAnimal, isLoading, isError, refetch } = useQuery({
+  const { data: featuredRaw, isLoading, isError, refetch } = useQuery({
     queryKey: ['tenant-featured-animal', currentId || assignedAnimalId],
     queryFn: () => fetchFeaturedAnimal(currentId || assignedAnimalId),
     staleTime: 60_000,
   });
+  const featuredAnimal = (featuredRaw as any)?.memorial?.active ? null : featuredRaw;
 
 
   const hasPet = Boolean(featuredAnimal);
@@ -169,7 +173,7 @@ export default function Home() {
               {/* Sin mascota registrada, /pet abre el alta: el botón lo dice. Mientras
                   carga o si falla la consulta se queda en «Ver mi mascota». */}
               <ActionButton variant="ghost" onClick={() => nav('/pet')}>
-                {!isLoading && !isError && !featuredAnimal ? 'Registrar mi mascota' : 'Ver mi mascota'}
+                {!isLoading && !isError && !featuredAnimal && !allPets.length ? 'Registrar mi mascota' : 'Ver mi mascota'}
               </ActionButton>
             </div>
           </div>

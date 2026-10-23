@@ -30,6 +30,9 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import CareRemindersCard from '../../components/pet/CareRemindersCard';
+import MemorialFamily from '../../components/memorial/MemorialFamily';
+import FarewellSheet from '../../components/memorial/FarewellSheet';
+import { startMemorial } from '../../api/memorial';
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
 import { shareLink, webUrl, openPaymentPage, isNativeApp } from '../../utils/native';
@@ -226,6 +229,9 @@ export default function PetPage() {
   const petItems = useMemo(() => myPets?.items || [], [myPets?.items]);
 
   useEffect(() => {
+    // Mientras se cargan no hay nada que corregir: borrar aquí la elegida pisaba
+    // la que trae `?mascota=` (tocar una notificación abría otra mascota).
+    if (!myPets) return;
     if (!petItems.length) {
       setSelectedPetId(null);
       return;
@@ -235,7 +241,7 @@ export default function PetPage() {
     }
     const firstId = String(petItems[0].animal?._id || petItems[0].animal?.id || '');
     setSelectedPetId(firstId || null);
-  }, [petItems, selectedPetId]);
+  }, [myPets, petItems, selectedPetId]);
 
   const currentPetEntry = useMemo(() => {
     if (!selectedPetId) return undefined;
@@ -433,6 +439,22 @@ export default function PetPage() {
     onError: (error: any) => {
       setLostError(backendErrorMessage(error, 'No hemos podido marcarlo. Inténtalo de nuevo.'));
     },
+  });
+
+  // Despedirla: su ficha pasa a ser su mural (ver components/memorial).
+  const [farewellOpen, setFarewellOpen] = useState(false);
+  const farewellMutation = useMutation({
+    mutationFn: async (diedAt?: string) => {
+      const id = String(currentPet?._id || currentPet?.id || '');
+      if (!id) throw new Error('missing_pet_id');
+      return startMemorial(id, diedAt);
+    },
+    onSuccess: () => {
+      setFarewellOpen(false);
+      refetchPets();
+      invalidateAnimalCaches();
+    },
+    onError: () => toast.error('No se ha podido guardar. Inténtalo de nuevo.'),
   });
 
   const foundMutation = useMutation({
@@ -676,6 +698,7 @@ export default function PetPage() {
   // Solo se edita lo propio: el respaldo (`fallbackQuery`) puede estar pintando
   // el animal destacado de una protectora, que no es de esta familia.
   const canEdit = Boolean(currentPetEntry);
+  const inMemory = Boolean(featuredAnimal.memorial?.active);
 
   return (
     <div className="p-4 grid gap-4" style={{ color: '#3F4A3C' }}>
@@ -703,6 +726,10 @@ export default function PetPage() {
         </div>
       </div>
 
+      {inMemory && canEdit ? (
+        <MemorialFamily animal={featuredAnimal} onChanged={() => { refetchPets(); invalidateAnimalCaches(); }} />
+      ) : (
+      <>
       {/* Ficha tipo carnet: la foto con sus datos encima y debajo cuatro
           accesos. Antes eran botones con emojis repartidos en tres filas. */}
       <div className="border rounded-2xl overflow-hidden" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
@@ -1061,6 +1088,28 @@ export default function PetPage() {
             )}
           </>
         </div>
+      )}
+
+      {/* Discreto y al final: nadie debería encontrárselo buscando otra cosa. */}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => setFarewellOpen(true)}
+          style={{ justifySelf: 'center', padding: '8px 0', border: 0, background: 'none', color: '#6B7464', fontSize: 14, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          {featuredAnimal.name} ha fallecido
+        </button>
+      )}
+      </>
+      )}
+
+      {farewellOpen && (
+        <FarewellSheet
+          petName={featuredAnimal.name}
+          busy={farewellMutation.isPending}
+          onCancel={() => setFarewellOpen(false)}
+          onConfirm={diedAt => farewellMutation.mutate(diedAt)}
+        />
       )}
 
       <SelectProtectoraModal

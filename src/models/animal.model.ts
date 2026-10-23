@@ -181,6 +181,66 @@ const careRemindersSchema = new Schema(
   { _id: false },
 );
 
+// «En su memoria». Cuando una mascota fallece la familia la despide y su ficha
+// pasa a ser un mural: el QR de la chapa lo enseña y se paran todos los avisos.
+// Se puede deshacer (`active: false`) sin perder lo escrito.
+// Los mensajes de las visitas NO viven aquí sino en `MemorialMessage`: los que
+// aún no ha aprobado la familia no pueden colarse en ninguna salida del animal.
+const MEDIA_URL = /\/uploads\/[\w-]+\.(webp|jpg|png|gif|mp4|mov)$/i;
+const memorialSchema = new Schema(
+  {
+    active: { type: Boolean, default: false },
+    since: { type: Date },
+    diedAt: { type: Date },
+    epitaph: { type: String, trim: true, maxlength: 300 },
+    epitaphBy: { type: String, trim: true, maxlength: 120 },
+    favorites: {
+      type: new Schema(
+        {
+          food: { type: String, trim: true, maxlength: 160 },
+          toy: { type: String, trim: true, maxlength: 160 },
+          place: { type: String, trim: true, maxlength: 160 },
+          nap: { type: String, trim: true, maxlength: 160 },
+          nicknames: { type: String, trim: true, maxlength: 160 },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+    // Fotos y vídeos del mural. Al despedirla entran las de su ficha.
+    media: {
+      type: [
+        new Schema(
+          {
+            url: { type: String, required: true, match: MEDIA_URL },
+            kind: { type: String, enum: ['image', 'video'], default: 'image' },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+      validate: [(val: unknown[]) => val.length <= 120, 'too_many_media'],
+    },
+    memories: {
+      type: [
+        new Schema(
+          {
+            // «2014-03»: un recuerdo se fecha por mes, casi nunca por día.
+            month: { type: String, match: /^\d{4}-(0[1-9]|1[0-2])$/ },
+            text: { type: String, trim: true, required: true, maxlength: 1000 },
+            photo: { type: String, match: MEDIA_URL },
+          },
+          { _id: true, timestamps: { createdAt: true, updatedAt: false } },
+        ),
+      ],
+      default: [],
+      validate: [(val: unknown[]) => val.length <= 100, 'too_many_memories'],
+    },
+    candles: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false },
+);
+
 const animalSchema = new Schema(
   {
     shelter: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -248,6 +308,7 @@ const animalSchema = new Schema(
       default: () => ({ foods: [], litters: [] }),
     },
     careReminders: { type: careRemindersSchema, default: () => ({}) },
+    memorial: { type: memorialSchema, default: undefined },
     code: { type: String, unique: true, uppercase: true, index: true },
     lost: {
       type: lostSchema,

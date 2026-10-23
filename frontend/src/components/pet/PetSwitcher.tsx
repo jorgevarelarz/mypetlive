@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { MPL, PawMark } from '../../styles/mypetlive';
 import { toAbsoluteUrl } from '../../utils/media';
 
-type Pet = { _id?: string; id?: string; name?: string; images?: string[] };
+type Pet = { _id?: string; id?: string; name?: string; images?: string[]; memorial?: { active?: boolean } | null };
 
 /**
  * Fila de mascotas para cambiar de una a otra (inicio y «Mi mascota»): foto
@@ -31,18 +31,21 @@ export default function PetSwitcher({
         if (!id) return null;
         const active = id === selectedId;
         const img = pet.images?.[0];
+        // La que ya no está: misma foto, más tenue. Sin iconos ni cintas.
+        const inMemory = Boolean(pet.memorial?.active);
         return (
           <button
             key={id}
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={inMemory ? `${pet.name || 'Mascota'}, en su memoria` : undefined}
             onClick={() => onSelect(id)}
             style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 64, flexShrink: 0, font: 'inherit' }}
           >
             <span style={{ ...circle, boxShadow: active ? `0 0 0 3px ${MPL.bg}, 0 0 0 5px ${MPL.teal}` : 'none' }}>
               {img ? (
-                <img src={toAbsoluteUrl(img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={toAbsoluteUrl(img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: inMemory ? 'grayscale(0.7)' : undefined, opacity: inMemory ? 0.85 : 1 }} />
               ) : (
                 <PawMark size={24} />
               )}

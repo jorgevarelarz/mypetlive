@@ -6,6 +6,7 @@ import * as ctrl from '../controllers/animal.controller';
 import { animalCreateSchema, animalUpdateSchema, animalStatusSchema, personalPetUpdateSchema } from '../validators/animal.schema';
 import asyncHandler from '../utils/asyncHandler';
 import { markFeeding, markLitter, markWalk, listCare, upsertSupply, updateCareReminders } from '../controllers/animalCare.controller';
+import * as memorial from '../controllers/memorial.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import * as favoriteCtrl from '../controllers/animalFavorite.controller';
 import * as alertCtrl from '../controllers/animalAlert.controller';
@@ -54,6 +55,22 @@ const sightingLimiter = rateLimit({
   legacyHeaders: false,
 });
 r.post('/passport/:code/sighting', sightingLimiter, asyncHandler(ctrl.reportSighting));
+// Mural «en su memoria»: velas y mensajes desde el QR, sin sesión.
+const candleLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
+const memorialMessageLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
+r.post('/passport/:code/candle', candleLimiter, asyncHandler(memorial.lightCandle));
+r.post('/passport/:code/memorial-message', memorialMessageLimiter, asyncHandler(memorial.leaveMessage));
+// La familia: despedirla, deshacerlo y llenar el mural.
+r.get('/:id/memorial', authenticate, asyncHandler(memorial.getMemorialForFamily));
+r.post('/:id/memorial', authenticate, asyncHandler(memorial.startMemorial));
+r.delete('/:id/memorial', authenticate, asyncHandler(memorial.stopMemorial));
+r.put('/:id/memorial', authenticate, asyncHandler(memorial.updateMemorial));
+r.post('/:id/memorial/media', authenticate, asyncHandler(memorial.addMemorialMedia));
+r.delete('/:id/memorial/media', authenticate, asyncHandler(memorial.removeMemorialMedia));
+r.post('/:id/memorial/memories', authenticate, asyncHandler(memorial.addMemory));
+r.delete('/:id/memorial/memories/:memoryId', authenticate, asyncHandler(memorial.removeMemory));
+r.patch('/:id/memorial/messages/:messageId', authenticate, asyncHandler(memorial.setMessageStatus));
+r.delete('/:id/memorial/messages/:messageId', authenticate, asyncHandler(memorial.deleteMessage));
 r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
 // Registro clínico del animal por su código. El control de quién puede escribir
 // vive en el controlador y no aquí: además del vet y el admin, puede la familia

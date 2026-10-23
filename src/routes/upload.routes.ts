@@ -114,4 +114,37 @@ router.post('/uploads', authenticate as any, (req, res, next) => {
   });
 });
 
+// Vídeos del mural de recuerdo. Aparte de las imágenes porque no se pueden
+// recodificar aquí (sería ffmpeg en el contenedor) y piden otro tope: un vídeo
+// de un minuto del iPhone ya pasa de 10 MB. Mismo criterio de seguridad: la
+// extensión sale de la firma del fichero (caja `ftyp` de MP4/MOV), nunca del
+// nombre ni del Content-Type que diga el cliente.
+const VIDEO_MAX_MB = 80;
+const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: VIDEO_MAX_MB * 1024 * 1024, files: 1 } });
+
+export function detectVideoType(buf: Buffer): { ext: string } | null {
+  if (buf.length < 12 || buf.subarray(4, 8).toString('ascii') !== 'ftyp') return null;
+  const brand = buf.subarray(8, 12).toString('ascii');
+  return { ext: brand === 'qt  ' ? '.mov' : '.mp4' };
+}
+
+// POST /api/uploads/video (un fichero, campo `file`)
+router.post('/uploads/video', authenticate as any, (req, res, next) => {
+  videoUpload.single('file')(req as any, res as any, async (err: any) => {
+    try {
+      if (err) {
+        const tooBig = err?.code === 'LIMIT_FILE_SIZE';
+        return res.status(tooBig ? 413 : 400).json({ error: tooBig ? 'video_too_large' : 'upload_error', maxMb: VIDEO_MAX_MB });
+      }
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) return res.status(400).json({ error: 'missing_file' });
+      const detected = detectVideoType(file.buffer);
+      if (!detected) return res.status(400).json({ error: 'invalid_file_type' });
+      const filename = `${randomUUID()}${detected.ext}`;
+      await fs.promises.writeFile(path.join(UPLOAD_DIR, filename), file.buffer, { flag: 'wx' });
+      res.json({ url: `${getBaseUrl(req)}/uploads/${filename}`, filename });
+    } catch (e) { next(e); }
+  });
+});
+
 export default router;
