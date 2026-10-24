@@ -58,31 +58,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 // Controlador de la vista web. Vive aquí y no en su propio fichero para no
-// tener que tocar el proyecto de Xcode. Gesto de deslizar desde el borde
-// izquierdo para volver: la app no tiene botón «atrás» de navegador.
-// El gesto propio de WebKit (allowsBackForwardNavigationGestures) no servía
-// en esta app de una sola página, así que el gesto es nuestro: al soltarlo se
-// avisa a la web con el evento «nativeback» y ella vuelve como el botón Volver.
-class MainViewController: CAPBridgeViewController, UIGestureRecognizerDelegate {
+// tener que tocar el proyecto de Xcode. El gesto de deslizar para volver ya no
+// es nativo: el UIScreenEdgePanGestureRecognizer que había aquí no llegaba a
+// dispararse (el contenido se desplaza dentro de #root) y ahora lo detecta la
+// web (NativeBackListener en BackButton.tsx). Se desactiva el de WebKit para
+// que no vuelva dos veces.
+class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
-        guard let webView = webView else { return }
-        webView.allowsBackForwardNavigationGestures = false
-        let edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwipe(_:)))
-        edge.edges = .left
-        edge.delegate = self
-        webView.addGestureRecognizer(edge)
-    }
-
-    @objc private func edgeSwipe(_ gesture: UIScreenEdgePanGestureRecognizer) {
-        guard gesture.state == .ended, let view = gesture.view else { return }
-        // Solo cuenta un deslizamiento de verdad hacia la derecha.
-        let dx = gesture.translation(in: view).x
-        let vx = gesture.velocity(in: view).x
-        guard dx > 60 || vx > 500 else { return }
-        webView?.evaluateJavaScript("window.dispatchEvent(new Event('nativeback'))", completionHandler: nil)
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
+        webView?.allowsBackForwardNavigationGestures = false
     }
 }

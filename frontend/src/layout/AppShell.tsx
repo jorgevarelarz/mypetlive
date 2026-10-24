@@ -458,9 +458,12 @@ export default function AppShell() {
           <LegalLinks />
         </>
       ) : (
-        <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
+        // En móvil el margen de arriba va dentro de <main>, que es lo que se
+        // desplaza: en el contenedor (overflow hidden) dejaba una franja fija
+        // de 24px bajo la cabecera que cortaba el contenido al bajar.
+        <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 md:py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
-          <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pb-24 md:pb-0">
+          <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pt-6 pb-24 md:pt-0 md:pb-0">
             <div className="mpl-crumbs"><Breadcrumbs /></div>
             <Outlet />
           </main>
