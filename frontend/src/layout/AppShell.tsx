@@ -25,7 +25,7 @@ const iconFor: Record<string, IconType> = {
   '/coupons': Ticket, '/admin/coupons': Ticket,
   '/donate': Gift,
   '/profile': User, '/admin/users': Users,
-  '/admin/reports': FileText, '/admin/settings': Settings,
+  '/admin/reports': FileText, '/admin/settings': Settings, '/ajustes': Settings,
   '/landlord/questionnaire': ClipboardList,
   '/inbox': Inbox,
 };

@@ -4,14 +4,18 @@ import { useLocation } from 'react-router-dom';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { nativePushAvailable, enableNativePush } from '../utils/nativePush';
+import { nativePushAvailable } from '../utils/nativePush';
+import { pushSupport, enablePush, isNewAccount, clearNewAccount } from '../utils/webPush';
 import { MPL, MPL_FONT_DISPLAY } from '../styles/mypetlive';
 
 // Pide el permiso de notificaciones la primera vez que alguien entra con sesión
-// en la app de iPhone. Antes solo se activaban desde el Perfil, y ahí no llega
-// casi nadie. Se explica para qué sirven ANTES del diálogo de Apple: si dice que
-// no en el de Apple, iOS no deja volver a preguntar.
-// Una sola vez por móvil: «Ahora no» se respeta y queda el interruptor del Perfil.
+// en la app de iPhone y, en cualquier móvil, nada más crear la cuenta.
+// En la app sale DIRECTAMENTE el diálogo de Apple, sin pantalla nuestra antes
+// (decisión de Jorge, 25 oct 2026). Ojo: si ahí dice que no, iOS no deja volver
+// a preguntar y solo queda activarlo en los Ajustes del iPhone.
+// En el navegador del móvil sí hace falta nuestra hoja: Safari y Chrome solo
+// enseñan su diálogo tras un toque de la persona.
+// Una sola vez por móvil, salvo con una cuenta recién creada.
 
 const KEY = 'mpl.notificationsAsked';
 // Pantallas donde interrumpir sería peor: entrar, registrarse o aceptar textos legales.
@@ -33,6 +37,13 @@ const REASONS: Record<string, string[]> = {
   store: ['Pedidos nuevos que preparar', 'Mensajes nuevos'],
 };
 
+// Navegador del móvil (no la app) que puede pedir permiso ahora mismo. En el
+// iPhone eso exige la web instalada en la pantalla de inicio.
+function mobileWebCanAsk(): boolean {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  return window.matchMedia('(pointer: coarse)').matches && pushSupport() === 'ok' && Notification.permission === 'default';
+}
+
 function alreadyAsked(): boolean {
   try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
 }
@@ -49,18 +60,32 @@ export default function NotificationsPrompt() {
   const blocked = SKIP.some(p => pathname.startsWith(p));
 
   useEffect(() => {
-    if (!loggedIn || blocked || open || !nativePushAvailable() || alreadyAsked()) return;
+    if (!loggedIn || blocked || open) return;
+    const fresh = isNewAccount();
+    const native = nativePushAvailable();
+    // En el navegador del móvil solo tras crear la cuenta; en la app, también
+    // la primera vez que se entra.
+    if (!native && !(fresh && mobileWebCanAsk())) return;
+    if (!fresh && alreadyAsked()) return;
     let cancelled = false;
-    // Un respiro para que la persona vea dónde ha entrado antes de preguntarle nada.
+    // Un respiro para que la persona vea dónde ha entrado antes de preguntarle
+    // nada; recién registrada, casi ninguno: es el momento de pedirlo.
     const timer = setTimeout(async () => {
+      if (!native) { if (!cancelled) setOpen(true); return; }
       try {
         const { receive } = await PushNotifications.checkPermissions();
         if (cancelled) return;
+        markAsked();
+        clearNewAccount();
         // Ya dio permiso (o lo negó en Ajustes): no hay nada que preguntar.
-        if (receive === 'prompt' || receive === 'prompt-with-rationale') setOpen(true);
-        else markAsked();
-      } catch { /* sin plugin no se pregunta */ }
-    }, 1500);
+        if (receive !== 'prompt' && receive !== 'prompt-with-rationale') return;
+        // enablePush pide el permiso del sistema y registra el móvil.
+        await enablePush();
+        toast.success('Avisos activados');
+      } catch (e: any) {
+        if (e?.message === 'permission_denied') toast('Puedes activarlas cuando quieras desde Ajustes, en el menú.');
+      }
+    }, fresh ? 500 : 1500);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [loggedIn, blocked, open]);
 
@@ -68,18 +93,18 @@ export default function NotificationsPrompt() {
 
   const reasons = REASONS[(user as any)?.role] || REASONS.tenant;
 
-  const close = () => { markAsked(); setOpen(false); };
+  const close = () => { markAsked(); clearNewAccount(); setOpen(false); };
 
   const accept = async () => {
     setBusy(true);
     try {
-      await enableNativePush();
+      await enablePush();
       toast.success('Avisos activados');
     } catch (e: any) {
       if (e?.message === 'permission_denied') {
-        toast('Puedes activarlos cuando quieras desde tu Perfil.');
+        toast('Puedes activarlos cuando quieras desde Ajustes.');
       } else {
-        toast.error('No se pudieron activar. Inténtalo desde tu Perfil.');
+        toast.error('No se pudieron activar. Inténtalo desde Ajustes.');
       }
     } finally {
       setBusy(false);

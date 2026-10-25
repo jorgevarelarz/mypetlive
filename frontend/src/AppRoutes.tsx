@@ -35,6 +35,7 @@ import RedirectHome from "./pages/RedirectHome";
 import AuthLayout from "./layout/AuthLayout";
 import AdminHome from "./pages/admin/AdminHome";
 import ProfilePage from "./pages/profile/ProfilePage";
+import SettingsPage from "./pages/settings/SettingsPage";
 import ConfirmEmailChange from "./pages/profile/ConfirmEmailChange";
 import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
@@ -155,6 +156,7 @@ export default function AppRoutes() {
               <Route path="/admin/settings" element={<ProtectedRoute><RoleGuard roles={["admin"]}><AdminSettings /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/ajustes" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
               <Route path="/properties/*" element={<Navigate to="/animals" replace />} />
               <Route path="/coliving/*" element={<Navigate to="/animals" replace />} />

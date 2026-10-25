@@ -1,4 +1,5 @@
 import { api as axios } from "../api/client";
+import { markNewAccount } from "../utils/webPush";
 
 export type UserAddress = {
   street?: string;
@@ -88,6 +89,7 @@ export async function socialLogin(
   // acceptLegal: los botones llevan al lado «Al continuar aceptas los términos
   // y la política de privacidad»; el servidor lo graba como la casilla del registro.
   const { data } = await axios.post(`/api/auth/oauth/${provider}`, { idToken, name, acceptLegal: true });
+  if (data.created) markNewAccount();
   const user: User = { ...data.user, token: data.token };
   localStorage.setItem("user", JSON.stringify(user));
   axios.defaults.headers.common["Authorization"] = `Bearer ${user.token}`;

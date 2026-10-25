@@ -13,7 +13,8 @@
     { "label": "Tienda", "path": "/tienda", "to": "/tienda" },
     { "label": "Mis pedidos", "path": "/mis-pedidos", "to": "/mis-pedidos" },
     { "label": "Citas vet", "path": "/citas", "to": "/citas" },
-    { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
+    { "label": "Cupones", "path": "/coupons", "to": "/coupons" },
+    { "label": "Ajustes", "path": "/ajustes", "to": "/ajustes" }
   ],
   "tenant": [
 
@@ -25,10 +26,12 @@
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
     { "label": "Citas veterinarias", "path": "/citas" },
     { "label": "Verificación", "path": "/landlord/verificacion" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "pro": [
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "admin": [
     { "label": "Inicio", "path": "/admin" },
@@ -40,8 +43,9 @@
     { "label": "Productos", "path": "/admin/productos" },
     { "label": "Pedidos", "path": "/admin/pedidos" },
     { "label": "Reportes", "path": "/admin/reports" },
-    { "label": "Ajustes", "path": "/admin/settings" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Ajustes de la plataforma", "path": "/admin/settings" },
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "store": [
     { "label": "Inicio", "path": "/partner" },
@@ -50,7 +54,8 @@
     { "label": "Pedidos por preparar", "path": "/partner/pedidos" },
     { "label": "Mis cupones", "path": "/partner/cupones" },
     { "label": "Patitas pendientes", "path": "/partner/patitas" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
@@ -58,6 +63,7 @@
     { "label": "Agenda de citas", "path": "/citas" },
     { "label": "Mis cupones", "path": "/partner/cupones" },
     { "label": "Patitas pendientes", "path": "/partner/patitas" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ]
 }

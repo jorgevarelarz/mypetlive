@@ -5,6 +5,7 @@ import { register as apiRegister } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
 import SocialAuthButtons from "../../components/auth/SocialAuthButtons";
 import LegalCheckbox from "../../components/auth/LegalCheckbox";
+import { markNewAccount } from "../../utils/webPush";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -38,6 +39,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await apiRegister(name.trim(), email.trim(), password, true);
+      markNewAccount();
       const user = await login(email.trim(), password);
       const destination = explicitNext || (user?.role === 'tenant' ? '/home' : '/');
       nav(destination, { replace: true });

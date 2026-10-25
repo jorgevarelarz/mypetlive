@@ -7,6 +7,19 @@ const isStandalone = () =>
 
 export type PushSupport = 'ok' | 'needs-install' | 'unsupported';
 
+// Marca de «esta cuenta se acaba de crear en este dispositivo»: con ella el
+// aviso de notificaciones sale nada más registrarse (ver NotificationsPrompt).
+const NEW_ACCOUNT_KEY = 'mpl.newAccount';
+export function markNewAccount() {
+  try { sessionStorage.setItem(NEW_ACCOUNT_KEY, '1'); } catch { /* sin marca sale como siempre */ }
+}
+export function isNewAccount(): boolean {
+  try { return sessionStorage.getItem(NEW_ACCOUNT_KEY) === '1'; } catch { return false; }
+}
+export function clearNewAccount() {
+  try { sessionStorage.removeItem(NEW_ACCOUNT_KEY); } catch { /* nada */ }
+}
+
 /** En iOS el push web solo funciona con la app instalada en pantalla de inicio. */
 export function pushSupport(): PushSupport {
   // Dentro de la app de iPhone van por APNs (utils/nativePush), no por Web Push.

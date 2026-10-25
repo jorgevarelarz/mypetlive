@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -21,9 +22,13 @@ const inputStyle: React.CSSProperties = {
   border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '11px 13px', font: 'inherit', fontSize: 15, width: '100%', boxSizing: 'border-box',
 };
 
-export default function DeleteAccountPanel() {
+// En el perfil se ve solo el botón: la explicación y la confirmación salen en
+// un diálogo al pulsarlo. `startOpen` es para quien ya ha pedido borrar en otra
+// parte (el consentimiento legal) y no tiene que volver a pulsar.
+export default function DeleteAccountPanel({ startOpen = false, onClose }: { startOpen?: boolean; onClose?: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(startOpen);
   const [step, setStep] = useState<'idle' | 'checking' | 'confirm' | 'deleting'>('idle');
   const [blockers, setBlockers] = useState<DeletionBlocker[]>([]);
   const [confirmWith, setConfirmWith] = useState<'password' | 'email'>('password');
@@ -42,6 +47,22 @@ export default function DeleteAccountPanel() {
       setError('No hemos podido comprobar tu cuenta. Inténtalo de nuevo.');
       setStep('idle');
     }
+  };
+
+  // La comprobación sale sola al abrir: así el diálogo ya enseña o lo que
+  // falta por cerrar o el campo para confirmar, sin un segundo botón.
+  useEffect(() => {
+    if (open) void start();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const close = () => {
+    if (step === 'deleting') return;
+    setOpen(false);
+    setStep('idle');
+    setSecret('');
+    setError('');
+    setBlockers([]);
+    onClose?.();
   };
 
   const confirm = async (e: React.FormEvent) => {
@@ -68,55 +89,83 @@ export default function DeleteAccountPanel() {
   };
 
   return (
-    <section style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22, display: 'grid', gap: 12 }}>
-      <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, margin: 0 }}>Borrar mi cuenta</h2>
-      <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-        Se borrarán tu perfil, tus datos personales, tus favoritos, tus alertas y tus solicitudes de adopción abiertas.
-        Tus mascotas dejarán de estar a tu nombre y perderás tus Patitas. Guardamos sin tu nombre lo que la ley nos
-        obliga a conservar (pedidos, donaciones y aceptaciones legales). No se puede deshacer.
-      </p>
+    <>
+      <button type="button" onClick={() => setOpen(true)}
+        style={{ justifySelf: 'start', background: '#fff', color: MPL.coralDark, border: `1.5px solid ${MPL.coralDark}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+        Borrar mi cuenta
+      </button>
+      {open && createPortal(
+        // Portal a <body>: dentro de la app el contenido se desplaza en #root.
+        <div className="safe-top fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={close}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            className="w-full max-w-md bg-white"
+            onClick={e => e.stopPropagation()}
+            style={{ borderRadius: '24px 24px 0 0', padding: '24px 22px calc(22px + env(safe-area-inset-bottom))', display: 'grid', gap: 12 }}
+          >
+            <h2 id="delete-account-title" style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 22, fontWeight: 800, margin: 0 }}>¿Borrar tu cuenta?</h2>
+            <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
+              Se borrarán tu perfil, tus datos personales, tus favoritos, tus alertas y tus solicitudes de adopción abiertas.
+              Tus mascotas dejarán de estar a tu nombre y perderás tus Patitas. Guardamos sin tu nombre lo que la ley nos
+              obliga a conservar (pedidos, donaciones y aceptaciones legales). No se puede deshacer.
+            </p>
 
-      {step === 'idle' || step === 'checking' ? (
-        <button type="button" onClick={start} disabled={step === 'checking'}
-          style={{ justifySelf: 'start', background: '#fff', color: MPL.coralDark, border: `1.5px solid ${MPL.coralDark}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
-          {step === 'checking' ? 'Comprobando…' : 'Quiero borrar mi cuenta'}
-        </button>
-      ) : blockers.length > 0 ? (
-        <div role="alert" style={{ display: 'grid', gap: 8 }}>
-          <strong style={{ fontSize: 14 }}>Antes hay que cerrar esto:</strong>
-          <ul style={{ margin: 0, paddingLeft: 18, color: MPL.ink, fontSize: 13.5, display: 'grid', gap: 4 }}>
-            {blockers.map(b => <li key={b}>{BLOCKER_TEXT[b] || b}</li>)}
-          </ul>
-          <p style={{ color: MPL.muted, fontSize: 13, margin: 0 }}>
-            ¿Necesitas ayuda? Escríbenos a <a href="mailto:soporte@mypetlive.es">soporte@mypetlive.es</a>.
-          </p>
-        </div>
-      ) : (
-        <form onSubmit={confirm} style={{ display: 'grid', gap: 10, maxWidth: 420 }}>
-          <label style={{ fontSize: 13.5, fontWeight: 700 }}>
-            {confirmWith === 'password'
-              ? 'Para confirmar, escribe tu contraseña'
-              : `Para confirmar, escribe tu correo (${user?.email})`}
-            <input
-              type={confirmWith === 'password' ? 'password' : 'email'}
-              autoComplete={confirmWith === 'password' ? 'current-password' : 'off'}
-              value={secret} onChange={e => setSecret(e.target.value)} required
-              style={{ ...inputStyle, marginTop: 6 }}
-            />
-          </label>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="submit" disabled={step === 'deleting' || !secret}
-              style={{ background: MPL.coralDark, color: '#fff', border: 0, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: step === 'deleting' || !secret ? .7 : 1 }}>
-              {step === 'deleting' ? 'Borrando…' : 'Borrar mi cuenta para siempre'}
-            </button>
-            <button type="button" onClick={() => { setStep('idle'); setSecret(''); setError(''); }}
-              style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>
-              Cancelar
-            </button>
+            {step === 'idle' || step === 'checking' ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                {step === 'checking'
+                  ? <span style={{ color: MPL.faint, fontSize: 13.5 }}>Comprobando tu cuenta…</span>
+                  : <button type="button" onClick={start} style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>Reintentar</button>}
+                <button type="button" onClick={close}
+                  style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>
+                  Cancelar
+                </button>
+              </div>
+            ) : blockers.length > 0 ? (
+              <div role="alert" style={{ display: 'grid', gap: 8 }}>
+                <strong style={{ fontSize: 14 }}>Antes hay que cerrar esto:</strong>
+                <ul style={{ margin: 0, paddingLeft: 18, color: MPL.ink, fontSize: 13.5, display: 'grid', gap: 4 }}>
+                  {blockers.map(b => <li key={b}>{BLOCKER_TEXT[b] || b}</li>)}
+                </ul>
+                <p style={{ color: MPL.muted, fontSize: 13, margin: 0 }}>
+                  ¿Necesitas ayuda? Escríbenos a <a href="mailto:soporte@mypetlive.es">soporte@mypetlive.es</a>.
+                </p>
+                <button type="button" onClick={close}
+                  style={{ justifySelf: 'start', background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={confirm} style={{ display: 'grid', gap: 10 }}>
+                <label style={{ fontSize: 13.5, fontWeight: 700 }}>
+                  {confirmWith === 'password'
+                    ? 'Para confirmar, escribe tu contraseña'
+                    : `Para confirmar, escribe tu correo (${user?.email})`}
+                  <input
+                    type={confirmWith === 'password' ? 'password' : 'email'}
+                    autoComplete={confirmWith === 'password' ? 'current-password' : 'off'}
+                    value={secret} onChange={e => setSecret(e.target.value)} required
+                    style={{ ...inputStyle, marginTop: 6 }}
+                  />
+                </label>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button type="submit" disabled={step === 'deleting' || !secret}
+                    style={{ background: MPL.coralDark, color: '#fff', border: 0, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: step === 'deleting' || !secret ? .7 : 1 }}>
+                    {step === 'deleting' ? 'Borrando…' : 'Confirmar y borrar'}
+                  </button>
+                  <button type="button" onClick={close} disabled={step === 'deleting'}
+                    style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+            {error && <p role="alert" style={{ color: MPL.coralDark, fontSize: 13.5, margin: 0 }}>{error}</p>}
           </div>
-        </form>
+        </div>,
+        document.body,
       )}
-      {error && <p role="alert" style={{ color: MPL.coralDark, fontSize: 13.5, margin: 0 }}>{error}</p>}
-    </section>
+    </>
   );
 }

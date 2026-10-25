@@ -41,6 +41,13 @@ function displayNameFrom(claims: OidcClaims, bodyName: unknown, email: string) {
   return email.split('@')[0];
 }
 
+// Google trae la foto de la cuenta en el token (`picture`); Apple no manda
+// ninguna. Solo se acepta una URL https, que es lo que pinta el perfil.
+function avatarFrom(claims: OidcClaims): string | undefined {
+  const raw = typeof claims.picture === 'string' ? claims.picture.trim() : '';
+  return /^https:\/\//i.test(raw) && raw.length <= 1000 ? raw : undefined;
+}
+
 function isEmailVerified(claims: OidcClaims) {
   const raw = claims.email_verified;
   return raw === true || raw === 'true';
@@ -98,6 +105,8 @@ export const socialLogin = async (req: Request, res: Response) => {
 
   try {
     let user = await User.findOne({ email });
+    // El front pide el permiso de notificaciones justo después de un alta.
+    const created = !user;
     if (user) {
       // Cuenta existente (con contraseña o no): se vincula el proveedor. Es
       // seguro porque el emisor ya ha verificado que ese correo es suyo.
@@ -119,6 +128,9 @@ export const socialLogin = async (req: Request, res: Response) => {
           user.passwordHash = undefined;
           user.tokenVersion = (user.tokenVersion || 0) + 1;
         }
+        // Al vincular, la foto de Google entra solo si la cuenta no tenía.
+        const picture = avatarFrom(claims);
+        if (picture && !(user as any).profile?.avatarUrl) user.set('profile.avatarUrl', picture);
         await user.save();
       }
     } else {
@@ -127,6 +139,8 @@ export const socialLogin = async (req: Request, res: Response) => {
         email,
         role: 'tenant',
         authProviders: [{ provider, sub: claims.sub }],
+        // Lo que ya sabemos no se vuelve a preguntar en el perfil.
+        ...(avatarFrom(claims) ? { profile: { avatarUrl: avatarFrom(claims) } } : {}),
       });
     }
 
@@ -146,6 +160,7 @@ export const socialLogin = async (req: Request, res: Response) => {
     res.json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },
+      created,
     });
   } catch (error: any) {
     if (isAppError(error)) throw error;

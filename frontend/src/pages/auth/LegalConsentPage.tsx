@@ -121,7 +121,7 @@ const LegalConsentPage: React.FC = () => {
         </button>.
       </p>
       {/* Aquí y no en el perfil: el perfil exige haber aceptado antes. */}
-      {showDelete && <DeleteAccountPanel />}
+      {showDelete && <DeleteAccountPanel startOpen onClose={() => setShowDelete(false)} />}
       <style>{`
         .legal-consent-doc h2 { font-size: 17px; margin: 16px 0 6px; }
         .legal-consent-doc h3, .legal-consent-doc h4, .legal-consent-doc h5 { font-size: 15px; margin: 14px 0 4px; }

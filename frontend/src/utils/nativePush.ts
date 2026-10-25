@@ -1,4 +1,5 @@
 import { PushNotifications } from '@capacitor/push-notifications';
+import { AppLauncher } from '@capacitor/app-launcher';
 import api from '../api/client';
 import { isNativeApp } from './native';
 
@@ -18,6 +19,17 @@ function storedToken(): string | null {
 export async function getNativePushEnabled(): Promise<boolean> {
   if (!nativePushAvailable()) return false;
   return (await PushNotifications.checkPermissions()).receive === 'granted' && !!storedToken();
+}
+
+/** Si la persona dijo que no en el diálogo de Apple, iOS no deja volver a preguntar. */
+export async function nativePushDenied(): Promise<boolean> {
+  if (!nativePushAvailable()) return false;
+  return (await PushNotifications.checkPermissions()).receive === 'denied';
+}
+
+/** Abre Ajustes del iPhone › MyPetLive, donde está el interruptor de Notificaciones. */
+export async function openNativeSettings(): Promise<void> {
+  await AppLauncher.openUrl({ url: 'app-settings:' });
 }
 
 let listenersReady = false;

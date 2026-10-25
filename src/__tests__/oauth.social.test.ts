@@ -210,4 +210,31 @@ describe('Login con Google/Apple', () => {
     const saved = await User.findOne({ email: 'nueva@gmail.com' }).lean();
     expect(saved?.name).toBe('nueva');
   });
+  it('pone la foto de Google como avatar al dar de alta', async () => {
+    mockVerify.mockResolvedValue(googleClaims({ picture: 'https://lh3.googleusercontent.com/a/foto' }) as any);
+
+    await request(app).post('/api/auth/oauth/google').send({ idToken: 'token-valido' });
+
+    const saved = await User.findOne({ email: 'nueva@gmail.com' }).lean();
+    expect((saved as any)?.profile?.avatarUrl).toBe('https://lh3.googleusercontent.com/a/foto');
+  });
+
+  it('al vincular no pisa el avatar que ya tenía la cuenta', async () => {
+    await User.create({ name: 'Laura', email: 'laura@example.com', passwordHash: 'x', role: 'tenant', profile: { avatarUrl: '/uploads/mia.jpg' } });
+    mockVerify.mockResolvedValue(googleClaims({ email: 'laura@example.com', sub: 'sub-laura', picture: 'https://lh3.googleusercontent.com/a/foto' }) as any);
+
+    await request(app).post('/api/auth/oauth/google').send({ idToken: 'token-valido' });
+
+    const saved = await User.findOne({ email: 'laura@example.com' }).lean();
+    expect((saved as any)?.profile?.avatarUrl).toBe('/uploads/mia.jpg');
+  });
+
+  it('ignora una foto que no sea https', async () => {
+    mockVerify.mockResolvedValue(googleClaims({ picture: 'javascript:alert(1)' }) as any);
+
+    await request(app).post('/api/auth/oauth/google').send({ idToken: 'token-valido' });
+
+    const saved = await User.findOne({ email: 'nueva@gmail.com' }).lean();
+    expect((saved as any)?.profile?.avatarUrl).toBeUndefined();
+  });
 });

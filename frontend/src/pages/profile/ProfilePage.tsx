@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import ProBadge from '../../components/ui/ProBadge';
 import api from '../../api/client';
 import { uploadImage } from '../../api/uploads';
 import { getShelterConnectStatus, createShelterConnectLink, ConnectStatus } from '../../api/connect';
@@ -16,17 +14,6 @@ import VetOffersPanel from '../../components/vet/VetOffersPanel';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 import DeleteAccountPanel from '../../components/account/DeleteAccountPanel';
 import { openPaymentPage } from '../../utils/native';
-import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
-import { nativePushAvailable } from '../../utils/nativePush';
-
-const roleLabel: Record<string, string> = {
-  tenant: 'Adoptante',
-  landlord: 'Protectora',
-  admin: 'Administración',
-  store: 'Tienda',
-  vet: 'Veterinario',
-  pro: 'Profesional',
-};
 
 const inputStyle: React.CSSProperties = {
   border: `1.5px solid ${MPL.border}`,
@@ -127,87 +114,6 @@ function initForm(user: any): FormState {
       emergency24h: Boolean(p.vet?.emergency24h),
     },
   };
-}
-
-// ---- Notificaciones push ---------------------------------------------------
-function PushPanel() {
-  const support = useMemo(() => pushSupport(), []);
-  const [enabled, setEnabled] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (support === 'ok') getPushEnabled().then(setEnabled).catch(() => {});
-  }, [support]);
-
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      if (enabled) {
-        await disablePush();
-        setEnabled(false);
-        toast.success('Notificaciones desactivadas');
-      } else {
-        await enablePush();
-        setEnabled(true);
-        toast.success('Notificaciones activadas');
-      }
-    } catch (e: any) {
-      toast.error(e?.message === 'permission_denied'
-        ? (nativePushAvailable()
-          ? 'Permiso denegado. Actívalo en Ajustes del iPhone › MyPetLive › Notificaciones.'
-          : 'Permiso denegado. Actívalo en los ajustes del navegador.')
-        : 'No se pudieron activar las notificaciones');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const test = async () => {
-    setBusy(true);
-    try {
-      await sendTestPush();
-      toast.success('Notificación de prueba enviada');
-    } catch {
-      toast.error('No se pudo enviar la prueba');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card title="Notificaciones 🔔">
-      {support === 'needs-install' ? (
-        <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-          Para recibir notificaciones en tu iPhone, primero instala MyPetLive: abre esta web en Safari,
-          toca <strong>Compartir</strong> y elige <strong>“Añadir a pantalla de inicio”</strong>. Luego
-          abre la app desde el icono y vuelve aquí.
-        </p>
-      ) : support === 'unsupported' ? (
-        <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-          Este navegador no soporta notificaciones push.
-        </p>
-      ) : (
-        <>
-          <p style={{ color: MPL.muted, fontSize: 13.5, margin: 0 }}>
-            Recibe un aviso en este dispositivo de mensajes nuevos, citas y vacunas, adopciones,
-            pedidos y si alguien encuentra a tu mascota.
-          </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" onClick={toggle} disabled={busy}
-              style={{ background: enabled ? '#fff' : MPL.teal, color: enabled ? MPL.ink : '#fff', border: enabled ? `1.5px solid ${MPL.border}` : 0, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: busy ? .7 : 1 }}>
-              {busy ? 'Un momento…' : enabled ? 'Desactivar' : 'Activar notificaciones'}
-            </button>
-            {enabled && (
-              <button type="button" onClick={test} disabled={busy}
-                style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink, opacity: busy ? .7 : 1 }}>
-                Enviar prueba
-              </button>
-            )}
-          </div>
-        </>
-      )}
-    </Card>
-  );
 }
 
 // ---- Sección de cobro de donaciones (solo protectora) ----------------------
@@ -316,7 +222,6 @@ export default function ProfilePage() {
   const role = user?.role;
   const isPerson = role === 'tenant' || role === 'pro' || role === 'admin';
   const isOrg = role === 'landlord' || role === 'store' || role === 'vet';
-  const isTenantPro = role === 'tenant' && user?.tenantPro?.status === 'verified';
 
   const set = (key: keyof FormState, value: any) => setForm(f => ({ ...f, [key]: value }));
   const setAddr = (key: keyof FormState['address'], value: string) =>
@@ -436,10 +341,14 @@ export default function ProfilePage() {
     <div style={{ display: 'grid', gap: 24, padding: 'clamp(14px, 4vw, 24px)' }}>
       <header>
         <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, fontWeight: 800, margin: 0 }}>Perfil y cuenta</h1>
-        <p style={{ color: MPL.muted, margin: '6px 0 0' }}>Completa tu información para operar en MyPetLive.</p>
+        <p style={{ color: MPL.muted, margin: '6px 0 0' }}>
+          {isOrg ? 'Completa tu información para operar en MyPetLive.' : 'Solo lo básico. Lo demás te lo pedimos cuando haga falta.'}
+        </p>
       </header>
 
-      <section className="profile-grid">
+      {/* La columna lateral solo existe para la ficha del veterinario; sin ella
+          el formulario ocupa todo el ancho en lugar de dejar un hueco. */}
+      <section className={role === 'vet' ? 'profile-grid' : undefined} style={role === 'vet' ? undefined : { display: 'grid', gap: 16, maxWidth: 720 }}>
         <div style={{ display: 'grid', gap: 16 }}>
           {/* Foto + identidad */}
           <Card title={isOrg ? 'Identidad' : 'Datos personales'}>
@@ -470,53 +379,60 @@ export default function ProfilePage() {
               </Field>
             )}
 
-            {isPerson && (
-              <div className="field-duo">
-                <Field label="Nombre"><input value={form.firstName} onChange={e => set('firstName', e.target.value)} style={inputStyle} /></Field>
-                <Field label="Apellidos"><input value={form.lastName} onChange={e => set('lastName', e.target.value)} style={inputStyle} /></Field>
-              </div>
-            )}
-
-            <Field label="Nombre público / de cuenta" hint="Cómo se te identifica en la plataforma">
+            {/* Una persona tiene un solo nombre que rellenar. Nombre, apellidos y
+                «nombre público» eran tres casillas para lo mismo; firstName y
+                lastName siguen en el formulario y se guardan como estaban. */}
+            <Field label={isOrg ? 'Nombre público / de cuenta' : 'Nombre'} hint={isOrg ? 'Cómo se te identifica en la plataforma' : undefined}>
               <input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Email" hint="Es la dirección con la que inicias sesión. Si la cambias, te enviaremos un correo a la dirección nueva: hasta que lo confirmes ahí, seguirás entrando con la actual.">
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Teléfono">
+            <Field label={isOrg ? 'Teléfono' : 'Teléfono (opcional)'} hint={isOrg ? undefined : 'Para que te localicen si alguien encuentra a tu mascota perdida.'}>
               <input value={form.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="+34 ___ ___ ___" />
             </Field>
 
-            {isPerson && (
-              <div className="field-duo">
-                <Field label="Edad">
-                  <input type="number" min={0} max={120} value={form.age} onChange={e => set('age', e.target.value)} style={inputStyle} />
-                </Field>
-                <Field label="¿Dónde vives?">
-                  <select value={form.housingType} onChange={e => set('housingType', e.target.value)} style={inputStyle}>
-                    <option value="">Sin especificar</option>
-                    <option value="casa">Casa</option>
-                    <option value="piso">Piso</option>
-                  </select>
-                </Field>
-              </div>
-            )}
-            {isPerson && (
-              <Field label="Ocupación / trabajo">
-                <input value={form.occupation} onChange={e => set('occupation', e.target.value)} style={inputStyle} />
-              </Field>
-            )}
             {isOrg && (
               <Field label="Sitio web">
                 <input value={form.website} onChange={e => set('website', e.target.value)} style={inputStyle} placeholder="https://" />
               </Field>
             )}
-            <Field label={isOrg ? 'Sobre la organización' : 'Sobre ti'} hint="Cuéntanos brevemente (máx. 1000 caracteres)">
-              <textarea value={form.bio} maxLength={1000} onChange={e => set('bio', e.target.value)} style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
-            </Field>
+            {isOrg && (
+              <Field label="Sobre la organización" hint="Cuéntanos brevemente (máx. 1000 caracteres)">
+                <textarea value={form.bio} maxLength={1000} onChange={e => set('bio', e.target.value)} style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
+              </Field>
+            )}
+
+            {/* Lo que ve la protectora en una solicitud (edad, ciudad, sobre ti):
+                solo le sirve a quien va a adoptar, así que va plegado. La
+                dirección completa no se pide aquí: el carrito la pide al
+                comprar. Vivienda y ocupación no las lee nadie y ya no se piden
+                (lo que hubiera guardado se conserva). */}
+            {isPerson && (
+              <details style={{ borderTop: `1px solid ${MPL.border}`, paddingTop: 12 }} open={Boolean(form.age || form.address.city || form.bio)}>
+                <summary style={{ cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>Si vas a adoptar (opcional)</summary>
+                <p style={{ color: MPL.faint, fontSize: 12.5, margin: '6px 0 12px' }}>
+                  La protectora lo verá cuando le envíes una solicitud.
+                </p>
+                <div style={{ display: 'grid', gap: 14 }}>
+                  <div className="field-duo">
+                    <Field label="Edad">
+                      <input type="number" min={0} max={120} value={form.age} onChange={e => set('age', e.target.value)} style={inputStyle} />
+                    </Field>
+                    <Field label="Ciudad">
+                      <input value={form.address.city} onChange={e => setAddr('city', e.target.value)} style={inputStyle} />
+                    </Field>
+                  </div>
+                  <Field label="Sobre ti" hint="Tu casa, tu día a día, otros animales… (máx. 1000 caracteres)">
+                    <textarea value={form.bio} maxLength={1000} onChange={e => set('bio', e.target.value)} style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
+                  </Field>
+                </div>
+              </details>
+            )}
           </Card>
 
-          {/* Dirección */}
+          {/* Dirección: la de una persona se pide en el carrito, al comprar. */}
+          {isOrg && (
           <Card title="Dirección">
             <Field label="Calle y número">
               <input value={form.address.street} onChange={e => setAddr('street', e.target.value)} style={inputStyle} />
@@ -530,6 +446,7 @@ export default function ProfilePage() {
               <Field label="País"><input value={form.address.country} onChange={e => setAddr('country', e.target.value)} style={inputStyle} /></Field>
             </div>
           </Card>
+          )}
 
           {/* Catálogo de productos (tienda/vet): quick-add en caja sin teclear cada venta */}
           {(role === 'store' || role === 'vet') && (
@@ -643,7 +560,6 @@ export default function ProfilePage() {
             </Card>
           )}
 
-          <PushPanel />
 
           {/* Cobro de donaciones (protectora) */}
           {role === 'landlord' && <DonationPayout />}
@@ -660,19 +576,9 @@ export default function ProfilePage() {
           </button>
         </div>
 
+        {role === 'vet' && (
         <aside style={{ display: 'grid', gap: 16, alignSelf: 'start' }}>
-          <div style={{ background: MPL.teal, color: '#fff', borderRadius: 18, padding: 22 }}>
-            <div style={{ fontSize: 12, textTransform: 'uppercase', color: 'rgba(255,255,255,.72)', fontWeight: 800 }}>Rol</div>
-            <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, fontWeight: 800, marginTop: 8 }}>{roleLabel[user.role] || user.role}</div>
-            <div style={{ marginTop: 16, color: 'rgba(255,255,255,.82)', fontSize: 14, wordBreak: 'break-word' }}>{user.email}</div>
-            {isTenantPro && (
-              <div style={{ marginTop: 18, background: '#fff', color: MPL.ink, borderRadius: 14, padding: 12 }}>
-                <ProBadge maxRent={user?.tenantPro?.maxRent} />
-              </div>
-            )}
-          </div>
-
-          {role === 'vet' && (() => {
+          {(() => {
             const steps = [
               { ok: !!form.vet.licenseNumber.trim(), label: 'Nº de colegiado' },
               { ok: form.vet.specialties.length > 0, label: 'Especialidades' },
@@ -696,6 +602,7 @@ export default function ProfilePage() {
             );
           })()}
         </aside>
+        )}
       </section>
 
       {role === 'vet' && (
@@ -706,18 +613,15 @@ export default function ProfilePage() {
         </section>
       )}
 
-      <section style={{ display: 'grid', gap: 14 }}>
-        <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: 0 }}>Patitas 🐾</h2>
-        {/* Las Patitas tienen pantalla propia (/patitas, desde la cabecera). */}
-        {role === 'tenant' && (
-          <Link to="/patitas" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '16px 18px', borderRadius: 18, border: '1px solid #E5E1D6', background: '#FBEFD4', color: '#A77B1C', fontWeight: 800, textDecoration: 'none' }}>
-            <span>Tus Patitas: saldo, protectora y donaciones</span>
-            <span aria-hidden>→</span>
-          </Link>
-        )}
-        {role === 'landlord' && <PatitasShelterPanel />}
-        {(role === 'store' || role === 'vet') && <PatitasPartnerPanel />}
-      </section>
+      {/* El adoptante tiene sus Patitas en la cabecera (/patitas). Protectora,
+          tienda y veterinario no: su panel vive aquí. */}
+      {(role === 'landlord' || role === 'store' || role === 'vet') && (
+        <section style={{ display: 'grid', gap: 14 }}>
+          <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: 0 }}>Patitas 🐾</h2>
+          {role === 'landlord' && <PatitasShelterPanel />}
+          {(role === 'store' || role === 'vet') && <PatitasPartnerPanel />}
+        </section>
+      )}
 
       <DeleteAccountPanel />
     </div>
