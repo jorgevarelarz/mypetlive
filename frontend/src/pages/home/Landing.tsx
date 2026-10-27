@@ -319,7 +319,7 @@ export default function Landing() {
               </div>
             </div>
             <div style={{ paddingTop: 24, fontSize: 13, color: 'rgba(230,224,210,.5)', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>© 2026 MyPetLive</span>
+              <span>© 2026 MyPetLive · Un proyecto de <a href="https://valerisstudio.es/" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'underline' }}>Valeris Studio</a></span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                 <Link to="/legal/legal-notice">Aviso legal</Link>
                 <Link to="/legal/privacy">Privacidad</Link>
