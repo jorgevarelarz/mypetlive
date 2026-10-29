@@ -4,6 +4,7 @@ import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import { User } from '../models/user.model';
 import { Verification } from '../models/verification.model';
+import { Questionnaire } from '../models/questionnaire.model';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -191,5 +192,35 @@ describe('Cancelación de la solicitud por el adoptante', () => {
     // El propio adoptante NO recibe el bloque de perfil (es para la protectora/admin).
     const ownView = await request(app).get(`/api/adoptions/${adoptionId}`).set(adopterHeaders).expect(200);
     expect(ownView.body.adopter).toBeUndefined();
+  });
+
+  it('acepta las respuestas al cuestionario de la protectora (antes la validación las quitaba)', async () => {
+    await Verification.create({ userId: shelterId, status: 'verified', verificationLevel: 'animal_protection_entity' });
+    await Questionnaire.create({ protectoraId: shelterId, questions: ['¿Has tenido mascotas?', '¿Piso o casa?'] });
+    const create = await request(app)
+      .post('/api/animals')
+      .set(protectoraHeaders)
+      .send({ shelter: shelterId, name: 'Toby', species: 'perro', sex: 'male', age: '3 años', size: 'medium' })
+      .expect(201);
+    const animalId = create.body._id;
+    await request(app).patch(`/api/animals/${animalId}/status`).set(protectoraHeaders).send({ status: 'publicado' }).expect(200);
+
+    const sinRespuestas = await request(app).post('/api/adoptions').set(adopterHeaders).send({ animalId }).expect(400);
+    expect(sinRespuestas.body.error).toBe('answers_required');
+
+    const apply = await request(app)
+      .post('/api/adoptions')
+      .set(adopterHeaders)
+      .send({
+        animalId,
+        answers: [
+          { question: '¿Has tenido mascotas?', answer: 'Sí, un perro durante 10 años' },
+          { question: '¿Piso o casa?', answer: 'Casa con jardín' },
+        ],
+      })
+      .expect(201);
+    const detail = await request(app).get(`/api/adoptions/${apply.body.id}`).set(protectoraHeaders).expect(200);
+    expect(detail.body.answers).toHaveLength(2);
+    expect(detail.body.answers[1].answer).toBe('Casa con jardín');
   });
 });
