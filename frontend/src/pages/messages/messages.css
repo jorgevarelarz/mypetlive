@@ -58,11 +58,16 @@
   .mpl-inbox .mpl-conv { background: #fff; border: 1px solid #E5E1D6; margin-bottom: 5px; }
   .mpl-inbox .mpl-conv.is-unread { border-color: #BFD9D5; }
   .mpl-thread-pane { display: none; }
-  .mpl-messages.has-thread .mpl-thread-pane { display: flex; position: fixed; inset: 0; z-index: 60; }
   .mpl-thread-head { padding: 8px 12px; }
   .mpl-thread-msgs { padding: 12px 12px 8px; }
   .mpl-bubble { max-width: 84%; }
 }
+/* Conversación a pantalla completa en el móvil (portal a <body>). */
+.mpl-thread-overlay { position: fixed; inset: 0; z-index: 70; display: flex; background: #F6F3EC; }
+
 @media (min-width: 900px) {
   .mpl-thread-back { display: none; }
 }
+
+/* En la app, la cabecera de la conversación empieza bajo la hora y la batería. */
+.native-app .mpl-thread-head.safe-top { padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important; }

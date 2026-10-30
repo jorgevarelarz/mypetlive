@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listConversations } from '../../api/chat';
@@ -13,11 +14,25 @@ import './messages.css';
  * la bandeja y, al abrir una, la conversación a pantalla completa (tapa la
  * cabecera y la barra de abajo, como cualquier app de mensajería).
  */
+const NARROW = '(max-width: 899px)';
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
+}
+
 export default function MessagesPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const narrow = useNarrow();
   const listQ = useQuery({
     queryKey: ['chat-conversations'],
     queryFn: () => listConversations({ limit: 50 }),
@@ -62,13 +77,25 @@ export default function MessagesPage() {
           </>
         )}
       </section>
-      <section className="mpl-thread-pane" aria-label="Conversación">
-        {conversationId ? (
-          <ChatThread key={conversationId} conversationId={conversationId} onBack={() => navigate('/mensajes')} />
-        ) : (
-          <div className="mpl-thread-empty">Elige una conversación para verla aquí.</div>
-        )}
-      </section>
+      {narrow ? (
+        // En el móvil, a pantalla completa y en <body>: dentro del contenedor que
+        // se desplaza (#root en la app de iPhone), WebKit la dejaba DEBAJO de la
+        // cabecera de la app por mucho z-index que llevara.
+        conversationId && createPortal(
+          <div className="mpl-thread-overlay" role="dialog" aria-modal="true" aria-label="Conversación">
+            <ChatThread key={conversationId} conversationId={conversationId} onBack={() => navigate('/mensajes')} />
+          </div>,
+          document.body,
+        )
+      ) : (
+        <section className="mpl-thread-pane" aria-label="Conversación">
+          {conversationId ? (
+            <ChatThread key={conversationId} conversationId={conversationId} onBack={() => navigate('/mensajes')} />
+          ) : (
+            <div className="mpl-thread-empty">Elige una conversación para verla aquí.</div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
