@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Home, PawPrint, Heart, Ticket, Gift, User, Users, FileText,
-  Settings, ClipboardList, Inbox, Circle, Menu, X, QrCode, RefreshCw,
+  Settings, ClipboardList, Inbox, Circle, Menu, X, QrCode, RefreshCw, LogOut,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
@@ -79,6 +79,11 @@ function Header() {
   const generalItems = generalItemsForRole(role);
   // El drawer móvil replica el menú lateral de la web: misma regla, misma función.
   const drawerItems = navItemsForRole(role);
+  // En la cabecera solo lo que NO está ya en el menú lateral: al adoptante
+  // le repetía las nueve entradas; a protectoras y partners les deja los
+  // enlaces públicos (Compañeros, Tienda…) que su menú no tiene.
+  const sideTargets = new Set(drawerItems.map(resolvePath));
+  const headerItems = generalItems.filter(item => !sideTargets.has(resolvePath(item)));
   const showInbox = generalItems.some(item => item.path === '/inbox');
 
   const loadCode = async () => {
@@ -138,8 +143,8 @@ function Header() {
             portada o el catálogo a cupones/perfil la cabecera no cambia. */}
         <Link to={roleHome} aria-label="MyPetLive — inicio" style={{ textDecoration: 'none' }}><BrandWordmark /></Link>
 
-        <nav className="hidden md:flex items-center gap-2 text-sm">
-          {generalItems.map((item: NavItem) => {
+        <nav className="hidden lg:flex items-center gap-2 text-sm">
+          {headerItems.map((item: NavItem) => {
             const target = resolvePath(item);
             return (
               <NavLink
@@ -195,15 +200,23 @@ function Header() {
               </button>
             </>
           ) : (
-            <>
-              <span className="hidden sm:inline" style={{ color: '#7A8273' }}>{user.email} · {labelFor[user.role] || user.role}</span>
-              <button onClick={logout} className="hidden md:inline-flex px-3 py-1.5 rounded">Salir</button>
-            </>
+            // Quién eres ya lo dice la tarjeta del menú lateral; aquí solo salir.
+            <button
+              type="button"
+              onClick={logout}
+              className="hidden lg:grid"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+              style={{ padding: 0, width: 40, height: 40, placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}
+            >
+              <LogOut size={17} />
+            </button>
           )}
-          {/* Menú lateral en móviles, a la derecha como en PublicHeader. En la
-              app y sin sesión sobra: la barra inferior ya lleva a todo. */}
+          {/* Menú en cajón hasta que cabe el menú lateral (lg), a la derecha como
+              en PublicHeader. En la app y sin sesión sobra: la barra inferior
+              ya lleva a todo. */}
           {(user || !isNativeApp()) && <button
-            className="md:hidden inline-flex items-center justify-center"
+            className="lg:hidden inline-flex items-center justify-center"
             style={{ width: 40, height: 40, padding: 0, flexShrink: 0, border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}
             onClick={() => setMenuOpen(true)}
             aria-expanded={menuOpen}
@@ -221,7 +234,7 @@ function Header() {
         para position:fixed y los dejaría atrapados en sus 56px de alto. */}
       {/* Fondo del drawer móvil */}
       <div
-        className="md:hidden fixed inset-0 z-40 transition-opacity duration-200"
+        className="lg:hidden fixed inset-0 z-40 transition-opacity duration-200"
         style={{ background: 'rgba(63,74,60,0.4)', opacity: menuOpen ? 1 : 0, pointerEvents: menuOpen ? 'auto' : 'none' }}
         onClick={() => setMenuOpen(false)}
         aria-hidden="true"
@@ -231,7 +244,7 @@ function Header() {
       <aside
         id="mobile-menu"
         // En la app el cajón empieza bajo la barra de estado (ver .safe-top en index.css).
-        className="md:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
+        className="lg:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
         style={{
           width: 280,
           maxWidth: '84vw',
@@ -284,6 +297,16 @@ function Header() {
                 <div style={{ fontSize: 11.5, color: MPL.faint }}>{labelFor[role] || role}</div>
               </div>
             </div>
+            {/* En móvil era el único sitio sin forma de cerrar sesión. */}
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); logout(); }}
+              className="flex items-center gap-3 w-full"
+              style={{ marginTop: 8, padding: '11px 12px', borderRadius: 12, border: 0, background: 'transparent', font: 'inherit', fontSize: 14.5, fontWeight: 800, color: MPL.muted, cursor: 'pointer' }}
+            >
+              <LogOut size={18} strokeWidth={2} />
+              Cerrar sesión
+            </button>
           </div>
         )}
       </aside>
