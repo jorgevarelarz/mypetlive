@@ -7,12 +7,13 @@
   ],
   "tenantGeneral": [
     { "label": "Inicio", "path": "/home", "to": "/home" },
+    { "label": "Mensajes", "path": "/mensajes", "to": "/mensajes" },
     { "label": "Compañeros", "path": "/animals", "to": "/animals" },
     { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
     { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
     { "label": "Tienda", "path": "/tienda", "to": "/tienda" },
     { "label": "Mis pedidos", "path": "/mis-pedidos", "to": "/mis-pedidos" },
-    { "label": "Citas vet", "path": "/citas", "to": "/citas" },
+    { "label": "Citas", "path": "/citas", "to": "/citas" },
     { "label": "Cupones", "path": "/coupons", "to": "/coupons" },
     { "label": "Ajustes", "path": "/ajustes", "to": "/ajustes" }
   ],
@@ -21,10 +22,11 @@
   ],
   "landlord": [
     { "label": "Inicio", "path": "/landlord" },
+    { "label": "Mensajes", "path": "/mensajes" },
     { "label": "Mis animales", "path": "/landlord/animals" },
     { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
-    { "label": "Citas veterinarias", "path": "/citas" },
+    { "label": "Citas", "path": "/citas" },
     { "label": "Verificación", "path": "/landlord/verificacion" },
     { "label": "Perfil y cuenta", "path": "/profile" },
     { "label": "Ajustes", "path": "/ajustes" }
@@ -59,6 +61,7 @@
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
+    { "label": "Mensajes", "path": "/mensajes" },
     { "label": "Caja", "path": "/caja" },
     { "label": "Agenda de citas", "path": "/citas" },
     { "label": "Mis cupones", "path": "/partner/cupones" },

@@ -3,6 +3,8 @@ import { toast } from 'react-hot-toast';
 import { pushSupport, getPushEnabled, enablePush, disablePush, sendTestPush } from '../../utils/webPush';
 import { nativePushAvailable, nativePushDenied, openNativeSettings } from '../../utils/nativePush';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
+import { getChatPrefs, setChatPrefs } from '../../api/chat';
+import { useAuth } from '../../context/AuthContext';
 
 // Ajustes del dispositivo y de la cuenta que no son datos personales. Las
 // notificaciones vivían en el Perfil, mezcladas con nombre y correo.
@@ -130,13 +132,48 @@ function PushPanel() {
   );
 }
 
+/** Correo cuando un mensaje lleva 10 minutos sin leer (jobs/chatEmails en el servidor). */
+function ChatEmailPanel() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getChatPrefs().then(p => setOn(p.emailUnread)).catch(() => setOn(null)); }, []);
+  if (on === null) return null;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const p = await setChatPrefs(!on);
+      setOn(p.emailUnread);
+      toast.success(p.emailUnread ? 'Te avisaremos por correo' : 'Ya no te avisaremos por correo');
+    } catch {
+      toast.error('No se pudo guardar');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Mensajes por correo ✉️">
+      <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} style={{ width: 20, height: 20, marginTop: 2, accentColor: MPL.teal }} />
+        <span style={{ fontSize: 14.5 }}>
+          <strong>Avisarme por correo de los mensajes sin leer</strong>
+          <span style={{ display: 'block', color: MPL.muted, fontSize: 13.5, marginTop: 2 }}>
+            Si un mensaje lleva 10 minutos sin leer, te mandamos un correo. Uno por conversación, no uno por mensaje.
+          </span>
+        </span>
+      </label>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
+  const { user } = useAuth();
   return (
     <div style={{ display: 'grid', gap: 24, padding: 'clamp(14px, 4vw, 24px)', maxWidth: 720 }}>
       <header>
         <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, fontWeight: 800, margin: 0 }}>Ajustes</h1>
       </header>
       <PushPanel />
+      {['tenant', 'landlord', 'vet'].includes(String(user?.role)) && <ChatEmailPanel />}
     </div>
   );
 }

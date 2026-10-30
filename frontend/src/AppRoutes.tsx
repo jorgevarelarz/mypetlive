@@ -36,6 +36,7 @@ import AuthLayout from "./layout/AuthLayout";
 import AdminHome from "./pages/admin/AdminHome";
 import ProfilePage from "./pages/profile/ProfilePage";
 import SettingsPage from "./pages/settings/SettingsPage";
+import MessagesPage from "./pages/messages/MessagesPage";
 import ConfirmEmailChange from "./pages/profile/ConfirmEmailChange";
 import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
@@ -157,6 +158,8 @@ export default function AppRoutes() {
 
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/ajustes" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/mensajes" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/mensajes/:conversationId" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
 
               <Route path="/properties/*" element={<Navigate to="/animals" replace />} />
               <Route path="/coliving/*" element={<Navigate to="/animals" replace />} />

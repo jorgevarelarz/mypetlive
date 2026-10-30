@@ -1,17 +1,20 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Heart, Home, Search, Ticket, User } from 'lucide-react';
+import { Home, MessageCircle, Search, Ticket, User } from 'lucide-react';
+import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { MPL, MPL_FONT_BODY } from '../styles/mypetlive';
 
 const items = [
   { label: 'Inicio', to: '/', icon: Home },
   { label: 'Compañeros', to: '/animals', icon: Search },
+  // Ocupa el sitio de Favoritos, que sigue en Compañeros (botón «Favoritos»).
+  { label: 'Mensajes', to: '/mensajes', icon: MessageCircle },
   { label: 'Cupones', to: '/coupons', icon: Ticket },
-  { label: 'Favoritos', to: '/me/favorites', icon: Heart },
   { label: 'Perfil', to: '/profile', icon: User },
 ];
 
 export default function MobileBottomNav() {
+  const unread = useUnreadMessages();
   return (
     <nav
       aria-label="Navegación móvil"
@@ -58,7 +61,14 @@ export default function MobileBottomNav() {
               fontWeight: isActive ? 800 : 700,
             })}
           >
-            <Icon size={25} strokeWidth={2.1} />
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Icon size={25} strokeWidth={2.1} />
+              {item.to === '/mensajes' && unread > 0 && (
+                <span aria-label={`${unread} sin leer`} style={{ position: 'absolute', top: -6, left: 15, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: MPL.coral, color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'grid', placeItems: 'center', border: '2px solid #fff', lineHeight: 1 }}>
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
+            </span>
             <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
           </NavLink>
         );

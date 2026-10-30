@@ -147,6 +147,9 @@ const userSchema = new Schema(
     // conserva anonimizado porque pedidos, donaciones y adopciones lo referencian.
     // Los listados públicos filtran `deletedAt: null`.
     deletedAt: { type: Date, default: null },
+    // Correo cuando un mensaje del chat lleva 10 minutos sin leer (jobs/chatEmails).
+    // Se guarda el «no», así las cuentas de antes quedan con el aviso puesto.
+    chatEmailOff: { type: Boolean, default: false },
     // Cambio de email pendiente de confirmar en la dirección nueva. El email es
     // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
     // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,

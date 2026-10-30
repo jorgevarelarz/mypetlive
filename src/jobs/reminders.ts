@@ -8,6 +8,7 @@ import { sendPushToUser, type PushPayload } from '../utils/push';
 import logger from '../utils/logger';
 import { sendSupplyAlerts } from './supplyAlerts';
 import { sendCareReminders } from './careReminders';
+import { sendUnreadChatEmails } from './chatEmails';
 
 const H24_MS = 24 * 60 * 60 * 1000;
 const WELCOME_NUDGE_AFTER_DAYS = 3;
@@ -255,5 +256,8 @@ export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   const care = () => sendCareReminders().catch(err => logger.error({ err }, '[reminders] pasada de cuidado falló'));
   setTimeout(care, 45_000);
   setInterval(care, 5 * 60 * 1000);
+  // Correo de mensajes sin leer: sale a los 10 minutos, así que se mira a menudo.
+  const chat = () => sendUnreadChatEmails().catch(err => logger.error({ err }, '[reminders] pasada de chat falló'));
+  setInterval(chat, 2 * 60 * 1000);
   return setInterval(run, intervalMs);
 }

@@ -68,9 +68,11 @@ describe('Chat de adopción (adoptante ↔ protectora)', () => {
       .set(adopterH)
       .send({ kind: 'adoption', refId: adoptionId })
       .expect(200);
-    expect(mine.body.participants.sort()).toEqual([adopterId, shelterId].sort());
-    expect(mine.body.meta.animalId).toBe(animalId);
-    expect(mine.body.meta.shelterId).toBe(shelterId);
+    // Devuelve con quién se habla y sobre qué, no los ids crudos.
+    expect(mine.body.other.id).toBe(shelterId);
+    expect(mine.body.other.name).toBe('Protectora Norte ONG');
+    expect(mine.body.animal.id).toBe(animalId);
+    expect(mine.body.context).toMatchObject({ type: 'adoption', adoptionId, role: 'adopter' });
 
     // La protectora entra a la MISMA conversación (única por solicitud).
     const theirs = await request(app)

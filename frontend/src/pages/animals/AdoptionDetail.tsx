@@ -5,7 +5,9 @@ import { getAdoption, setAdoptionStatus, adoptionStatusErrorMessage, cancelAdopt
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
-import ChatPanel from '../../components/chat/ChatPanel';
+import OpenChatButton from '../../components/chat/OpenChatButton';
+import ProposeVisitDialog from '../../components/chat/ProposeVisitDialog';
+import { whenLong } from '../../components/chat/chatFormat';
 import { speciesLabel } from '../../styles/mypetlive';
 import { nextAdoptionStatuses, isTerminalAdoptionStatus, ADOPTION_ACTION_LABEL } from '../../utils/adoptionTransitions';
 
@@ -38,11 +40,15 @@ function formatDate(value?: string) {
   }).format(date);
 }
 
-function nextStep(status: AdoptionStatus, canManage: boolean) {
+function nextStep(status: AdoptionStatus, canManage: boolean, visit?: { status: string }) {
   if (canManage) {
     if (status === 'recibida') return 'Revisa la solicitud y pásala a revisión si encaja.';
-    if (status === 'en_revision') return 'Valora el cuestionario y propone una cita o solicita más información.';
-    if (status === 'cita_propuesta') return 'Confirma la visita y avanza a preaprobada cuando esté lista.';
+    if (status === 'en_revision') return 'Valora el cuestionario y propón una visita o pide más información.';
+    if (status === 'cita_propuesta') {
+      return visit?.status === 'aceptada'
+        ? 'La visita está confirmada. Después, pasa la solicitud a preaprobada si encaja.'
+        : 'Visita propuesta: falta que la persona adoptante la acepte.';
+    }
     if (status === 'preaprobada') return 'Cierra la decisión final de adopción.';
     return 'Solicitud cerrada o pendiente de gestión específica.';
   }
@@ -53,10 +59,11 @@ function nextStep(status: AdoptionStatus, canManage: boolean) {
     case 'en_revision':
       return 'La protectora está revisando tu perfil y respuestas.';
     case 'info_adicional':
-      // El chat de esta misma página es el único canal para responder.
-      return 'La protectora necesita más información: respóndele por el chat de esta solicitud.';
+      return 'La protectora necesita más información: respóndele por Mensajes.';
     case 'cita_propuesta':
-      return 'La protectora ha propuesto una cita: concretad día y hora por el chat de esta solicitud.';
+      return visit?.status === 'aceptada'
+        ? 'Visita confirmada: la tienes en Citas.'
+        : 'La protectora te propone una visita para conocer al animal: acéptala o propón otra hora desde Mensajes.';
     case 'preaprobada':
       return 'Tu solicitud está en fase final.';
     case 'aprobada':
@@ -96,6 +103,7 @@ export default function AdoptionDetail() {
   const [undoOpen, setUndoOpen] = React.useState(false);
   const [undoReason, setUndoReason] = React.useState('');
   const [undoBusy, setUndoBusy] = React.useState(false);
+  const [visitOpen, setVisitOpen] = React.useState(false);
 
   if (isLoading) return <div className="p-4">Cargando solicitud...</div>;
 
@@ -215,7 +223,7 @@ export default function AdoptionDetail() {
           <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
             <div className="text-sm font-medium">Siguiente paso</div>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {nextStep(status, canManage)}
+              {nextStep(status, canManage, adoption.visit)}
             </p>
           </div>
           {lastShelterNote && (
@@ -309,17 +317,48 @@ export default function AdoptionDetail() {
         </section>
       )}
 
-      <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-        <div>
-          <h2 className="text-lg font-semibold">
-            {canManage ? 'Chat con la persona adoptante' : 'Chat con la protectora'}
-          </h2>
-          <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-            Resuelve dudas sobre esta solicitud sin salir de MyPetLive.
-          </p>
-        </div>
-        <ChatPanel kind="adoption" refId={String(id)} title="" />
-      </section>
+      {/* La conversación vive en Mensajes; aquí solo el acceso. El admin no es
+          parte de la conversación, así que no la ve. */}
+      {user?.role !== 'admin' && (
+        <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+          <div>
+            <h2 className="text-lg font-semibold">Mensajes y visita</h2>
+            <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
+              {canManage
+                ? 'Habla con la persona adoptante y propón una visita para que conozca al animal.'
+                : 'Habla con la protectora. Si te proponen una visita, la aceptas desde el chat.'}
+            </p>
+          </div>
+          {adoption.visit && (
+            <Link to={`/citas?visita=${adoption._id || id}`} className="text-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#F6F3EC', color: '#3F4A3C', textDecoration: 'none' }}>
+              <span>📅</span>
+              <span style={{ flex: 1 }}>
+                <strong>{adoption.visit.status === 'aceptada' ? 'Visita confirmada' : 'Visita propuesta'}:</strong> {whenLong(adoption.visit.at)}
+                {adoption.visit.place ? ` · ${adoption.visit.place}` : ''}
+              </span>
+              <span style={{ fontWeight: 800, color: '#176363' }}>Ver visita ›</span>
+            </Link>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <OpenChatButton kind="adoption" refId={String(id)} primary label={canManage ? 'Escribir a la persona adoptante' : 'Escribir a la protectora'} />
+            {canManage && !isTerminal && (
+              <button type="button" onClick={() => setVisitOpen(true)}
+                style={{ border: '1.5px solid #E5E1D6', background: '#fff', borderRadius: 12, padding: '9px 15px', font: 'inherit', fontWeight: 800, fontSize: 14, cursor: 'pointer', color: '#3F4A3C' }}>
+                {adoption.visit ? 'Cambiar visita' : 'Proponer visita'}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+      {visitOpen && (
+        <ProposeVisitDialog
+          adoptionId={String(id)}
+          animalName={animal.name}
+          initial={{ place: adoption.visit?.place }}
+          onClose={() => setVisitOpen(false)}
+          onDone={() => { setVisitOpen(false); refetch(); }}
+        />
+      )}
 
       {canManage && (
         <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>

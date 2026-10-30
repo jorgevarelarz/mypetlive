@@ -18,10 +18,22 @@ export interface IAdoptionHistoryItem {
   payload?: Record<string, unknown>;
 }
 
+// Visita para conocer al animal que propone la protectora. Una sola a la vez:
+// proponer otra fecha la sustituye (el chat guarda el rastro de las anteriores).
+export interface IAdoptionVisit {
+  at: Date;
+  place?: string;
+  note?: string;
+  status: 'propuesta' | 'aceptada';
+  proposedBy?: string;
+  respondedAt?: Date;
+}
+
 export interface IAdoption extends Document {
   animalId: string;
   adopterId: string;
   status: AdoptionStatus;
+  visit?: IAdoptionVisit;
   answers: { question: string; answer: string }[];
   history: IAdoptionHistoryItem[];
   createdAt: Date;
@@ -56,6 +68,19 @@ const schema = new Schema<IAdoption>(
       default: 'recibida',
     },
     answers: { type: [answerSchema], default: [] },
+    visit: {
+      type: new Schema(
+        {
+          at: { type: Date, required: true },
+          place: { type: String, trim: true, maxlength: 200 },
+          note: { type: String, trim: true, maxlength: 500 },
+          status: { type: String, enum: ['propuesta', 'aceptada'], default: 'propuesta' },
+          proposedBy: { type: String },
+          respondedAt: { type: Date },
+        },
+        { _id: false },
+      ),
+    },
   },
   { timestamps: true },
 );

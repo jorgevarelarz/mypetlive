@@ -1,0 +1,68 @@
+/* Mensajes: bandeja + conversación. Colores de styles/mypetlive (MPL). */
+.mpl-messages { display: flex; gap: 0; height: calc(100vh - 56px - 48px); min-height: 480px; box-sizing: border-box; background: #fff; border: 1px solid #E5E1D6; border-radius: 18px; overflow: hidden; }
+.mpl-inbox { width: 360px; flex: none; border-right: 1px solid #E5E1D6; padding: 18px 12px; overflow-y: auto; background: #FCFBF8; }
+.mpl-thread-pane { flex: 1; min-width: 0; display: flex; background: #F6F3EC; }
+.mpl-thread-empty { margin: auto; color: #6B7464; font-size: 15px; }
+
+.mpl-tab { padding: 7px 13px; border-radius: 999px; font: inherit; font-weight: 800; font-size: 13.5px; background: #fff; border: 1px solid #E5E1D6; color: #6B7464; cursor: pointer; }
+.mpl-tab.is-on { background: #3F4A3C; border-color: #3F4A3C; color: #fff; }
+
+/* minmax(0,1fr): sin esto la columna crece con el texto más largo y se sale. */
+.mpl-conv-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.mpl-conv { display: flex; gap: 12px; align-items: center; padding: 11px 10px; border-radius: 16px; text-decoration: none; color: #3F4A3C; transition: background .2s; }
+.mpl-conv:hover { background: #F4F0E6; }
+.mpl-conv.is-selected { background: #E2EEEC; }
+.mpl-conv-name { font-weight: 800; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpl-conv-time { margin-left: auto; font-size: 12.5px; color: #6B7464; flex: none; }
+.mpl-conv.is-unread .mpl-conv-time { color: #1F6F6F; font-weight: 800; }
+.mpl-conv-ctx { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: #6B7464; margin: 1px 0 3px; white-space: nowrap; min-width: 0; }
+.mpl-conv-last { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: #6B7464; }
+.mpl-conv.is-unread .mpl-conv-last { color: #3F4A3C; font-weight: 700; }
+.mpl-badge { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: #1F6F6F; color: #fff; font-size: 12px; font-weight: 800; display: inline-grid; place-items: center; flex: none; }
+.mpl-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 800; flex: none; white-space: nowrap; }
+
+.mpl-thread { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.mpl-thread-head { flex: none; background: #fff; border-bottom: 1px solid #E5E1D6; padding: 10px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.mpl-thread-back { width: 38px; height: 38px; display: grid; place-items: center; border: 0; background: none; border-radius: 12px; color: #3F4A3C; cursor: pointer; padding: 0 !important; margin-left: -6px; }
+.mpl-thread-ctx { display: flex; align-items: center; gap: 10px; font-size: 13.5px; background: #F6F3EC; border-radius: 12px; padding: 8px 10px; }
+.mpl-link-btn { border: 0; background: none; padding: 0 !important; font: inherit; font-weight: 800; color: #176363; cursor: pointer; text-decoration: none; white-space: nowrap; }
+
+.mpl-thread-msgs { flex: 1; overflow-y: auto; padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
+.mpl-older { align-self: center; border: 1px solid #E5E1D6; background: #fff; border-radius: 999px; padding: 6px 14px !important; font: inherit; font-size: 13px; font-weight: 800; color: #6B7464; cursor: pointer; margin-bottom: 6px; }
+.mpl-day { align-self: center; font-size: 12px; font-weight: 800; color: #6B7464; background: #EFEADF; padding: 3px 10px; border-radius: 999px; margin: 8px 0 4px; }
+.mpl-sys { align-self: center; max-width: 88%; text-align: center; font-size: 13px; color: #566A3D; background: #ECEFE2; padding: 6px 12px; border-radius: 12px; margin: 4px 0; }
+.mpl-card { align-self: center; width: min(100%, 380px); background: #fff; border: 1px solid #E5E1D6; border-radius: 16px; padding: 14px; margin: 6px 0; box-shadow: 0 8px 20px -18px rgba(31,55,40,.6); }
+
+.mpl-bubble { max-width: 78%; padding: 8px 12px 6px; border-radius: 18px; font-size: 15px; line-height: 1.4; display: flex; flex-direction: column; }
+.mpl-bubble.is-theirs { align-self: flex-start; background: #fff; border: 1px solid #E5E1D6; border-bottom-left-radius: 6px; color: #3F4A3C; }
+.mpl-bubble.is-mine { align-self: flex-end; background: #1F6F6F; color: #fff; border-bottom-right-radius: 6px; }
+.mpl-bubble.is-mine a { color: #fff; }
+.mpl-bubble-time { align-self: flex-end; font-size: 11px; margin-top: 2px; opacity: .75; }
+.mpl-bubble-photo { display: block; margin: 2px -4px 4px; }
+.mpl-bubble-photo img { display: block; width: 220px; max-width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; }
+
+.mpl-composer { flex: none; background: #fff; border-top: 1px solid #E5E1D6; padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; }
+.mpl-attach { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6B7464; }
+.mpl-attach img { width: 44px; height: 44px; object-fit: cover; border-radius: 10px; }
+.mpl-attach button { margin-left: auto; border: 0; background: #F6F3EC; border-radius: 999px; width: 30px; height: 30px; padding: 0 !important; display: grid; place-items: center; cursor: pointer; color: #3F4A3C; }
+.mpl-icon-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #6B7464; flex: none; cursor: pointer; }
+.mpl-input { flex: 1; min-height: 44px; max-height: 130px; resize: none; border-radius: 22px; border: 1.5px solid #E5E1D6; background: #F6F3EC; padding: 11px 15px; font: inherit; font-size: 16px; line-height: 1.35; color: #3F4A3C; outline: none; box-sizing: border-box; }
+.mpl-input:focus { border-color: #1F6F6F; background: #fff; }
+.mpl-send { width: 44px; height: 44px; border-radius: 50%; background: #C0512F; color: #fff; border: 0; display: grid; place-items: center; flex: none; cursor: pointer; padding: 0 !important; transition: opacity .2s; }
+.mpl-send:disabled { opacity: .45; cursor: default; }
+
+/* Móvil y tablet: una cosa a la vez. */
+@media (max-width: 899px) {
+  .mpl-messages { display: block; height: auto; min-height: 0; border: 0; background: transparent; border-radius: 0; }
+  .mpl-inbox { width: auto; border: 0; padding: 0; background: transparent; overflow: visible; }
+  .mpl-inbox .mpl-conv { background: #fff; border: 1px solid #E5E1D6; margin-bottom: 5px; }
+  .mpl-inbox .mpl-conv.is-unread { border-color: #BFD9D5; }
+  .mpl-thread-pane { display: none; }
+  .mpl-messages.has-thread .mpl-thread-pane { display: flex; position: fixed; inset: 0; z-index: 60; }
+  .mpl-thread-head { padding: 8px 12px; }
+  .mpl-thread-msgs { padding: 12px 12px 8px; }
+  .mpl-bubble { max-width: 84%; }
+}
+@media (min-width: 900px) {
+  .mpl-thread-back { display: none; }
+}

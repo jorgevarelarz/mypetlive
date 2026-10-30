@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Home, PawPrint, Heart, Ticket, Gift, User, Users, FileText,
-  Settings, ClipboardList, Inbox, Circle, Menu, X, QrCode, RefreshCw, LogOut,
+  Settings, ClipboardList, Circle, Menu, X, QrCode, RefreshCw, LogOut, MessageCircle, CalendarDays,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,7 @@ import { navItemsForRole, generalItemsForRole, resolvePath, type NavItem } from 
 import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
-import { listConversations } from '../api/chat';
+import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { getMyCode, getMyPatitas } from '../api/patitas';
 import { useQuery } from '@tanstack/react-query';
 import { BrandWordmark, MPL, PawMark } from '../styles/mypetlive';
@@ -27,7 +27,8 @@ const iconFor: Record<string, IconType> = {
   '/profile': User, '/admin/users': Users,
   '/admin/reports': FileText, '/admin/settings': Settings, '/ajustes': Settings,
   '/landlord/questionnaire': ClipboardList,
-  '/inbox': Inbox,
+  '/mensajes': MessageCircle,
+  '/citas': CalendarDays,
 };
 
 // Rutas "home" de cada rol: solo se marcan activas en coincidencia exacta (no en sus hijas)
@@ -70,7 +71,7 @@ const labelFor: Record<string, string> = {
 function Header() {
   const { user, logout } = useAuth();
   const { openAuth } = useAuthModal();
-  const [unread, setUnread] = useState(0);
+  const unread = useUnreadMessages();
   const [menuOpen, setMenuOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [myCode, setMyCode] = useState<{ token: string; code: string } | null>(null);
@@ -84,7 +85,6 @@ function Header() {
   // enlaces públicos (Compañeros, Tienda…) que su menú no tiene.
   const sideTargets = new Set(drawerItems.map(resolvePath));
   const headerItems = generalItems.filter(item => !sideTargets.has(resolvePath(item)));
-  const showInbox = generalItems.some(item => item.path === '/inbox');
 
   const loadCode = async () => {
     setLoadingCode(true);
@@ -100,23 +100,6 @@ function Header() {
     if (anyOverlay) window.addEventListener('keydown', onKey);
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
   }, [menuOpen, qrOpen]);
-  useEffect(() => {
-    let timer: any;
-    const load = async () => {
-      try {
-        if (!user?._id || !showInbox) { setUnread(0); return; }
-        const list = await listConversations({ page: 1, limit: 50 });
-        const total = list.reduce((acc: number, c: any) => acc + (c?.unread?.[user._id] || 0), 0);
-        setUnread(total);
-      } catch {}
-    };
-    load();
-    if (showInbox) {
-      timer = setInterval(load, 30_000);
-      return () => clearInterval(timer);
-    }
-    return () => {};
-  }, [user?._id, showInbox]);
   const { data: patitasData } = useQuery({
     queryKey: ['patitas-me'],
     queryFn: getMyPatitas,
@@ -153,7 +136,7 @@ function Header() {
                 className={({ isActive }) => `px-2 py-1 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`}
               >
                 {item.label}
-                {target === '/inbox' && unread > 0 && (
+                {target === '/mensajes' && unread > 0 && (
                   <span
                     className="ml-1 inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
                     style={{ background: '#E5DACC', color: '#3F4A3C' }}
@@ -273,7 +256,7 @@ function Header() {
           {drawerItems.map((item: NavItem) => {
             const target = resolvePath(item);
             const badge =
-              target === '/inbox' && unread > 0 ? (
+              target === '/mensajes' && unread > 0 ? (
                 <span
                   className="inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
                   style={{ background: MPL.teal, color: '#fff' }}
@@ -374,27 +357,8 @@ function Header() {
 
 function SideNav() {
   const { user } = useAuth();
-  const [unread, setUnread] = useState(0);
+  const unread = useUnreadMessages();
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
-  const generalItems = generalItemsForRole(role);
-  const showInbox = generalItems.some(item => item.path === '/inbox');
-  useEffect(() => {
-    let timer: any;
-    const load = async () => {
-      try {
-        if (!user?._id || !showInbox) { setUnread(0); return; }
-        const list = await listConversations({ page: 1, limit: 50 });
-        const total = list.reduce((acc: number, c: any) => acc + (c?.unread?.[user._id] || 0), 0);
-        setUnread(total);
-      } catch {}
-    };
-    load();
-    if (showInbox) {
-      timer = setInterval(load, 30_000);
-      return () => clearInterval(timer);
-    }
-    return () => {};
-  }, [user?._id, showInbox]);
   const items = navItemsForRole(role);
   return (
     <aside className="hidden lg:flex w-60 shrink-0">
@@ -406,7 +370,7 @@ function SideNav() {
           {items.map((item: NavItem) => {
             const target = resolvePath(item);
             const badge =
-              target === '/inbox' && unread > 0 ? (
+              target === '/mensajes' && unread > 0 ? (
                 <span
                   className="inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
                   style={{ background: MPL.teal, color: '#fff' }}
@@ -487,7 +451,7 @@ export default function AppShell() {
         <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 md:py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
           <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pt-6 pb-24 md:pt-0 md:pb-0">
-            <div className="mpl-crumbs"><Breadcrumbs /></div>
+            {!pathname.startsWith('/mensajes') && <div className="mpl-crumbs"><Breadcrumbs /></div>}
             <Outlet />
           </main>
         </div>

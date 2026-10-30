@@ -217,9 +217,16 @@ export default function AnimalsPublicList() {
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, fontWeight: 800, margin: '0 0 6px' }}>
             Compañeros en adopción
           </h1>
-          <p style={{ fontSize: 16, color: MPL.muted, margin: 0 }}>
-            <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: 16, color: MPL.muted, margin: 0, flex: '1 1 260px' }}>
+              <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
+            </p>
+            {/* Favoritos ya no está en la barra de abajo (la ocupa Mensajes): se llega desde aquí. */}
+            <Link to="/me/favorites" className="catalog-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 12, border: `1.5px solid ${MPL.border}`, background: '#fff', fontWeight: 800, fontSize: 14, color: MPL.ink, textDecoration: 'none' }}>
+              <Heart size={16} fill={favorites.ids.length ? MPL.coral : 'none'} color={favorites.ids.length ? MPL.coral : 'currentColor'} />
+              Favoritos{favorites.ids.length ? ` · ${favorites.ids.length}` : ''}
+            </Link>
+          </div>
 
           {/* Lo primero que se elige: qué animal. Tarjetas con su dibujo; al
               pulsar la activa se quita el filtro. */}

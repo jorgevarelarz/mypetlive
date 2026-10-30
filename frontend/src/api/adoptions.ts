@@ -136,3 +136,28 @@ export async function cancelAdoption(id: string, note?: string) {
   const { data } = await client.post(`/api/adoptions/${id}/cancel`, { note });
   return data as { ok: boolean; id: string; status: AdoptionStatus };
 }
+
+// Visitas para conocer al animal (las propone la protectora, las acepta el adoptante).
+export type AdoptionVisitItem = {
+  adoptionId: string;
+  status: AdoptionStatus;
+  visit: { at: string; place?: string; note?: string; status: 'propuesta' | 'aceptada' };
+  animal: { id: string; name: string; photo?: string } | null;
+  shelterName: string;
+  adopterName: string;
+};
+
+export async function proposeAdoptionVisit(id: string, body: { at: string; place?: string; note?: string }) {
+  const { data } = await client.post(`/api/adoptions/${id}/visit`, body);
+  return data;
+}
+
+export async function acceptAdoptionVisit(id: string) {
+  const { data } = await client.post(`/api/adoptions/${id}/visit/accept`);
+  return data;
+}
+
+export async function listMyAdoptionVisits() {
+  const { data } = await client.get<{ items: AdoptionVisitItem[] }>('/api/adoptions/visits/mine');
+  return data.items;
+}

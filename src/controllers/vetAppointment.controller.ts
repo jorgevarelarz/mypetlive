@@ -7,6 +7,7 @@ import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { sendPushToUser } from '../utils/push';
+import { formatWhen, postSystemMessage } from '../utils/chat';
 import { AnimalEvent } from '../models/animalEvent.model';
 import { withRequiredTxn, withTxnIfAvailable } from '../utils/txn';
 import { AppError } from '../utils/errors';
@@ -221,6 +222,13 @@ export async function createAppointment(req: Request, res: Response) {
     appt = await VetAppointment.create(payload);
   }
 
+  // Abre la conversación con el veterinario: la cita sale en Mensajes de los dos.
+  await postSystemMessage({
+    kind: 'vet_appointment', refId: String(appt._id), code: 'vet.requested', actorId: userId,
+    body: `Cita solicitada para el ${formatWhen(when)}${service ? `: ${service.name}` : ''}. Motivo: ${cleanReason.slice(0, 300)}`,
+    payload: { at: when, service: service?.name, reason: cleanReason.slice(0, 300) },
+  });
+
   // Avisar al veterinario de la nueva solicitud.
   const [vetUser, owner] = await Promise.all([
     User.findById(vetId).select('email name').lean(),
@@ -366,6 +374,21 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
         logger.error({ err, appointmentId: String(appt._id) }, '[vet-appointments] liquidación pendiente');
       }
     }
+  }
+
+  // Tarjeta en el chat de la cita (no en el reintento de liquidar: no cambia nada).
+  const CHAT_TEXT: Record<string, string> = {
+    confirmed: `Cita confirmada para el ${formatWhen(appt.scheduledAt || appt.requestedAt)}.`,
+    rescheduled: `Nueva fecha propuesta para la cita: ${formatWhen(appt.scheduledAt || appt.requestedAt)}.`,
+    completed: 'Cita completada.',
+    cancelled: `Cita cancelada.${appt.cancelReason ? ` Motivo: ${appt.cancelReason}` : ''}`,
+  };
+  if (CHAT_TEXT[status] && !(status === 'completed' && initial.status === 'completed')) {
+    await postSystemMessage({
+      kind: 'vet_appointment', refId: String(appt._id), code: `vet.${status}`, actorId,
+      body: CHAT_TEXT[status],
+      payload: { status, at: appt.scheduledAt || appt.requestedAt, ...(appt.cancelReason && status === 'cancelled' ? { reason: appt.cancelReason } : {}) },
+    });
   }
 
   // Notificar a la contraparte del cambio de estado.

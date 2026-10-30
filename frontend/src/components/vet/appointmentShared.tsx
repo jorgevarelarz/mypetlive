@@ -1,5 +1,6 @@
 import React from 'react';
 import { CalendarDays, PawPrint } from 'lucide-react';
+import OpenChatButton from '../chat/OpenChatButton';
 import { MPL, MPL_FONT_MONO } from '../../styles/mypetlive';
 import type { VetAppointment, VetAppointmentStatus } from '../../api/vetAppointments';
 
@@ -77,7 +78,7 @@ export function AppointmentCard({
   const s = meta[appt.status];
   const shown = appt.scheduledAt || appt.requestedAt;
   return (
-    <div style={{ border: `1px solid ${MPL.border}`, borderRadius: 14, padding: 14, display: 'grid', gap: 8 }}>
+    <div data-cita={appt._id} style={{ border: `1px solid ${MPL.border}`, borderRadius: 14, padding: 14, display: 'grid', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>
@@ -105,8 +106,7 @@ export function AppointmentCard({
       {appt.vetNotes && <div style={{ fontSize: 12.5, color: MPL.muted, background: MPL.bg, borderRadius: 10, padding: '7px 10px' }}>Nota del vet: {appt.vetNotes}</div>}
       {appt.cancelReason && <div style={{ fontSize: 12.5, color: MPL.coralDark }}>Motivo de cancelación: {appt.cancelReason}</div>}
       {children}
-      {actions.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {actions.map(a => (
             <button key={a.label} type="button" onClick={a.onClick}
               style={{
@@ -118,8 +118,9 @@ export function AppointmentCard({
               {a.label}
             </button>
           ))}
-        </div>
-      )}
+          {/* Dudas sobre la cita: al chat con la otra parte. */}
+          <OpenChatButton kind="vet_appointment" refId={appt._id} label="Escribir" style={{ padding: '8px 14px', fontSize: 13, borderRadius: 11 }} />
+      </div>
     </div>
   );
 }
