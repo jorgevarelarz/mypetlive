@@ -57,15 +57,26 @@ describe('RegisterPage', () => {
     expect(authApi.register).not.toHaveBeenCalled();
   });
 
-  it('registra cuando coinciden', async () => {
+  it('no registra sin aceptar los términos y la privacidad', () => {
     render(<RegisterPage />);
     fill(PASSWORD, PASSWORD);
+    fireEvent.submit(screen.getByRole('button', { name: /Crear cuenta/ }).closest('form')!);
+
+    expect(screen.getByText('Tienes que aceptar los términos y la política de privacidad.')).toBeInTheDocument();
+    expect(authApi.register).not.toHaveBeenCalled();
+  });
+
+  it('registra cuando coinciden y acepta los legales', async () => {
+    render(<RegisterPage />);
+    fill(PASSWORD, PASSWORD);
+    // Casilla obligatoria desde 2cd5743: el servidor graba la aceptación en el alta.
+    fireEvent.click(screen.getByRole('checkbox'));
 
     expect(screen.queryByText('Las dos contraseñas no coinciden.')).not.toBeInTheDocument();
     fireEvent.submit(screen.getByRole('button', { name: /Crear cuenta/ }).closest('form')!);
 
     await waitFor(() =>
-      expect(authApi.register).toHaveBeenCalledWith('Laura', 'laura@example.com', PASSWORD),
+      expect(authApi.register).toHaveBeenCalledWith('Laura', 'laura@example.com', PASSWORD, true),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/home', { replace: true }));
   });
