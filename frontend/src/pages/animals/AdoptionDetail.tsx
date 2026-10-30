@@ -138,6 +138,8 @@ export default function AdoptionDetail() {
   const animal = adoption.animal || {};
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
   const isTerminal = isTerminalAdoptionStatus(status);
+  // Cesión de un particular: se cierra firmando el contrato, no aprobando.
+  const isCession = animal.createdByRole === 'particular' || Boolean(animal.cession);
   const image = Array.isArray(animal.images) ? animal.images[0] : undefined;
   const lastShelterNote = findLastShelterNote(adoption.history);
 
@@ -223,7 +225,11 @@ export default function AdoptionDetail() {
           <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
             <div className="text-sm font-medium">Siguiente paso</div>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {nextStep(status, canManage, adoption.visit)}
+              {isCession && status === 'preaprobada'
+                ? 'Te han elegido: firmad los dos el contrato de cesión y pasará a tu «Mi mascota».'
+                : isCession && status === 'aprobada'
+                  ? 'Cesión completada. Falta el cambio de titular del microchip en el veterinario.'
+                  : nextStep(status, canManage, adoption.visit)}
             </p>
           </div>
           {lastShelterNote && (
@@ -326,7 +332,9 @@ export default function AdoptionDetail() {
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
               {canManage
                 ? 'Habla con la persona adoptante y propón una visita para que conozca al animal.'
-                : 'Habla con la protectora. Si te proponen una visita, la aceptas desde el chat.'}
+                : isCession
+                  ? 'Habla con la persona que lo cede. Si te elige, el contrato se firma desde aquí.'
+                  : 'Habla con la protectora. Si te proponen una visita, la aceptas desde el chat.'}
             </p>
           </div>
           {adoption.visit && (
@@ -340,7 +348,12 @@ export default function AdoptionDetail() {
             </Link>
           )}
           <div className="flex flex-wrap gap-2">
-            <OpenChatButton kind="adoption" refId={String(id)} primary label={canManage ? 'Escribir a la persona adoptante' : 'Escribir a la protectora'} />
+            {isCession && ['preaprobada', 'aprobada'].includes(status) && (
+              <Link to={`/contratos/${adoption._id || id}`} style={{ display: 'inline-flex', alignItems: 'center', background: '#C0512F', color: '#fff', borderRadius: 12, padding: '9px 15px', fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>
+                {status === 'preaprobada' ? 'Firmar el contrato' : 'Ver contrato'}
+              </Link>
+            )}
+            <OpenChatButton kind="adoption" refId={String(id)} primary label={canManage ? 'Escribir a la persona adoptante' : isCession ? 'Escribir a quien lo cede' : 'Escribir a la protectora'} />
             {canManage && !isTerminal && (
               <button type="button" onClick={() => setVisitOpen(true)}
                 style={{ border: '1.5px solid #E5E1D6', background: '#fff', borderRadius: 12, padding: '9px 15px', font: 'inherit', fontWeight: 800, fontSize: 14, cursor: 'pointer', color: '#3F4A3C' }}>

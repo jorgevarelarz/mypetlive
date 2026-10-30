@@ -20,6 +20,7 @@ import uploadRoutes from './routes/upload.routes';
 import notifyRoutes from './routes/notify.routes';
 import userRoutes from './routes/user.routes';
 import chatRoutes from './routes/chat.routes';
+import rehomeRoutes from './routes/rehome.routes';
 import paymentsRoutes from './routes/payments.routes';
 import connectRoutes from './routes/connect.routes';
 import adminRoutes from './routes/admin.routes';
@@ -287,6 +288,7 @@ app.use('/api', questionnaireRoutes);
 // Protected routes (autenticación + rol; sin verificación KYC — adopción libre)
 app.use('/api/users', authenticate, userRoutes);
 app.use('/api/chat', authenticate, chatRoutes);
+app.use('/api/rehome', authenticate, rehomeRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
 // Stripe Connect: onboarding de cobro para protectoras (donaciones). Sin requireVerified.

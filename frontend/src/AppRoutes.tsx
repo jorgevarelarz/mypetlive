@@ -37,6 +37,9 @@ import AdminHome from "./pages/admin/AdminHome";
 import ProfilePage from "./pages/profile/ProfilePage";
 import SettingsPage from "./pages/settings/SettingsPage";
 import MessagesPage from "./pages/messages/MessagesPage";
+import RehomePage, { PathChooser } from "./pages/rehome/RehomePage";
+import RehomeNewPage from "./pages/rehome/RehomeNewPage";
+import ContractPage from "./pages/rehome/ContractPage";
 import ConfirmEmailChange from "./pages/profile/ConfirmEmailChange";
 import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
@@ -158,6 +161,10 @@ export default function AppRoutes() {
 
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/ajustes" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/buscar-casa" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><RehomePage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/buscar-casa/elegir" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><div style={{ padding: 'clamp(14px, 4vw, 24px)', maxWidth: 720 }}><PathChooser /></div></RoleGuard></ProtectedRoute>} />
+              <Route path="/buscar-casa/nuevo" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><RehomeNewPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/contratos/:adoptionId" element={<ProtectedRoute><ContractPage /></ProtectedRoute>} />
               <Route path="/mensajes" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/mensajes/:conversationId" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
 

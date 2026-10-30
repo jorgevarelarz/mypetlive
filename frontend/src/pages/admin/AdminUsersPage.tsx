@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { toast } from 'react-hot-toast';
+import { adminSetRehome } from '../../api/rehome';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
 
 const ROLE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -90,15 +92,16 @@ export default function AdminUsersPage() {
                 <th style={th}>Email</th>
                 <th style={th}>Rol</th>
                 <th style={th}>Creado</th>
+                <th style={th} title="Puede publicar animales suyos para cederlos (cesión entre particulares)">Busca casa a animales</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={3} style={{ ...td, color: MPL.muted }}>Cargando…</td></tr>
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>Cargando…</td></tr>
               ) : isError ? (
-                <tr><td colSpan={3} style={{ ...td, color: MPL.muted }}>—</td></tr>
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>—</td></tr>
               ) : pageItems.length === 0 ? (
-                <tr><td colSpan={3} style={{ ...td, color: MPL.muted }}>No hay usuarios para esos filtros.</td></tr>
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>No hay usuarios para esos filtros.</td></tr>
               ) : pageItems.map((u: any) => (
                 <tr key={u._id}>
                   <td style={td}>{u.email}</td>
@@ -108,6 +111,23 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td style={{ ...td, color: MPL.muted, fontSize: 13 }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''}</td>
+                  <td style={td}>
+                    {u.role === 'tenant' ? (
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(u.rehome?.enabled)}
+                          onChange={async e => {
+                            const on = e.target.checked;
+                            if (!window.confirm(on ? `¿Dejar que ${u.email} publique animales suyos para cederlos?` : `¿Quitarle la opción a ${u.email}? Sus anuncios abiertos se ocultan.`)) return;
+                            try { await adminSetRehome(u._id, on); toast.success(on ? 'Activado' : 'Desactivado'); refetch(); } catch { toast.error('No se pudo cambiar'); }
+                          }}
+                          style={{ width: 18, height: 18, accentColor: MPL.teal }}
+                        />
+                        {u.rehome?.enabled ? 'Sí' : 'No'}
+                      </label>
+                    ) : <span style={{ color: MPL.muted, fontSize: 13 }}>—</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>

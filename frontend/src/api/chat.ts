@@ -10,7 +10,7 @@ export type AdoptionVisit = {
 };
 
 export type ConversationContext =
-  | { type: 'adoption'; adoptionId: string; status?: string; visit: AdoptionVisit | null; role: 'shelter' | 'adopter' }
+  | { type: 'adoption'; adoptionId: string; status?: string; visit: AdoptionVisit | null; role: 'shelter' | 'adopter'; cession?: boolean }
   | { type: 'vet_appointment'; appointmentId: string; status?: string; at?: string; service?: string; reason?: string; role: 'vet' | 'owner' };
 
 /** Conversación tal y como la pinta la bandeja: con quién, sobre qué y el último mensaje. */

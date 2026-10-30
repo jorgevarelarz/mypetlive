@@ -30,7 +30,8 @@ export function contextLine(conv: ConversationSummary): string {
   const name = conv.animal?.name;
   const ctx = conv.context;
   if (ctx.type === 'adoption') {
-    if (!name) return 'Solicitud de adopción';
+    if (!name) return ctx.cession ? 'Cesión' : 'Solicitud de adopción';
+    if (ctx.cession) return ctx.role === 'shelter' ? `Quiere a ${name}` : `Traspaso de ${name}`;
     return ctx.role === 'shelter' ? `Quiere adoptar a ${name}` : `Solicitud por ${name}`;
   }
   const when = ctx.at
@@ -39,8 +40,14 @@ export function contextLine(conv: ConversationSummary): string {
   return `${name ? `Cita de ${name}` : ctx.service || 'Cita veterinaria'}${when ? ` · ${when}` : ''}`;
 }
 
+// En una cesión no hay «preaprobada» ni «aprobada»: hay alguien elegido y un animal cedido.
+const CESSION_LABEL: Record<string, string> = { preaprobada: 'Elegida', aprobada: 'Cedido' };
+
 export function statusPillOf(conv: ConversationSummary) {
-  return conv.context.type === 'adoption' ? adoptionPill(conv.context.status) : VET_PILL[conv.context.status || ''] || null;
+  if (conv.context.type !== 'adoption') return VET_PILL[conv.context.status || ''] || null;
+  const pill = adoptionPill(conv.context.status);
+  const relabel = conv.context.cession && CESSION_LABEL[conv.context.status || ''];
+  return pill && relabel ? { ...pill, label: relabel } : pill;
 }
 
 export default function ConversationList({

@@ -149,7 +149,7 @@ export async function summarize(convs: IConversation[] | any[], userId: string) 
   ];
   const codes = appts.filter((a: any) => !a.animalId && a.animalCode).map((a: any) => a.animalCode);
   const animals = await Animal.find({ $or: [{ _id: { $in: animalIds } }, { code: { $in: codes } }] })
-    .select('name images species code').lean();
+    .select('name images species code cession createdByRole').lean();
 
   const userMap = new Map(users.map((u: any) => [String(u._id), u]));
   const adoptionMap = new Map(adoptions.map((a: any) => [String(a._id), a]));
@@ -173,6 +173,8 @@ export async function summarize(convs: IConversation[] | any[], userId: string) 
         visit: ad?.visit || null,
         // Quién mira: la protectora ve «quiere adoptar a», el adoptante «solicitud por».
         role: c.meta?.shelterId === userId ? 'shelter' : 'adopter',
+        // Cesión de un particular: se cierra con contrato, no aprobando.
+        cession: Boolean(animal?.cession),
       };
     } else {
       const ap: any = apptMap.get(String(c.refId));

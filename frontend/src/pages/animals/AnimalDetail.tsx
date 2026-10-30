@@ -226,7 +226,12 @@ export default function AnimalDetail() {
   const likes = Array.isArray(a.likes) ? a.likes : [];
   const environment = Array.isArray(a.environment) ? a.environment : [];
   const story = a.story || a.description || 'Aún no tenemos historia para este compañero.';
-  const shelterName = typeof a.shelter === 'object' ? a.shelter?.name || a.shelter?.email : 'Protectora verificada';
+  // Cesión de un particular (Ley 7/2023): no es una adopción de protectora.
+  const isCession = a.createdByRole === 'particular';
+  const shelterName = typeof a.shelter === 'object'
+    ? isCession ? `${a.shelter?.name || 'Particular'} · lo cede un particular` : a.shelter?.name || a.shelter?.email
+    : 'Protectora verificada';
+  const askLabel = isCession ? 'Solicitar traspaso' : 'Solicitar adopción';
   const gallery: Array<string | null> = images.slice(0, 4);
   const meta = [speciesLabel(a.species), sexLabel(a.sex), sizeLabel(a.size), a.age].filter(Boolean);
 
@@ -281,7 +286,7 @@ export default function AnimalDetail() {
                 <div>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.teal100, color: MPL.tealDark, fontSize: 12.5, fontWeight: 800, padding: '7px 12px', borderRadius: 999, marginBottom: 14 }}>
                     <PawMark size={14} />
-                    {canAdopt ? 'Disponible para adopción' : `Estado: ${a.status}`}
+                    {canAdopt ? (isCession ? 'Busca casa · cesión gratuita' : 'Disponible para adopción') : `Estado: ${a.status}`}
                   </div>
                   <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 46, lineHeight: 1, fontWeight: 800, margin: 0 }}>{a.name}</h1>
                   {shelterName && (
@@ -367,7 +372,9 @@ export default function AnimalDetail() {
                 <p style={{ color: 'rgba(255,255,255,.86)', lineHeight: 1.5, margin: '0 0 20px' }}>
                   {existingRequest
                     ? `Ya has solicitado su adopción (${ADOPTION_STATUS_LABEL[existingRequest.status as AdoptionStatus] || existingRequest.status}).`
-                    : 'Solicita la adopción y la protectora revisará tu candidatura.'}
+                    : isCession
+                      ? 'Lo cede un particular, gratis y con contrato. Pídelo y elegirá familia entre quienes lo pidan.'
+                      : 'Solicita la adopción y la protectora revisará tu candidatura.'}
                 </p>
                 {existingRequest ? (
                   <Link to={`/adoptions/${existingRequest._id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', boxSizing: 'border-box', background: '#fff', color: MPL.tealDark, border: 0, borderRadius: 14, padding: '14px 18px', fontWeight: 800, textDecoration: 'none' }}>
@@ -375,17 +382,25 @@ export default function AnimalDetail() {
                   </Link>
                 ) : (
                   <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ width: '100%', background: canAdopt ? MPL.coral : 'rgba(255,255,255,.25)', color: '#fff', border: 0, borderRadius: 14, padding: '14px 18px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed' }}>
-                    {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+                    {adoptionMutation.isPending ? 'Enviando...' : askLabel}
                   </button>
                 )}
               </div>
             </section>
 
             <section style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 22 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: MPL.muted, fontSize: 14 }}>
-                <CalendarDays size={18} color={MPL.teal} />
-                Si la solicitud avanza, la protectora propondrá una cita desde el panel.
-              </div>
+              {isCession ? (
+                <div style={{ display: 'grid', gap: 6, color: MPL.muted, fontSize: 14 }}>
+                  <div style={{ color: MPL.ink, fontWeight: 800 }}>Cesión gratuita</div>
+                  <div>No se paga nada por él. Si te elige, firmáis los dos el contrato de cesión en la app y pasa a tu «Mi mascota».</div>
+                  {a.cession?.microchipLast4 && <div>Microchip terminado en <strong style={{ color: MPL.ink }}>{a.cession.microchipLast4}</strong>.</div>}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: MPL.muted, fontSize: 14 }}>
+                  <CalendarDays size={18} color={MPL.teal} />
+                  Si la solicitud avanza, la protectora propondrá una cita desde el panel.
+                </div>
+              )}
             </section>
           </aside>
         </div>
@@ -398,7 +413,7 @@ export default function AnimalDetail() {
           </Link>
         ) : (
           <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
-            {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+            {adoptionMutation.isPending ? 'Enviando...' : askLabel}
           </button>
         )}
         <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ padding: 0, width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>

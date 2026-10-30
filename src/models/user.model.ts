@@ -150,6 +150,11 @@ const userSchema = new Schema(
     // Correo cuando un mensaje del chat lleva 10 minutos sin leer (jobs/chatEmails).
     // Se guarda el «no», así las cuentas de antes quedan con el aviso puesto.
     chatEmailOff: { type: Boolean, default: false },
+    // Particular autorizado por el admin para buscar casa a animales (cesión).
+    // Solo usuarios seleccionados: el resto no ve la opción.
+    rehome: {
+      type: new Schema({ enabled: { type: Boolean, default: false }, by: String, at: Date }, { _id: false }),
+    },
     // Cambio de email pendiente de confirmar en la dirección nueva. El email es
     // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
     // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,

@@ -219,7 +219,7 @@ export default function AnimalsPublicList() {
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p style={{ fontSize: 16, color: MPL.muted, margin: 0, flex: '1 1 260px' }}>
-              <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
+              <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar.
             </p>
             {/* Favoritos ya no está en la barra de abajo (la ocupa Mensajes): se llega desde aquí. */}
             <Link to="/me/favorites" className="catalog-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 12, border: `1.5px solid ${MPL.border}`, background: '#fff', fontWeight: 800, fontSize: 14, color: MPL.ink, textDecoration: 'none' }}>
@@ -483,7 +483,7 @@ export default function AnimalsPublicList() {
                               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.faint, fontSize: 13 }}>Sin imagen</div>
                             )}
                             <span style={{ position: 'absolute', top: 12, left: 12, background: a.status === 'publicado' ? MPL.teal100 : MPL.gold100, color: a.status === 'publicado' ? MPL.tealDark : MPL.goldDark, fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8 }}>
-                              {a.status === 'publicado' ? 'Disponible' : statusLabel(a.status)}
+                              {a.status === 'publicado' ? (a.createdByRole === 'particular' ? 'Lo cede un particular' : 'Disponible') : statusLabel(a.status)}
                             </span>
                           </div>
                           <div style={{ padding: '16px 18px 20px' }}>

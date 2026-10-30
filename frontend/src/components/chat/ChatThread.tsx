@@ -101,6 +101,22 @@ function SystemCard({
     );
   }
 
+  // Cesión entre particulares: contrato listo, firmas y cambio de titular del chip.
+  if (code === 'cession.contract' || code === 'cession.title_change') {
+    const isTitle = code === 'cession.title_change';
+    return (
+      <div className="mpl-card" style={{ borderTop: `4px solid ${isTitle ? MPL.gold : MPL.teal}` }}>
+        <div style={{ fontWeight: 800, fontSize: 14.5 }}>{isTitle ? 'Falta un paso: el cambio de titular del microchip' : '📄 Contrato de cesión gratuita'}</div>
+        <div style={{ color: MPL.muted, fontSize: 13.5, marginTop: 4 }}>{m.body}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {isTitle && <CardButton to="/citas">Pedir cita al veterinario</CardButton>}
+          <CardButton primary={!isTitle} to={`/contratos/${p.adoptionId}`}>{isTitle ? 'Ver contrato' : 'Leer y firmar'}</CardButton>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 11, color: MPL.muted, marginTop: 4 }}>{timeOf(m.createdAt)}</div>
+      </div>
+    );
+  }
+
   const approved = code === 'adoption.status' && p.status === 'aprobada' && !p.undo;
   if (approved) {
     return (
@@ -323,8 +339,14 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
   const ctx = conv?.context;
   const pill = conv ? statusPillOf(conv) : null;
   const lastVisitId = [...messages].reverse().find(m => m.systemCode === 'adoption.visit')?._id;
-  const canProposeVisit = ctx?.type === 'adoption' && ctx.role === 'shelter' && !CLOSED_ADOPTION.includes(ctx.status || '');
-  const detailLink = ctx?.type === 'adoption' ? `/adoptions/${ctx.adoptionId}` : ctx ? citasLink(conv!) : '#';
+  const isCession = ctx?.type === 'adoption' && Boolean(ctx.cession);
+  // Las visitas son de protectoras; en una cesión lo que hay es un contrato.
+  const canProposeVisit = ctx?.type === 'adoption' && ctx.role === 'shelter' && !isCession && !CLOSED_ADOPTION.includes(ctx.status || '');
+  const hasContract = isCession && ['preaprobada', 'aprobada'].includes(ctx?.status || '');
+  const detailLink = ctx?.type === 'adoption'
+    ? hasContract ? `/contratos/${ctx.adoptionId}` : isCession && ctx.role === 'shelter' ? '/buscar-casa' : `/adoptions/${ctx.adoptionId}`
+    : ctx ? citasLink(conv!) : '#';
+  const detailLabel = ctx?.type === 'adoption' ? (hasContract ? 'Ver contrato ›' : 'Ver solicitud ›') : 'Ver cita ›';
 
   return (
     <div className="mpl-thread">
@@ -348,7 +370,7 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
               {ctx?.type === 'adoption'
                 ? ctx.visit?.status === 'aceptada' && new Date(ctx.visit.at).getTime() > Date.now()
                   ? `Visita: ${whenLong(ctx.visit.at)}`
-                  : 'Solicitud de adopción'
+                  : isCession ? 'Cesión entre particulares' : 'Solicitud de adopción'
                 : ctx?.at ? `${ctx.service || 'Cita'} · ${whenLong(ctx.at)}` : 'Cita veterinaria'}
             </span>
             {canProposeVisit && (
@@ -356,7 +378,7 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
                 {ctx?.type === 'adoption' && ctx.visit ? 'Cambiar visita' : 'Proponer visita'}
               </button>
             )}
-            <Link to={detailLink} className="mpl-link-btn">{ctx?.type === 'adoption' ? 'Ver solicitud ›' : 'Ver cita ›'}</Link>
+            <Link to={detailLink} className="mpl-link-btn">{detailLabel}</Link>
           </div>
         )}
       </header>

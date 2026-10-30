@@ -19,6 +19,7 @@ import {
 import logger from '../utils/logger';
 import { sendPushToUser, type PushPayload } from '../utils/push';
 import { formatWhen, postSystemMessage } from '../utils/chat';
+import { isAdoptableRole } from '../utils/adoptable';
 
 // Aviso al móvil junto al correo. Sin esperar: la respuesta no depende de Apple.
 function pushTo(userId: unknown, payload: PushPayload) {
@@ -40,7 +41,7 @@ export async function create(req: Request, res: Response) {
 
   const animal = await Animal.findById(animalId).lean();
   if (!animal) return res.status(404).json({ error: 'animal_not_found' });
-  if (animal.isPersonalPet === true || animal.createdByRole !== 'protectora') {
+  if (animal.isPersonalPet === true || !isAdoptableRole(animal.createdByRole)) {
     return res.status(400).json({ error: 'animal_not_available' });
   }
   if (animal.status !== 'publicado') return res.status(400).json({ error: 'animal_not_available' });
@@ -73,6 +74,7 @@ export async function create(req: Request, res: Response) {
     normalizedAnswers = requiredQuestions.map(question => ({ question, answer: answerMap.get(question) || '' }));
   }
 
+  if (String(animal.shelter) === String(userId)) return res.status(400).json({ error: 'own_animal' });
   const exists = await Adoption.findOne({ animalId: String(animal._id), adopterId: String(userId) });
   if (exists) return res.json({ ok: true, id: exists._id, status: exists.status });
 
@@ -91,7 +93,9 @@ export async function create(req: Request, res: Response) {
   // solicitud aparece en Mensajes de los dos sin que nadie tenga que escribir.
   await postSystemMessage({
     kind: 'adoption', refId: String(created._id), code: 'adoption.created', actorId: String(userId),
-    body: `Solicitud enviada para adoptar a ${animal.name}.`,
+    body: (animal as any).cession?.microchip
+      ? `Solicitud de traspaso enviada para ${animal.name}.`
+      : `Solicitud enviada para adoptar a ${animal.name}.`,
     payload: { animalName: animal.name },
   });
 
@@ -102,19 +106,25 @@ export async function create(req: Request, res: Response) {
         User.findById(animal.shelter).select('email').lean(),
         User.findById(userId).select('name').lean(),
       ]);
+      // En una cesión quien recibe el aviso es un particular: su sitio es
+      // «Buscar casa a un animal», no el panel de protectoras.
+      const cession = Boolean((animal as any).cession?.microchip);
+      const panel = cession ? '/buscar-casa' : '/landlord/adoptions';
+      const who = (adopter as any)?.name || (cession ? 'Alguien' : 'Un adoptante');
       if ((shelter as any)?.email) {
         const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
         await sendEmail(
           (shelter as any).email,
-          `Nueva solicitud de adopción para ${animal.name}`,
-          `${(adopter as any)?.name || 'Un adoptante'} ha enviado una solicitud de adopción para ${animal.name}.\n` +
-            `Revísala en tu panel: ${baseUrl}/landlord/adoptions`,
+          cession ? `${who} ha pedido el traspaso de ${animal.name}` : `Nueva solicitud de adopción para ${animal.name}`,
+          (cession
+            ? `${who} ha pedido el traspaso de ${animal.name}. Puedes hablar con esa persona y elegir familia aquí: `
+            : `${who} ha enviado una solicitud de adopción para ${animal.name}.\nRevísala en tu panel: `) + `${baseUrl}${panel}`,
         );
       }
       pushTo(animal.shelter, {
-        title: `Nueva solicitud para ${animal.name}`,
-        body: `${(adopter as any)?.name || 'Un adoptante'} quiere adoptarle.`,
-        url: '/landlord/adoptions',
+        title: cession ? `Alguien quiere a ${animal.name}` : `Nueva solicitud para ${animal.name}`,
+        body: cession ? `${who} ha pedido el traspaso.` : `${who} quiere adoptarle.`,
+        url: panel,
       });
     }
   } catch {}
@@ -310,7 +320,7 @@ async function closeSiblingApplications(approved: any, animal: any, actorId: str
  * `quiet` se salta avisos y tarjeta: lo usa proponer visita, que manda los
  * suyos con la fecha (un «ahora está: cita propuesta» sin fecha no sirve).
  */
-async function applyStatusChange(
+export async function applyStatusChange(
   app: any,
   animal: any,
   status: import('../models/adoption.model').AdoptionStatus,
@@ -341,7 +351,8 @@ async function applyStatusChange(
     await logAnimalEvent({
       animalId: String(animal._id), code: animal.code, type: 'adopted',
       actorId: userId,
-      fromOwnerId: previousShelter, fromOwnerType: 'protectora',
+      // En una cesión el anterior dueño es una persona, no una protectora.
+      fromOwnerId: previousShelter, fromOwnerType: animal.cession?.microchip ? 'tenant' : 'protectora',
       toOwnerId: app.adopterId ? String(app.adopterId) : undefined, toOwnerType: 'tenant',
       shelterId: previousShelter, data: { adoptionId: String(app._id) },
     });
@@ -369,13 +380,15 @@ async function applyStatusChange(
   await postSystemMessage({
     kind: 'adoption', refId: String(app._id), code: 'adoption.status', actorId: userId,
     body: status === 'aprobada'
-      ? `¡Adopción aprobada! ${animal.name} se va a casa.`
+      ? animal.cession?.microchip
+        ? `¡Cesión completada! ${animal.name} se va a casa.`
+        : `¡Adopción aprobada! ${animal.name} se va a casa.`
       : `La solicitud ha pasado a «${STATUS_LABEL_ES[status] || status}».`,
     payload: { status, ...(note ? { note: note.slice(0, 1000) } : {}) },
   });
 
   pushTo(app.adopterId, status === 'aprobada'
-    ? { title: '¡Adopción aprobada! 🎉', body: `${animal.name} se viene a casa contigo.`, url: `/adoptions/${app._id}` }
+    ? { title: animal.cession?.microchip ? '¡Cesión completada! 🎉' : '¡Adopción aprobada! 🎉', body: `${animal.name} se viene a casa contigo.`, url: `/adoptions/${app._id}` }
     : { title: `Tu solicitud para ${animal.name}`, body: `Ahora está: ${STATUS_LABEL_ES[status] || status}.`, url: `/adoptions/${app._id}` });
 
   try {
@@ -390,7 +403,8 @@ async function applyStatusChange(
       });
     } else if (adopter?.email) {
       const subject = 'Estado de tu solicitud de adopción';
-      let msg = `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
+      const who = animal.cession?.microchip ? 'La persona que lo cede' : 'La protectora';
+      let msg = `${who} ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
       // Al rechazar, sugerimos animales parecidos para que el adoptante siga buscando.
       if (status === 'rechazada') {
         const similars = await findSimilarAnimals(animal);
@@ -572,7 +586,8 @@ export async function undoApproval(req: Request, res: Response) {
   // 1. El animal vuelve a la protectora. `reservado` y no `publicado`: que
   //    regrese al escaparate lo decide ella, no nosotros.
   if (shelterId) animal.ownerId = new Types.ObjectId(shelterId);
-  animal.createdByRole = 'protectora';
+  // Una cesión vuelve a ser del particular que la publicó, no de una protectora.
+  animal.createdByRole = animal.cession?.microchip ? 'particular' : 'protectora';
   animal.isPersonalPet = false;
   animal.status = 'reservado';
   await animal.save();

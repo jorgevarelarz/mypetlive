@@ -1,3 +1,4 @@
+import { ADOPTABLE_ROLES } from '../utils/adoptable';
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Animal } from '../models/animal.model';
@@ -11,7 +12,7 @@ export async function list(req: Request, res: Response) {
   const animals = animalIds.length
     ? await Animal.find({
         _id: { $in: animalIds },
-        createdByRole: 'protectora',
+        createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] },
         isPersonalPet: { $ne: true },
       }).lean()
     : [];
@@ -28,7 +29,7 @@ export async function add(req: Request, res: Response) {
   if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'invalid_animal_id' });
   const animal = await Animal.findOne({
     _id: id,
-    createdByRole: 'protectora',
+    createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] },
     isPersonalPet: { $ne: true },
   }).select('_id');
   if (!animal) return res.status(404).json({ error: 'not_found' });
@@ -44,7 +45,7 @@ export async function addMany(req: Request, res: Response) {
   if (!ids.length) return res.json({ ok: true, added: 0 });
   const animals = await Animal.find({
     _id: { $in: ids },
-    createdByRole: 'protectora',
+    createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] },
     isPersonalPet: { $ne: true },
   }).select('_id').lean();
   if (animals.length) {

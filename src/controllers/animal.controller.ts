@@ -1,3 +1,4 @@
+import { ADOPTABLE_ROLES, isAdoptableRole } from '../utils/adoptable';
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
@@ -25,6 +26,15 @@ const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'a
 function stripInternalFields<T extends Record<string, any>>(animal: T): T {
   const { ownerId, __v, ...rest } = animal as any;
   if (rest.lost) rest.lost = { ...rest.lost, sightings: undefined };
+  // Cesión de un particular: es una persona, no una entidad. Fuera su correo, y
+  // del microchip solo las 4 últimas cifras (el anuncio lo lleva, art. 57.2).
+  if (rest.createdByRole === 'particular') {
+    if (rest.shelter && typeof rest.shelter === 'object' && 'email' in rest.shelter) {
+      const { email, ...shelter } = rest.shelter;
+      rest.shelter = shelter;
+    }
+    if (rest.cession?.microchip) rest.cession = { ...rest.cession, microchip: undefined, microchipLast4: String(rest.cession.microchip).slice(-4) };
+  }
   return rest;
 }
 
@@ -135,7 +145,7 @@ export async function getById(req: Request, res: Response) {
   const a = await Animal.findById(req.params.id);
   if (!a) return res.status(404).json({ error: 'not_found' });
   if (a.isPersonalPet === true) return res.status(404).json({ error: 'not_found' });
-  if (a.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
+  if (!isAdoptableRole(a.createdByRole)) return res.status(404).json({ error: 'not_found' });
   const canManage = canManageAnimal((req as any).user, a);
   // Un borrador no está listo para verse: antes cualquiera con el ID (o
   // adivinándolo) lo veía igual que uno publicado, sin pasar por el catálogo.
@@ -155,7 +165,7 @@ export async function getByCode(req: Request, res: Response) {
   const animal = await Animal.findOne({ code: normalized });
   if (!animal) return res.status(404).json({ error: 'not_found' });
   if (animal.isPersonalPet === true) return res.status(404).json({ error: 'not_found' });
-  if (animal.createdByRole !== 'protectora') return res.status(404).json({ error: 'not_found' });
+  if (!isAdoptableRole(animal.createdByRole)) return res.status(404).json({ error: 'not_found' });
   const canManage = canManageAnimal((req as any).user, animal);
   if (animal.status === 'borrador' && !canManage) return res.status(404).json({ error: 'not_found' });
   if (!animal.code) await ensureAnimalCode(animal);
@@ -641,7 +651,7 @@ export async function search(req: Request, res: Response) {
   const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '24'), 10) || 24));
 
-  const filter: any = { createdByRole: 'protectora', isPersonalPet: { $ne: true } };
+  const filter: any = { createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] }, isPersonalPet: { $ne: true } };
 
   // Visibilidad: admin ve todo; la protectora dueña ve todos sus estados; el público solo los publicados.
   const user: any = (req as any).user;

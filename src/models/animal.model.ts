@@ -315,7 +315,20 @@ const animalSchema = new Schema(
       default: () => ({ isLost: false, sightings: [] }),
     },
     isPersonalPet: { type: Boolean, default: false, index: true },
-    createdByRole: { type: String, enum: ['protectora', 'tenant'], required: true, index: true },
+    createdByRole: { type: String, enum: ['protectora', 'tenant', 'particular'], required: true, index: true },
+    // Cesión de un particular (createdByRole 'particular'): el particular va en
+    // `shelter` como responsable de la ficha, igual que una protectora, y así
+    // reutiliza solicitudes, chat y traspaso. La ley exige microchip a su
+    // nombre (arts. 27 m y 58.1): se pide el número y una declaración.
+    cession: {
+      type: new Schema(
+        {
+          microchip: { type: String, trim: true, match: /^\d{15}$/ },
+          declaredAt: { type: Date },
+        },
+        { _id: false },
+      ),
+    },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   },
   { timestamps: true },

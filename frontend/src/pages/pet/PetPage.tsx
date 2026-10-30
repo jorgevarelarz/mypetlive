@@ -30,6 +30,7 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import CareRemindersCard from '../../components/pet/CareRemindersCard';
+import RehomeEntry from '../../components/rehome/RehomeEntry';
 import MemorialFamily from '../../components/memorial/MemorialFamily';
 import FarewellSheet from '../../components/memorial/FarewellSheet';
 import { startMemorial } from '../../api/memorial';
@@ -675,6 +676,7 @@ export default function PetPage() {
           <button type="button" onClick={() => setRegisterOpen(true)}>
             Registrar mi mascota
           </button>
+          <RehomeEntry style={{ alignSelf: 'center' }} />
         </div>
         {registerOpen && (
           <PetFormModal
@@ -723,6 +725,7 @@ export default function PetPage() {
           >
             🐾 Adoptar otra mascota
           </button>
+          <RehomeEntry />
         </div>
       </div>
 

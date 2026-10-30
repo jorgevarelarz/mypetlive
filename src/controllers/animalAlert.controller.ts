@@ -1,3 +1,4 @@
+import { ADOPTABLE_ROLES } from '../utils/adoptable';
 import { Request, Response } from 'express';
 import { Animal } from '../models/animal.model';
 import { AnimalAlert } from '../models/animalAlert.model';
@@ -29,7 +30,7 @@ function cleanFilters(input: any) {
 
 function buildFilter(filters: Record<string, any>) {
   const query: any = {
-    createdByRole: 'protectora',
+    createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] },
     isPersonalPet: { $ne: true },
     status: { $in: PUBLIC_STATUSES },
   };
