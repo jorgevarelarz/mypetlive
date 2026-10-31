@@ -17,6 +17,15 @@ import { canManageAnimal } from '../utils/animalAccess';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
+// Estados en los que el animal se ve en el catálogo y en el SEO. Solo una
+// protectora verificada (o un admin) puede ponerlos. `adoptado` no sale en el
+// catálogo y tiene su propia regla: lo pone el flujo de adopción.
+const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
+
+function needsVerification(status: unknown): boolean {
+  return typeof status === 'string' && PUBLIC_STATUSES.includes(status);
+}
+
 // Lo que nunca debe salir de `getById`/`getByCode`/`search` para quien no
 // gestiona el animal (ni protectora ni admin): `ownerId` identifica a la
 // familia, `lost.sightings` lleva ubicación y contacto de terceros que
@@ -94,7 +103,7 @@ export async function create(req: Request, res: Response) {
     const u: any = (req as any).user;
     if (u?._id || u?.id) b.shelter = String(u._id || u.id);
   }
-  if (b.status === 'publicado' && !(await canPublishAnimals((req as any).user, String(b.shelter || '')))) {
+  if (needsVerification(b.status) && !(await canPublishAnimals((req as any).user, String(b.shelter || '')))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
   const doc = await Animal.create({ ...b, isPersonalPet: false, createdByRole: 'protectora' });
@@ -122,7 +131,13 @@ export async function update(req: Request, res: Response) {
   delete (payload as any).shelter;
   delete (payload as any).ownerId;
 
-  if (current.status !== 'publicado' && payload.status === 'publicado' && !(await canPublishAnimals(user, String(current.shelter)))) {
+  // `adoptado` lo pone el flujo de adopción, no la edición de la ficha. Si ya lo
+  // estaba se acepta: el formulario reenvía siempre el estado actual.
+  if (payload.status === 'adoptado' && current.status !== 'adoptado') {
+    return res.status(400).json({ error: 'invalid_status_transition' });
+  }
+
+  if (payload.status !== current.status && needsVerification(payload.status) && !(await canPublishAnimals(user, String(current.shelter)))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
 
@@ -627,8 +642,6 @@ async function notifySighting(animal: any, sighting: any) {
   );
 }
 
-const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
-
 export async function search(req: Request, res: Response) {
   const {
     q,
@@ -718,7 +731,7 @@ export async function updateStatus(req: Request, res: Response) {
   if (!animal) return res.status(404).json({ error: 'not_found' });
   const user: any = (req as any).user;
   if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
-  if (animal.status !== 'publicado' && status === 'publicado' && !(await canPublishAnimals(user, String(animal.shelter)))) {
+  if (animal.status !== status && needsVerification(status) && !(await canPublishAnimals(user, String(animal.shelter)))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
   const previousStatus = animal.status;
