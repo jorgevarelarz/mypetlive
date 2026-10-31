@@ -77,3 +77,70 @@ describe('Stripe webhook idempotency', () => {
     expect(count).toBe(1);
   });
 });
+
+describe('Stripe webhook sin secreto fuera de test', () => {
+  const { __stripeMock } = jest.requireMock('../utils/stripe');
+  const rawBody = Buffer.from(JSON.stringify({ any: 'payload' }));
+  let savedNodeEnv: string | undefined;
+  let savedSecret: string | undefined;
+
+  const postWebhook = () =>
+    request(app)
+      .post('/api/stripe/webhook')
+      .set('Stripe-Signature', 't=1,v1=fake')
+      .set('Content-Type', 'application/json')
+      .send(rawBody);
+
+  const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+
+  beforeEach(async () => {
+    savedNodeEnv = process.env.NODE_ENV;
+    savedSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    __stripeMock.webhooks.constructEvent.mockClear();
+    await ProcessedEvent.deleteMany({});
+  });
+
+  afterEach(async () => {
+    restore('NODE_ENV', savedNodeEnv);
+    restore('STRIPE_WEBHOOK_SECRET', savedSecret);
+    await ProcessedEvent.deleteMany({});
+  });
+
+  const expectRejected = async () => {
+    const res = await postWebhook();
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'stripe_webhook_secret_missing' });
+    expect(__stripeMock.webhooks.constructEvent).not.toHaveBeenCalled();
+    expect(await ProcessedEvent.countDocuments()).toBe(0);
+  };
+
+  it('rechaza con 500 en development si el secreto está vacío', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = '';
+    await expectRejected();
+  });
+
+  it('rechaza con 500 en development si el secreto no está definido', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    await expectRejected();
+  });
+
+  it('rechaza con 500 en development si el secreto solo tiene espacios', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = '   ';
+    await expectRejected();
+  });
+
+  it('procesa el evento en development si hay secreto', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_fake';
+    const res = await postWebhook();
+    expect(res.status).toBe(200);
+    expect(__stripeMock.webhooks.constructEvent).toHaveBeenCalledTimes(1);
+    expect(await ProcessedEvent.countDocuments({ provider: 'stripe', eventId: 'evt_test_1' })).toBe(1);
+  });
+});
