@@ -63,7 +63,7 @@ export default function PatitasShelterPanel() {
             <div style={{ display: 'grid', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 12.5, color: MPL.faint, fontWeight: 800 }}>Código manual</div>
-                <div style={{ fontFamily: MPL_FONT_MONO, fontSize: 30, fontWeight: 800, letterSpacing: 2, color: MPL.ink }}>{wallet.code}</div>
+                <div style={{ fontFamily: MPL_FONT_MONO, fontSize: 30, fontWeight: 800, letterSpacing: 2, color: MPL.ink, wordBreak: 'break-all' }}>{wallet.code}</div>
               </div>
               <button type="button" onClick={showWallet} disabled={loadingWallet} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink, justifySelf: 'start' }}>
                 <RefreshCw size={15} /> Regenerar

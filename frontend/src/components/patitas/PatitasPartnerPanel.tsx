@@ -739,7 +739,7 @@ export function RedeemFromShelter() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
               <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
                 Código manual
-                <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABC123" style={{ ...input, width: 160, fontFamily: MPL_FONT_MONO, letterSpacing: 1 }} />
+                <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABCD23EFGH" maxLength={10} style={{ ...input, width: 220, fontFamily: MPL_FONT_MONO, letterSpacing: 1 }} />
               </label>
               <button type="button" onClick={submitCode} disabled={busy || !code.trim()} style={{ background: MPL.ink, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
                 {busy ? '…' : 'Buscar'}
