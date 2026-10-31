@@ -142,7 +142,7 @@ describe('Patitas API', () => {
     expect(res.body?.error).toBe('shelter_verification_required');
   });
 
-  it('allows partners to register purchases that generate Patitas automatically', async () => {
+  it('POST /api/purchases ya no existe: 404 y sin Patitas', async () => {
     const shelter = await User.create({
       name: 'Protectora Compra',
       email: 'compra@shelter.app',
@@ -169,16 +169,21 @@ describe('Patitas API', () => {
     const res = await request(app)
       .post('/api/purchases')
       .set(testUserHeaders('store', partner.id))
-      .send({ animalId: animal.id, amount: 120, notes: 'Compra mensual' });
+      .send({ animalId: animal.id, amount: 1000000 });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(404);
     const updatedShelter = await User.findById(shelter.id);
-    expect(updatedShelter?.patitas).toBeCloseTo(9.6);
+    expect(updatedShelter?.patitas).toBe(0);
 
     const logs = await PatitaLog.find({ source: 'purchase' }).lean();
-    expect(logs).toHaveLength(1);
-    expect(String(logs[0].animalId)).toBe(String(animal.id));
-    expect(String(logs[0].partnerId)).toBe(partner.id);
+    expect(logs).toHaveLength(0);
+
+    const vetRes = await request(app)
+      .post('/api/purchases')
+      .set(testUserHeaders('vet'))
+      .send({ animalId: animal.id, amount: 1000000 });
+
+    expect(vetRes.status).toBe(404);
   });
 
   // Regresión: el QR de canje daba 403 si la sesión llevaba role 'protectora'
