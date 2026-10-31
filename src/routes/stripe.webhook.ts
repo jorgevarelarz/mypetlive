@@ -29,6 +29,71 @@ async function ensureContractConversation(contractId: string): Promise<string> {
   return conv.id;
 }
 
+/**
+ * Una donación reembolsada o disputada deja de dar Patitas: se marca la
+ * donación y se retiran a la protectora las que recibió por ella, sin bajar
+ * nunca su saldo de 0 (lo ya canjeado lo asume la plataforma).
+ */
+async function reverseDonation(
+  paymentIntentId: string,
+  newStatus: 'refunded' | 'disputed',
+  concept: string,
+  eventId: string,
+) {
+  try {
+    const { Donation } = await import('../models/donation.model');
+    // Marcado condicional y atómico: si llegan reembolso y disputa del mismo
+    // pago, solo el primero encuentra la donación `completed` y descuenta.
+    const donation = await Donation.findOneAndUpdate(
+      { paymentRef: paymentIntentId, status: 'completed' },
+      { status: newStatus },
+      { new: false },
+    ).lean();
+    if (!donation) return; // no es una donación o ya estaba revertida
+
+    const animalId = donation.animalId && Types.ObjectId.isValid(donation.animalId) ? donation.animalId : undefined;
+    let n: number;
+    let shelterId: string | undefined;
+    if (donation.patitasGranted !== undefined && donation.patitasGranted !== null) {
+      n = donation.patitasGranted;
+      shelterId = donation.patitasShelterId;
+    } else {
+      // Donaciones de antes de guardar lo concedido: se recalcula.
+      n = Math.round((donation.amount || 0) / 100);
+      if (animalId) {
+        const { Animal } = await import('../models/animal.model');
+        const animal = await Animal.findById(animalId).select('shelter').lean();
+        shelterId = animal?.shelter ? String(animal.shelter) : undefined;
+      }
+    }
+    if (!(n > 0) || !shelterId || !Types.ObjectId.isValid(shelterId)) return;
+
+    const { User } = await import('../models/user.model');
+    const { PatitaLog } = await import('../models/patitaLog.model');
+    const old = await User.findOneAndUpdate(
+      { _id: shelterId },
+      [{ $set: { patitas: { $max: [0, { $subtract: [{ $ifNull: ['$patitas', 0] }, n] }] } } }],
+      { new: false },
+    ).lean();
+    const removed = Math.min(n, Math.max(0, Number(old?.patitas) || 0));
+    if (removed > 0) {
+      const donorId = donation.userId && Types.ObjectId.isValid(String(donation.userId))
+        ? String(donation.userId)
+        : shelterId;
+      await PatitaLog.create({
+        shelterId,
+        userId: donorId,
+        animalId,
+        amount: -removed,
+        source: 'donation',
+        concept,
+      });
+    }
+  } catch (err: any) {
+    logger.error({ err, eventId, paymentIntentId }, 'Error retirando Patitas por donación revertida');
+  }
+}
+
 r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
   const secret = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -160,10 +225,18 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
             if (animal?.shelter) {
               const { User } = await import('../models/user.model');
               const { PatitaLog } = await import('../models/patitaLog.model');
-              await User.updateOne(
+              const granted = await User.updateOne(
                 { _id: animal.shelter, role: { $in: ['landlord', 'protectora'] } },
                 { $inc: { patitas } },
               );
+              // Se apunta lo concedido de verdad para poder retirarlo si la
+              // donación se reembolsa o se disputa.
+              if (granted.modifiedCount === 1) {
+                await Donation.updateOne(
+                  { sessionId: session.id },
+                  { patitasGranted: patitas, patitasShelterId: String(animal.shelter) },
+                );
+              }
               const donorId = donation?.userId && Types.ObjectId.isValid(String(donation.userId))
                 ? String(donation.userId)
                 : String(animal.shelter);
@@ -233,7 +306,18 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
       break;
     }
     case 'charge.refunded': {
-      // handle refund record logic
+      const charge = event.data.object as Stripe.Charge;
+      // Solo reembolsos totales: el parcial no tiene aún regla de prorrateo.
+      if (charge.refunded === true) {
+        const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+        if (pi) await reverseDonation(pi, 'refunded', 'Donación reembolsada', event.id);
+      }
+      break;
+    }
+    case 'charge.dispute.created': {
+      const dispute = event.data.object as Stripe.Dispute;
+      const pi = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : dispute.payment_intent?.id;
+      if (pi) await reverseDonation(pi, 'disputed', 'Donación disputada', event.id);
       break;
     }
   }
