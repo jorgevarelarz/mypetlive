@@ -391,6 +391,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 - Backend: http://localhost:3000
 - Frontend (CRA): http://localhost:3001
 - Webhook Stripe: POST /api/stripe/webhook
+- Métricas Prometheus: `GET /metrics` solo responde si está definida la variable `METRICS_TOKEN` y la petición lleva `Authorization: Bearer <valor de METRICS_TOKEN>`; si no, 404.
 
 ## Matriz RBAC (resumen)
 - Landlord: crear/editar/publish propiedades; aprobar/validar tickets; iniciar firma contrato.
