@@ -15,7 +15,8 @@ const EMAIL_CHANGE_TTL_HOURS = 24;
 function buildEmailConfirmLink(token: string) {
   const encoded = encodeURIComponent(token);
   const base = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000';
-  return `${base.replace(/\/$/, '')}/perfil/confirmar-email?token=${encoded}`;
+  // Token detrás de '#': nunca llega al servidor ni a sus logs.
+  return `${base.replace(/\/$/, '')}/perfil/confirmar-email#token=${encoded}`;
 }
 
 // Los avisos no pueden tumbar la operación: si el correo falla, el cambio sigue

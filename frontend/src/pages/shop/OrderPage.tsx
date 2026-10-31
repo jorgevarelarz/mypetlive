@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { readUrlToken, storedOrderToken } from '../../utils/urlToken';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Truck } from 'lucide-react';
 import { ORDER_STATUS_LABELS, getOrder, resumeOrderPayment } from '../../api/marketplace';
@@ -14,7 +15,9 @@ import { openPaymentPage } from '../../utils/native';
 export default function OrderPage() {
   const { id = '' } = useParams();
   const [params] = useSearchParams();
-  const token = params.get('token') || undefined;
+  // El token va en el fragmento (#token=…); `?token=` sigue valiendo para correos viejos.
+  const { hash, search } = useLocation();
+  const token = readUrlToken(hash, search) || storedOrderToken(id) || undefined;
   const cancelado = params.get('cancelado') === '1';
   const [resuming, setResuming] = useState(false);
   const [paymentError, setPaymentError] = useState('');

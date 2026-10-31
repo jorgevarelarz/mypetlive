@@ -75,6 +75,15 @@ describe('Cambio de email con doble opt-in', () => {
     expect(pendingEmail).toBe(NEW);
   });
 
+  it('el enlace de confirmación lleva el token detrás de # (no llega a ningún log)', async () => {
+    await requestChange(NEW).expect(200);
+    const { token } = await pendingToken();
+    const call = (sendEmail as jest.Mock).mock.calls.find((c: any[]) => c[0] === NEW)!;
+    const body = `${call[2]} ${call[3]}`;
+    expect(body).toContain(`/perfil/confirmar-email#token=${encodeURIComponent(token)}`);
+    expect(body).not.toContain('confirmar-email?token=');
+  });
+
   it('el email no viaja en la respuesta ni el token tampoco', async () => {
     const res = await requestChange(NEW).expect(200);
     expect(res.body.email).toBe(OLD);

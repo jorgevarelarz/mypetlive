@@ -523,12 +523,16 @@ describe('Pago confirmado', () => {
     const confirmation = (sendEmail as jest.Mock).mock.calls.find(c => c[0] === 'invitada@test.com');
     expect(confirmation).toBeTruthy();
     const link = confirmation![2].match(/https:\/\/\S+\/pedido\/\S+/)?.[0];
-    expect(link).toContain(`token=${created.body.guestToken}`);
+    // El token va detrás de '#': no sale del navegador ni llega a ningún log.
+    expect(link).toContain(`#token=${created.body.guestToken}`);
+    expect(link).not.toContain('?token=');
 
     const url = new URL(link!);
+    const token = new URLSearchParams(url.hash.slice(1)).get('token')!;
     await request(app).get(`/api/marketplace/orders/${created.body.orderId}`).expect(403);
     await request(app)
-      .get(`/api/marketplace/orders/${created.body.orderId}${url.search}`)
+      .get(`/api/marketplace/orders/${created.body.orderId}`)
+      .set('X-Order-Token', token)
       .expect(200);
   });
 });
@@ -561,9 +565,13 @@ describe('Acceso al pedido', () => {
     await request(app).get(url).expect(403);
     await request(app).get(`${url}?token=noesmitoken`).expect(403);
 
-    const ok = await request(app).get(`${url}?token=${created.body.guestToken}`).expect(200);
+    await request(app).get(url).set('X-Order-Token', 'noesmitoken').expect(403);
+
+    // La web lo manda en la cabecera; `?token=` sigue valiendo por los correos ya enviados.
+    const ok = await request(app).get(url).set('X-Order-Token', created.body.guestToken).expect(200);
     expect(ok.body.guestToken).toBeUndefined();
     expect(ok.body.reference).toBeTruthy();
+    await request(app).get(`${url}?token=${created.body.guestToken}`).expect(200);
   });
 
   it('el panel de la tienda no lista pedidos sin pagar', async () => {

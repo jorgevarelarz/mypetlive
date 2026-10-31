@@ -404,8 +404,10 @@ export async function createCheckout(req: Request, res: Response) {
         reference: order.reference,
         listedBy,
       },
-      success_url: `${base}/pedido/${order._id}?ok=1${guestToken ? `&token=${guestToken}` : ''}`,
-      cancel_url: `${base}/pedido/${order._id}?cancelado=1${guestToken ? `&token=${guestToken}` : ''}`,
+      // El token del invitado va detrás de '#' (Stripe conserva el fragmento al
+      // redirigir): así no llega a los logs de Apache ni de la API.
+      success_url: `${base}/pedido/${order._id}?ok=1${guestToken ? `#token=${guestToken}` : ''}`,
+      cancel_url: `${base}/pedido/${order._id}?cancelado=1${guestToken ? `#token=${guestToken}` : ''}`,
     };
     // Guardar exactamente la petición permite recuperar un timeout sin duplicar el cobro.
     order.checkoutRequest = checkoutRequest;
@@ -477,7 +479,10 @@ export async function getOrder(req: Request, res: Response) {
   if (!Types.ObjectId.isValid(id)) return res.status(404).json({ error: 'not_found' });
   const order = await Order.findById(id).select('+guestToken');
   if (!order) return res.status(404).json({ error: 'not_found' });
-  if (!canSeeOrder(order, (req as any).user, String(req.query.token || ''))) {
+  // El token llega en la cabecera X-Order-Token. `?token=` se sigue aceptando por
+  // los enlaces de correos ya enviados, pero la web ya no lo pone en la URL.
+  const token = req.get('x-order-token') || String(req.query.token || '');
+  if (!canSeeOrder(order, (req as any).user, token)) {
     return res.status(403).json({ error: 'forbidden' });
   }
   const plain = order.toObject();
@@ -523,7 +528,7 @@ export async function markShipped(req: Request, res: Response) {
     const tracking = order.tracking?.code
       ? `\n\nSeguimiento: ${order.tracking.carrier || ''} ${order.tracking.code}`.trim()
       : '';
-    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `?token=${order.guestToken}` : ''}`;
+    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `#token=${order.guestToken}` : ''}`;
     await sendEmail(
       order.buyer.email,
       `Tu pedido ${order.reference} va de camino`,
@@ -567,7 +572,7 @@ export async function fulfillPaidOrder(orderId: string, paymentRef?: string): Pr
 
   try {
     const lines = order.items.map(i => `- ${i.qty} × ${i.name}`).join('\n');
-    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `?token=${order.guestToken}` : ''}`;
+    const orderLink = `${FRONTEND_URL()}/pedido/${order._id}${order.guestToken ? `#token=${order.guestToken}` : ''}`;
     await sendEmail(
       order.buyer.email,
       `Pedido ${order.reference} confirmado`,

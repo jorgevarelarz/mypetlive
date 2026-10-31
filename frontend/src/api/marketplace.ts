@@ -158,8 +158,9 @@ export async function createCheckout(payload: CheckoutPayload): Promise<Checkout
 }
 
 export async function getOrder(id: string, token?: string) {
+  // En cabecera y no en la query: la URL de la API acaba en los logs del servidor.
   const { data } = await client.get(`/api/marketplace/orders/${id}`, {
-    params: token ? { token } : undefined,
+    headers: token ? { 'X-Order-Token': token } : undefined,
   });
   return data as Order;
 }
