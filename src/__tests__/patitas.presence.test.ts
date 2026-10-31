@@ -15,6 +15,7 @@ let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Sale: any;
+let UserCode: any;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -25,6 +26,7 @@ beforeAll(async () => {
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
   Sale = (await import('../models/sale.model')).Sale;
+  UserCode = (await import('../models/userCode.model')).UserCode;
 });
 
 afterAll(async () => {
@@ -35,7 +37,12 @@ afterAll(async () => {
 const storeId = new mongoose.Types.ObjectId().toHexString();
 const clientAId = new mongoose.Types.ObjectId().toHexString();
 const clientBId = new mongoose.Types.ObjectId().toHexString();
+// Segunda tienda: el rate-limit de visitas (en memoria, por cliente:tienda)
+// sobrevive al dropDatabase, así que cada test que registra una visita
+// válida del cliente A usa una tienda distinta.
+const store2Id = new mongoose.Types.ObjectId().toHexString();
 const storeH = { 'x-user-id': storeId, 'x-user-role': 'store', 'x-user-verified': 'true' };
+const store2H = { 'x-user-id': store2Id, 'x-user-role': 'store', 'x-user-verified': 'true' };
 const clientAH = { 'x-user-id': clientAId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
 
 beforeEach(async () => {
@@ -44,6 +51,7 @@ beforeEach(async () => {
   }
   await User.create([
     { _id: storeId, name: 'Tienda Norte', email: 'store@test.com', passwordHash: 'x', role: 'store' },
+    { _id: store2Id, name: 'Tienda Sur', email: 'store2@test.com', passwordHash: 'x', role: 'store' },
     { _id: clientAId, name: 'Ana', email: 'ana@test.com', passwordHash: 'x', role: 'tenant', patitas: 0 },
     { _id: clientBId, name: 'Luis', email: 'luis@test.com', passwordHash: 'x', role: 'tenant', patitas: 0 },
   ]);
@@ -115,7 +123,7 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
     const { code } = await myCode();
     const res = await request(app)
       .post('/api/patitas/earn/visit')
-      .set(storeH)
+      .set(store2H)
       .send({ code })
       .expect(200);
     expect(res.body.earned).toBeGreaterThan(0);
@@ -146,5 +154,24 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
       .expect(400);
     expect(visit.body).toEqual({ error: 'invalid_user' });
     expect(await Sale.countDocuments()).toBe(0);
+  });
+
+  it('rechaza un código caducado en venta y visita', async () => {
+    const { code } = await myCode();
+    await UserCode.updateOne({ code }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+    const sale = await request(app)
+      .post('/api/patitas/sales')
+      .set(storeH)
+      .send({ code, amountEur: 10 })
+      .expect(400);
+    expect(sale.body).toEqual({ error: 'invalid_user' });
+    const visit = await request(app)
+      .post('/api/patitas/earn/visit')
+      .set(storeH)
+      .send({ code })
+      .expect(400);
+    expect(visit.body).toEqual({ error: 'invalid_user' });
+    expect(await Sale.countDocuments()).toBe(0);
+    expect(await patitas(clientAId)).toBe(0);
   });
 });
