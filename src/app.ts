@@ -49,7 +49,6 @@ import offersRoutes from './routes/offers.routes';
 import vetAppointmentRoutes from './routes/vetAppointment.routes';
 import vetOffersRoutes from './routes/vetOffers.routes';
 import adminCouponRoutes from './routes/coupon.admin.routes';
-import purchaseRoutes from './routes/purchase.routes';
 import questionnaireRoutes from './routes/questionnaire.routes';
 import { ensureAnimalCodes } from './models/animal.model';
 
@@ -275,7 +274,6 @@ app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);
 app.use('/api', vetAppointmentRoutes);
 app.use('/api', vetOffersRoutes);
-app.use('/api/purchases', purchaseRoutes);
 // API del TPV del partner (X-Api-Key, sin sesión): exporta ventas y aplica cupones.
 app.use('/api/pos', posLimiter, asyncHandlerApp(posAuth), posRoutes);
 

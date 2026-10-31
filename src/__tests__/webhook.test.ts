@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
 import ProcessedEvent from '../models/processedEvent.model';
+import { Donation } from '../models/donation.model';
+import logger from '../utils/logger';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -40,6 +42,24 @@ jest.mock('../utils/stripe', () => {
   };
 });
 
+const headers = { 'Stripe-Signature': 't=1,v1=fake' } as any;
+const rawBody = Buffer.from(JSON.stringify({ any: 'payload' }));
+
+function sendWebhook() {
+  return request(app)
+    .post('/api/stripe/webhook')
+    .set(headers)
+    .set('Content-Type', 'application/json')
+    .send(rawBody);
+}
+
+// Se fija la implementación en cada test: `jest.restoreAllMocks()` del
+// afterEach puede dejar el mock de `constructEvent` sin implementación.
+function stripeEvent(event: any) {
+  const { __stripeMock } = jest.requireMock('../utils/stripe') as any;
+  __stripeMock.webhooks.constructEvent.mockImplementation(() => event);
+}
+
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
   process.env.MONGO_URL = mongo.getUri();
@@ -49,6 +69,10 @@ beforeAll(async () => {
   app = mod.app || mod.default;
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 afterAll(async () => {
   await mongoose.connection.close();
   if (mongo) await mongo.stop();
@@ -56,24 +80,155 @@ afterAll(async () => {
 
 describe('Stripe webhook idempotency', () => {
   it('processes an event once and ignores duplicates', async () => {
-    const rawBody = Buffer.from(JSON.stringify({ any: 'payload' }));
-    const headers = { 'Stripe-Signature': 't=1,v1=fake' } as any;
+    stripeEvent({
+      id: 'evt_test_1',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_test_1', metadata: {} } },
+    });
 
-    const r1 = await request(app)
-      .post('/api/stripe/webhook')
-      .set(headers)
-      .set('Content-Type', 'application/json')
-      .send(rawBody);
+    const r1 = await sendWebhook();
     expect(r1.status).toBe(200);
+    expect(r1.body.duplicate).toBeUndefined();
 
-    const r2 = await request(app)
-      .post('/api/stripe/webhook')
-      .set(headers)
-      .set('Content-Type', 'application/json')
-      .send(rawBody);
+    const r2 = await sendWebhook();
     expect(r2.status).toBe(200);
+    expect(r2.body.duplicate).toBe(true);
 
     const count = await ProcessedEvent.countDocuments({ provider: 'stripe', eventId: 'evt_test_1' });
     expect(count).toBe(1);
+  });
+});
+
+describe('Stripe webhook sin secreto fuera de test', () => {
+  const { __stripeMock } = jest.requireMock('../utils/stripe');
+  const rawBody = Buffer.from(JSON.stringify({ any: 'payload' }));
+  let savedNodeEnv: string | undefined;
+  let savedSecret: string | undefined;
+
+  const postWebhook = () =>
+    request(app)
+      .post('/api/stripe/webhook')
+      .set('Stripe-Signature', 't=1,v1=fake')
+      .set('Content-Type', 'application/json')
+      .send(rawBody);
+
+  const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+
+  beforeEach(async () => {
+    savedNodeEnv = process.env.NODE_ENV;
+    savedSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    __stripeMock.webhooks.constructEvent.mockClear();
+    await ProcessedEvent.deleteMany({});
+  });
+
+  afterEach(async () => {
+    restore('NODE_ENV', savedNodeEnv);
+    restore('STRIPE_WEBHOOK_SECRET', savedSecret);
+    await ProcessedEvent.deleteMany({});
+  });
+
+  const expectRejected = async () => {
+    const res = await postWebhook();
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'stripe_webhook_secret_missing' });
+    expect(__stripeMock.webhooks.constructEvent).not.toHaveBeenCalled();
+    expect(await ProcessedEvent.countDocuments()).toBe(0);
+  };
+
+  it('rechaza con 500 en development si el secreto está vacío', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = '';
+    await expectRejected();
+  });
+
+  it('rechaza con 500 en development si el secreto no está definido', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    await expectRejected();
+  });
+
+  it('rechaza con 500 en development si el secreto solo tiene espacios', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = '   ';
+    await expectRejected();
+  });
+
+  it('procesa el evento en development si hay secreto', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_fake';
+    const res = await postWebhook();
+    expect(res.status).toBe(200);
+    expect(__stripeMock.webhooks.constructEvent).toHaveBeenCalledTimes(1);
+    expect(await ProcessedEvent.countDocuments({ provider: 'stripe', eventId: 'evt_test_1' })).toBe(1);
+  });
+});
+
+describe('Stripe webhook: fallo al procesar', () => {
+  const donationEvent = {
+    id: 'evt_fail_1',
+    type: 'checkout.session.completed',
+    data: {
+      object: {
+        id: 'cs_test_fail',
+        amount_total: 500,
+        currency: 'eur',
+        payment_intent: 'pi_x',
+        metadata: { donation: 'true' },
+      },
+    },
+  };
+
+  beforeAll(async () => {
+    await Donation.create({ sessionId: 'cs_test_fail', amount: 500, status: 'pending' });
+  });
+
+  it('si una rama lanza, responde 500 y no guarda el evento', async () => {
+    stripeEvent(donationEvent);
+    jest.spyOn(Donation, 'findOneAndUpdate').mockRejectedValueOnce(new Error('mongo caído'));
+
+    const res = await sendWebhook();
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'webhook_processing_failed' });
+    expect(await ProcessedEvent.countDocuments({ eventId: 'evt_fail_1' })).toBe(0);
+  });
+
+  it('el reintento tras un fallo se procesa y no sale como duplicate', async () => {
+    stripeEvent(donationEvent);
+
+    const res = await sendWebhook();
+    expect(res.status).toBe(200);
+    expect(res.body.duplicate).toBeUndefined();
+
+    const donation = await Donation.findOne({ sessionId: 'cs_test_fail' }).lean();
+    expect(donation?.status).toBe('completed');
+    expect(await ProcessedEvent.countDocuments({ eventId: 'evt_fail_1' })).toBe(1);
+  });
+
+  it('no registra datos personales al fallar', async () => {
+    const event = { ...donationEvent, id: 'evt_fail_log' };
+    stripeEvent(event);
+    jest.spyOn(Donation, 'findOneAndUpdate').mockRejectedValueOnce(new Error('mongo caído'));
+    const errorSpy = jest.spyOn(logger, 'error');
+
+    const res = await sendWebhook();
+    expect(res.status).toBe(500);
+
+    const call = errorSpy.mock.calls.find(([fields]: any[]) => fields && fields.eventId === 'evt_fail_log');
+    expect(call).toBeDefined();
+    const [fields] = call as any[];
+    expect(fields).toMatchObject({
+      eventId: 'evt_fail_log',
+      eventType: 'checkout.session.completed',
+      errName: 'Error',
+    });
+    expect(fields).not.toHaveProperty('err');
+    expect(fields).not.toHaveProperty('event');
+    const serialized = JSON.stringify(call);
+    expect(serialized).not.toContain('metadata');
+    expect(serialized).not.toContain('cs_test_fail');
+    expect(serialized).not.toContain('mongo caído');
   });
 });

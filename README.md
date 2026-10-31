@@ -40,7 +40,7 @@
 
    Nota: Stripe CLI mostrará un "Webhook signing secret" (por ejemplo, `whsec_...`).
    - Puedes exportarlo temporalmente: `export STRIPE_WEBHOOK_SECRET=whsec_xxx`
-   - O añadirlo a tu `.env`. En producción este valor es obligatorio; si falta, la API devolverá `500 stripe_webhook_secret_missing` para evitar aceptar webhooks sin firma.
+   - O añadirlo a tu `.env`. Este valor es obligatorio en cualquier entorno salvo en los tests (`NODE_ENV=test`); si falta o está vacío, la API devolverá `500 stripe_webhook_secret_missing` para evitar aceptar webhooks sin firma.
 
 ## Herramientas de desarrollo
 
