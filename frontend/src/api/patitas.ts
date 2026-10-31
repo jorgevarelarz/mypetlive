@@ -48,8 +48,11 @@ export async function donatePatitas(payload: { shelterId: string; amount: number
   return data as { ok: boolean; balance: number; shelterName?: string };
 }
 
-export async function earnVisit(userId: string) {
-  const { data } = await client.post('/api/patitas/earn/visit', { userId });
+// La visita exige el mismo QR (userToken) o código corto con que se identificó
+// al cliente: el servidor no acepta un userId suelto. La caja traduce
+// invalid_user (código caducado), así que se evita el toast con el código crudo.
+export async function earnVisit(ref: { userToken?: string; code?: string }) {
+  const { data } = await client.post('/api/patitas/earn/visit', ref, { skipErrorToast: true } as any);
   return data as { ok: boolean; earned: number; balance: number; autoDonated: boolean; shelterId?: string };
 }
 
@@ -124,7 +127,8 @@ export async function addPatitas(protectoraId: string, amount: number) {
 export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
 export type AppliedSaleCoupon = { _id: string; title?: string; discount?: string; bonusPatitas: number; targetAnimalCode?: string | null };
 
-export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[]; couponIds?: string[]; applyCoupons?: boolean }) {
+// userToken/code: el QR o código con que se identificó al cliente (prueba de presencia).
+export async function registerSale(payload: { userToken?: string; code?: string; amountEur: number; items?: SaleItemInput[]; couponIds?: string[]; applyCoupons?: boolean }) {
   // La caja traduce sus códigos (amount_too_large, invalid_amount): sin esto
   // el partner veía el código crudo además del mensaje bueno.
   const { data } = await client.post('/api/patitas/sales', payload, { skipErrorToast: true } as any);

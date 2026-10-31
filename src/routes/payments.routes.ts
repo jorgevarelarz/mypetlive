@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getStripeClient, isStripeConfigured } from '../utils/stripe';
+import { isStripeConfigured } from '../utils/stripe';
 import { User } from '../models/user.model';
 import { authenticate } from '../middleware/auth.middleware';
 import asyncHandler from '../utils/asyncHandler';
@@ -39,44 +39,6 @@ r.post(
     }
 
     res.json({ customerId });
-  })
-);
-
-/**
- * Crea un PaymentIntent en EUR.
- * - En producción: exige auth y validación estricta (>0) -> 400 si inválido
- * - En tests (NODE_ENV=test): no exige auth y si el monto es inválido usa 1 EUR
- */
-// Production: require auth except in NODE_ENV=test to ease Jest
-const maybeAuth: any = (req: any, res: any, next: any) =>
-  process.env.NODE_ENV === 'test' ? next() : authenticate(req, res, next);
-
-r.post(
-  '/payments/intent',
-  maybeAuth,
-  asyncHandler(async (req, res) => {
-    const raw = (req.body as any)?.amountEUR;
-    let amountEUR = Number(raw);
-    if (!Number.isFinite(amountEUR) || amountEUR <= 0) {
-      if (process.env.NODE_ENV === 'test') {
-        amountEUR = 1;
-      } else {
-        return res.status(400).json({ error: 'invalid_amount' });
-      }
-    }
-
-    if (!isStripeConfigured()) {
-      return res.status(503).json({ error: 'payments_unavailable' });
-    }
-
-    const stripe = getStripeClient();
-    const intent = await stripe.paymentIntents.create({
-      amount: Math.round(amountEUR * 100),
-      currency: 'eur',
-      automatic_payment_methods: { enabled: true },
-    });
-
-    res.json({ clientSecret: intent.client_secret });
   })
 );
 

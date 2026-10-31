@@ -133,6 +133,35 @@ describe('Reembolsos y disputas de donaciones', () => {
     expect(String(log.animalId)).toBe(animalId);
   });
 
+  it('si falla el descuento, responde 500, deja la donación como estaba y el reintento de Stripe la revierte', async () => {
+    await completeDonation();
+    const spy = jest.spyOn(User, 'findOneAndUpdate').mockImplementationOnce(() => {
+      throw new Error('mongo caído');
+    });
+    const event = { id: 'evt_refund_retry', type: 'charge.refunded', data: { object: { id: 'ch_x', refunded: true, payment_intent: 'pi_x' } } };
+    const send = () => {
+      __stripeMock.webhooks.constructEvent.mockImplementationOnce(() => event);
+      return request(app)
+        .post('/api/stripe/webhook')
+        .set('Stripe-Signature', 't=1,v1=fake')
+        .set('Content-Type', 'application/json')
+        .send(Buffer.from(JSON.stringify({ any: 'payload' })));
+    };
+
+    const failed = await send();
+    expect(failed.status).toBe(500);
+    expect((await Donation.findOne({ sessionId: 'cs_x' }).lean()).status).toBe('completed');
+    expect(await patitasOf(shelterId)).toBe(25);
+    spy.mockRestore();
+
+    const retried = await send();
+    expect(retried.status).toBe(200);
+    expect(retried.body.duplicate).toBeUndefined();
+    expect((await Donation.findOne({ sessionId: 'cs_x' }).lean()).status).toBe('refunded');
+    expect(await patitasOf(shelterId)).toBe(0);
+    expect(await PatitaLog.countDocuments({ shelterId, amount: { $lt: 0 } })).toBe(1);
+  });
+
   it('una disputa también retira las Patitas', async () => {
     await completeDonation();
     const res = await sendEvent('charge.dispute.created', { id: 'dp_x', payment_intent: 'pi_x' });
