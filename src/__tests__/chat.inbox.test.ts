@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
+import { startMongoMemoryReplicaSet, limpiarBase } from './utils/mongoMemoryServer';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -59,7 +59,7 @@ let animalId: string;
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   sendEmail.mockClear();
   sendPushToUser.mockClear();

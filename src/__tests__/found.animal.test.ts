@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
+import { startMongoMemoryReplicaSet, limpiarBase } from './utils/mongoMemoryServer';
 
 jest.mock('../utils/notification', () => ({ sendEmail: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../utils/push', () => ({ sendPushToUser: jest.fn().mockResolvedValue(undefined), pushConfigured: false }));
@@ -46,7 +46,7 @@ const found = (extra: any = {}) => ({
 });
 
 beforeEach(async () => {
-  if (mongoose.connection.readyState === 1 && mongoose.connection.db) await mongoose.connection.db.dropDatabase();
+  await limpiarBase();
   await User.create([
     { _id: finder, name: 'Carmen Ruiz', email: 'carmen@test.com', passwordHash: 'x', role: 'tenant', rehome: { enabled: true } },
     { _id: owner, name: 'Lucía Paz', email: 'lucia@test.com', passwordHash: 'x', role: 'tenant' },

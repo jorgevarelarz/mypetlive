@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 // Cuidado diario (`POST /api/animals/:id/care/feed|litter`). Estos endpoints no
 // tenían ningún test y `authorizeCare` devolvía 403 a todo el mundo salvo admin:
@@ -40,7 +40,7 @@ const strangerH = { 'x-user-id': strangerId, 'x-user-role': 'tenant', 'x-user-ve
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   // El registro congela el nombre de quien marca el cuidado, así que hacen falta
   // usuarios de verdad y no solo sus ids en las cabeceras.

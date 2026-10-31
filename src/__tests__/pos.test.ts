@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 import { SALE_MAX_EUR } from '../utils/limits';
 
 jest.mock('../utils/notification', () => ({
@@ -61,7 +61,7 @@ async function getClientCode(): Promise<{ token: string; code: string }> {
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   await User.create([
     { _id: storeId, name: 'Tienda Norte', email: 'store@test.com', passwordHash: 'x', role: 'store' },
@@ -221,8 +221,7 @@ describe('API POS del partner', () => {
 
   it('dos reintentos concurrentes con el mismo externalRef crean una sola venta', async () => {
     const key = await getPosKey();
-    // dropDatabase borra los índices: reconstruir el único (partnerId, externalRef)
-    // que arbitra la carrera.
+    // El índice único (partnerId, externalRef) arbitra la carrera: asegurarlo antes.
     await Sale.syncIndexes();
 
     const { code } = await getClientCode();

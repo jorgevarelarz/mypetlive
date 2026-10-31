@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 // Aviso de "se acaba el pienso" y bloque "dónde comprarlo".
 //
@@ -54,7 +54,7 @@ const ownerH = { 'x-user-id': ownerId, 'x-user-role': 'tenant', 'x-user-verified
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   sent.length = 0;
   await User.create([
