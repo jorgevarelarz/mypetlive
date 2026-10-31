@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
+import { startMongoMemoryReplicaSet, limpiarBase } from './utils/mongoMemoryServer';
 import { orderTotals, shippingFor, priceFromCost, ORDER_MAX_EUR } from '../utils/marketplace';
 
 jest.mock('../utils/stripe', () => ({
@@ -66,7 +66,7 @@ const address = { line1: 'Rúa Real 12', city: 'A Coruña', postalCode: '15003' 
 beforeEach(async () => {
   (isStripeConfigured as jest.Mock).mockReturnValue(true);
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   await User.create([
     {

@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 // Mascota fallecida: mural «en su memoria», mensajes con permiso y fin de los avisos.
 
@@ -49,7 +49,7 @@ const PHOTO = 'https://mypetlive.es/uploads/1b2c3d4e-0000-4000-8000-000000000001
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   (sendPushToUser as jest.Mock).mockClear();
   (sendEmail as jest.Mock).mockClear();

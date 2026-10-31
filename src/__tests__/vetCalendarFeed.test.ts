@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -33,7 +33,7 @@ const ownerH = { 'x-user-id': ownerId, 'x-user-role': 'tenant', 'x-user-verified
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   await User.create([
     { _id: vetId, name: 'Clínica Sur', email: 'vet@test.com', passwordHash: 'x', role: 'vet' },

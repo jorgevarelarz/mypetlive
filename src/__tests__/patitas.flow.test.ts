@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -38,7 +38,7 @@ const storeH = { 'x-user-id': storeId, 'x-user-role': 'store', 'x-user-verified'
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   await User.create([
     { _id: tenantId, name: 'Ana', email: 'ana@test.com', passwordHash: 'x', role: 'tenant' },

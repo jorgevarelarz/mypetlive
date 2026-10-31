@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -39,7 +39,7 @@ const NEW = 'ana.nueva@test.com';
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   (sendEmail as jest.Mock).mockClear();
   await User.create([

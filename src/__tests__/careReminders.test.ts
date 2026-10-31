@@ -1,7 +1,7 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
-import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { startMongoMemoryServer, limpiarBase } from './utils/mongoMemoryServer';
 
 // Recordatorios de comida, arena y paseos (notificación al móvil).
 
@@ -44,7 +44,7 @@ const pushes = () => (sendPushToUser as jest.Mock).mock.calls;
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    await mongoose.connection.db.dropDatabase();
+    await limpiarBase();
   }
   (sendPushToUser as jest.Mock).mockClear();
   await User.create([
