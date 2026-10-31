@@ -17,6 +17,15 @@ import { canManageAnimal } from '../utils/animalAccess';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
+// Estados en los que el animal se ve en el catálogo y en el SEO. Solo una
+// protectora verificada (o un admin) puede ponerlos. `adoptado` no sale en el
+// catálogo y tiene su propia regla: lo pone el flujo de adopción.
+const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
+
+function needsVerification(status: unknown): boolean {
+  return typeof status === 'string' && PUBLIC_STATUSES.includes(status);
+}
+
 // Lo que nunca debe salir de `getById`/`getByCode`/`search` para quien no
 // gestiona el animal (ni protectora ni admin): `ownerId` identifica a la
 // familia, `lost.sightings` lleva ubicación y contacto de terceros que
@@ -94,7 +103,7 @@ export async function create(req: Request, res: Response) {
     const u: any = (req as any).user;
     if (u?._id || u?.id) b.shelter = String(u._id || u.id);
   }
-  if (b.status === 'publicado' && !(await canPublishAnimals((req as any).user, String(b.shelter || '')))) {
+  if (needsVerification(b.status) && !(await canPublishAnimals((req as any).user, String(b.shelter || '')))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
   const doc = await Animal.create({ ...b, isPersonalPet: false, createdByRole: 'protectora' });
@@ -113,9 +122,7 @@ export async function update(req: Request, res: Response) {
   if (!current) return res.status(404).json({ error: 'not_found' });
 
   const user: any = (req as any).user;
-  const isAdmin = user?.role === 'admin';
-  const isOwner = user && String(current.shelter) === String(user._id || user.id);
-  if (!isAdmin && !isOwner) {
+  if (!canManageAnimal(user, current)) {
     return res.status(403).json({ error: 'forbidden' });
   }
 
@@ -124,7 +131,13 @@ export async function update(req: Request, res: Response) {
   delete (payload as any).shelter;
   delete (payload as any).ownerId;
 
-  if (current.status !== 'publicado' && payload.status === 'publicado' && !(await canPublishAnimals(user, String(current.shelter)))) {
+  // `adoptado` lo pone el flujo de adopción, no la edición de la ficha. Si ya lo
+  // estaba se acepta: el formulario reenvía siempre el estado actual.
+  if (payload.status === 'adoptado' && current.status !== 'adoptado') {
+    return res.status(400).json({ error: 'invalid_status_transition' });
+  }
+
+  if (payload.status !== current.status && needsVerification(payload.status) && !(await canPublishAnimals(user, String(current.shelter)))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
 
@@ -629,8 +642,6 @@ async function notifySighting(animal: any, sighting: any) {
   );
 }
 
-const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
-
 export async function search(req: Request, res: Response) {
   const {
     q,
@@ -719,9 +730,8 @@ export async function updateStatus(req: Request, res: Response) {
   const animal = await Animal.findById(id);
   if (!animal) return res.status(404).json({ error: 'not_found' });
   const user: any = (req as any).user;
-  const isOwner = user?.role === 'admin' || String(animal.shelter) === String(user?._id || user?.id);
-  if (!isOwner) return res.status(403).json({ error: 'forbidden' });
-  if (animal.status !== 'publicado' && status === 'publicado' && !(await canPublishAnimals(user, String(animal.shelter)))) {
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+  if (animal.status !== status && needsVerification(status) && !(await canPublishAnimals(user, String(animal.shelter)))) {
     return res.status(403).json({ error: 'shelter_verification_required' });
   }
   const previousStatus = animal.status;
@@ -736,11 +746,16 @@ export async function updateStatus(req: Request, res: Response) {
 export async function remove(req: Request, res: Response) {
   const { id } = req.params;
   const user: any = (req as any).user || {};
-  const isAdmin = user?.role === 'admin';
   const a = await Animal.findById(id);
   if (!a) return res.status(404).json({ error: 'not_found' });
-  const isOwner = String(a.shelter) === String(user?._id || user?.id);
-  if (!isAdmin && !isOwner) return res.status(403).json({ error: 'forbidden' });
+  if (!canManageAnimal(user, a)) return res.status(403).json({ error: 'forbidden' });
+  // Con una adopción en curso o aprobada no se borra, ni siquiera el admin:
+  // primero hay que cancelarla o moverla.
+  const activeAdoption = await Adoption.exists({
+    animalId: String(a._id),
+    status: { $in: ['preaprobada', 'cita_propuesta', 'aprobada'] },
+  });
+  if (activeAdoption) return res.status(409).json({ error: 'adoption_in_progress' });
   await Animal.deleteOne({ _id: a._id });
   res.json({ ok: true });
 }
