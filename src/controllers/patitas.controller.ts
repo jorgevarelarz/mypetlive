@@ -326,9 +326,11 @@ export async function registerSale(req: Request, res: Response) {
   const partnerId = actorId(req);
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
 
-  // Acepta el userId que la caja obtuvo al identificar (QR/código) al cliente
-  // presente; no devuelve PII, solo confirma la venta y suma Patitas.
-  const target = await resolveUserFromBody(req.body || {});
+  // allowUserId:false — exige QR (userToken) o código corto que prueben la
+  // presencia del cliente. Con un userId suelto, un partner podría generar
+  // Patitas sin cliente delante, y esas Patitas acaban en dinero real cuando
+  // una protectora las canjea. Si el código caduca, la caja vuelve a identificar.
+  const target = await resolveUserFromBody(req.body || {}, { allowUserId: false });
   if (!target) return res.status(400).json({ error: 'invalid_user' });
   const user = await User.findById(target).select('role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -393,8 +395,9 @@ export async function earnVisit(req: Request, res: Response) {
   const partnerId = actorId(req);
   const partner: any = (req as any).user;
   if (!['store', 'vet', 'admin'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  // Acepta el userId que la caja obtuvo al identificar al cliente presente.
-  const target = await resolveUserFromBody(req.body || {});
+  // allowUserId:false — igual que en la venta: la visita solo cuenta con QR
+  // (userToken) o código corto del cliente presente, nunca con un userId suelto.
+  const target = await resolveUserFromBody(req.body || {}, { allowUserId: false });
   if (!target) return res.status(400).json({ error: 'invalid_user' });
 
   const user = await User.findById(target).select('role');

@@ -16,6 +16,8 @@ let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Coupon: any;
+// Las ventas exigen prueba de presencia (QR/código): se manda el userToken del QR.
+let signUserToken: (userId: string) => string;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -26,6 +28,7 @@ beforeAll(async () => {
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
   Coupon = (await import('../models/coupon.model')).Coupon;
+  signUserToken = (await import('../utils/patitas')).signUserToken;
 });
 
 afterAll(async () => {
@@ -64,7 +67,7 @@ async function sellTo(headers: Record<string, string>, items: Array<{ name: stri
   await request(app)
     .post('/api/patitas/sales')
     .set(headers)
-    .send({ userId: clientId, amountEur: items.reduce((a, i) => a + (i.priceEur || 10), 0), items })
+    .send({ userToken: signUserToken(clientId), amountEur: items.reduce((a, i) => a + (i.priceEur || 10), 0), items })
     .expect(201);
 }
 
