@@ -29,6 +29,67 @@ async function ensureContractConversation(contractId: string): Promise<string> {
   return conv.id;
 }
 
+/**
+ * Confirma un pedido del marketplace solo si Stripe lo da por cobrado y el
+ * importe y la moneda coinciden con los del pedido. La usan
+ * `checkout.session.completed` y `checkout.session.async_payment_succeeded`.
+ *
+ * Con métodos diferidos (SEPA) `completed` llega con `payment_status:'unpaid'`:
+ * avisar a la tienda entonces sería pedirle que envíe algo sin cobrar.
+ */
+async function confirmMarketplaceSession(session: Stripe.Checkout.Session) {
+  const orderId = session.metadata?.marketplaceOrderId as string;
+  const sessionId = session.id;
+
+  if (session.payment_status !== 'paid') {
+    logger.info(
+      { sessionId, orderId, paymentStatus: session.payment_status },
+      'Pago de marketplace aún no cobrado, se espera async_payment_*',
+    );
+    return;
+  }
+
+  if (!Types.ObjectId.isValid(orderId)) {
+    logger.info({ sessionId, orderId }, 'Webhook de marketplace con un id de pedido no válido');
+    return;
+  }
+  const { Order } = await import('../models/order.model');
+  const { cents } = await import('../utils/marketplace');
+  const order = await Order.findById(orderId).select('totalEur').lean();
+  if (!order) {
+    logger.info({ sessionId, orderId }, 'Webhook de marketplace sin pedido');
+    return;
+  }
+
+  const expectedCents = cents(order.totalEur);
+  const amountTotal = session.amount_total;
+  const currency = session.currency;
+  if (amountTotal !== expectedCents || (currency || '').toLowerCase() !== 'eur') {
+    // Cobro real que no cuadra con el pedido: se deja en `pending_payment` (con
+    // su stock reservado) para que alguien lo revise; puede tocar devolverlo.
+    logger.error(
+      { sessionId, orderId, amountTotal, expectedCents, currency },
+      'Importe de Stripe no coincide con el pedido; no se confirma',
+    );
+    return;
+  }
+
+  // `fulfillPaidOrder` es idempotente porque Stripe reintenta y confirmar dos
+  // veces mandaría dos avisos de envío.
+  const { fulfillPaidOrder } = await import('../controllers/marketplace.controller');
+  const paymentRef = (session.payment_intent as string) || session.id;
+  const fulfilled = await fulfillPaidOrder(orderId, paymentRef);
+  if (!fulfilled) {
+    // No es un error: es el reintento de un pedido ya cobrado, o uno que
+    // alguien canceló antes. Se registra para no confundirlo con un cobro
+    // perdido si algún día falta un pedido.
+    logger.info(
+      { sessionId, orderId },
+      'Webhook de marketplace sin efecto (pedido ya procesado o no pendiente)',
+    );
+  }
+}
+
 r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
   const secret = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -192,21 +253,7 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
           });
         }
       } else if (session.metadata?.marketplaceOrderId) {
-        // Pedido del marketplace: hasta aquí no hay venta, solo una intención.
-        // `fulfillPaidOrder` es idempotente porque Stripe reintenta y descontar
-        // el stock dos veces dejaría sin producto a alguien que sí lo tenía.
-        const { fulfillPaidOrder } = await import('../controllers/marketplace.controller');
-        const paymentRef = (session.payment_intent as string) || session.id;
-        const fulfilled = await fulfillPaidOrder(session.metadata.marketplaceOrderId, paymentRef);
-        if (!fulfilled) {
-          // No es un error: es el reintento de un pedido ya cobrado, o uno que
-          // alguien canceló antes. Se registra para no confundirlo con un cobro
-          // perdido si algún día falta un pedido.
-          logger.info(
-            { sessionId: session.id, orderId: session.metadata.marketplaceOrderId },
-            'Webhook de marketplace sin efecto (pedido ya procesado o no pendiente)',
-          );
-        }
+        await confirmMarketplaceSession(session);
       } else if (session.metadata?.deposit === 'true') {
         const contractId = session.metadata?.contractId;
         if (contractId) {
@@ -225,6 +272,24 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
     // aplica al marketplace: es el único flujo que reserva existencias antes
     // de cobrar, así que es el único que necesita liberarlas si nadie paga.
     case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.marketplaceOrderId) {
+        const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
+        await releaseExpiredOrder(session.metadata.marketplaceOrderId);
+      }
+      break;
+    }
+    // Pago diferido (SEPA y similares) cobrado por fin: ahora sí se confirma.
+    case 'checkout.session.async_payment_succeeded': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.marketplaceOrderId) {
+        await confirmMarketplaceSession(session);
+      }
+      break;
+    }
+    // Pago diferido rechazado: el pedido no se cobrará, así que se cancela y
+    // se devuelven las existencias, igual que con una sesión caducada.
+    case 'checkout.session.async_payment_failed': {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.metadata?.marketplaceOrderId) {
         const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
