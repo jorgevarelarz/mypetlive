@@ -112,6 +112,7 @@ const BACKEND_ERRORS: Record<string, string> = {
   forbidden: 'Esa ficha no es de tu protectora.',
   'No autorizado': 'Tu cuenta no tiene permiso para gestionar fichas de animales.',
   not_found: 'La ficha ya no existe. Recarga el listado.',
+  adoption_in_progress: 'Esta ficha tiene una adopción en curso o aprobada. Cancélala en Adopciones antes de eliminarla.',
   invalid_status: 'Ese estado no existe.',
   invalid_status_transition: 'Adoptado lo marca el proceso de adopción.',
   invalid_file_type: 'Ese archivo no es una imagen. Sube un JPG o un PNG.',
