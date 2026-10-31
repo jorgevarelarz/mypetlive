@@ -163,6 +163,8 @@ describe('Stripe webhook sin secreto fuera de test', () => {
     expect(res.status).toBe(200);
     expect(__stripeMock.webhooks.constructEvent).toHaveBeenCalledTimes(1);
     expect(await ProcessedEvent.countDocuments({ provider: 'stripe', eventId: 'evt_test_1' })).toBe(1);
+  });
+});
 
 describe('Stripe webhook: fallo al procesar', () => {
   const donationEvent = {
