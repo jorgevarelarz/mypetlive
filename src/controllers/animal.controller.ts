@@ -696,6 +696,16 @@ export async function search(req: Request, res: Response) {
   // cualquier otro visitante (el caso normal: el catálogo público) se retira
   // lo mismo que en `getById`/`getByCode` antes de que salga por la red.
   const sanitized = isAdmin || isOwnerView ? items : items.map(stripInternalFields);
+  // La protectora ve quién tiene en casa cada animal en acogida (encontrado
+  // por un particular): nombre, no el correo.
+  if (isAdmin || isOwnerView) {
+    const fosterIds = items.map((a: any) => a.foster?.userId).filter(Boolean);
+    if (fosterIds.length) {
+      const people = await User.find({ _id: { $in: fosterIds } }).select('name').lean();
+      const nameOf = new Map(people.map((u: any) => [String(u._id), u.name]));
+      for (const a of sanitized as any[]) if (a.foster?.userId) a.foster = { ...a.foster, name: nameOf.get(String(a.foster.userId)) || 'Particular' };
+    }
+  }
 
   res.json({ items: sanitized, page, limit, total });
 }

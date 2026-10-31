@@ -128,6 +128,9 @@ describe('Animal encontrado', () => {
     expect(String(animal.shelter)).toBe(shelter);
     expect(animal.foster.userId).toBe(finder);
     expect((await FoundAnimal.findById(fid).lean()).status).toBe('en_acogida');
+    // En su panel, la protectora ve quién lo tiene en casa (nombre, no correo).
+    const panel = await request(app).get('/api/animals').query({ shelter, status: 'borrador' }).set(H(shelter, 'landlord')).expect(200);
+    expect(panel.body.items[0].foster).toMatchObject({ userId: finder, name: 'Carmen Ruiz' });
   });
 
   it('quedármelo yo: la adopción a su nombre queda lista para que la protectora la apruebe', async () => {

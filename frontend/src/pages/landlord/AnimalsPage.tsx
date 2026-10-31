@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import OpenChatButton from '../../components/chat/OpenChatButton';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -875,6 +876,13 @@ export default function AnimalsPage() {
                         {(ages || animal.city) && (
                           <div style={{ fontSize: 12.5, color: MPL.faint, marginTop: 2 }}>
                             {[ages, animal.city].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                        {/* Encontrado por un particular que lo cuida en su casa: el animal no está en el refugio. */}
+                        {animal.foster?.userId && (
+                          <div style={{ marginTop: 8, display: 'grid', gap: 6, background: MPL.teal100, borderRadius: 10, padding: '8px 10px' }}>
+                            <span style={{ fontSize: 13, color: MPL.tealDark, fontWeight: 800 }}>🏠 En casa de acogida de {animal.foster.name || 'un particular'}</span>
+                            {animal.foster.foundId && <OpenChatButton kind="foster" refId={animal.foster.foundId} label="Escribir" style={{ padding: '6px 12px', fontSize: 13 }} />}
                           </div>
                         )}
                       </div>
