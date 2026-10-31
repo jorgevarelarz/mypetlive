@@ -30,9 +30,15 @@ r.post(
 
     // Resolver la protectora destinataria (modelo fiscal: el dinero va directo a su cuenta).
     let shelterId: string | undefined = bodyShelterId && Types.ObjectId.isValid(bodyShelterId) ? bodyShelterId : undefined;
-    if (!shelterId && animalId && Types.ObjectId.isValid(animalId)) {
+    if (animalId && Types.ObjectId.isValid(animalId)) {
       const animal = await Animal.findById(animalId).select('shelter').lean();
-      if (animal?.shelter) shelterId = String(animal.shelter);
+      if (animal?.shelter) {
+        // El dinero y las Patitas van a la misma protectora: la del animal.
+        if (shelterId && String(animal.shelter) !== shelterId) {
+          return res.status(400).json({ error: 'animal_shelter_mismatch' });
+        }
+        if (!shelterId) shelterId = String(animal.shelter);
+      }
     }
     if (!shelterId) return res.status(400).json({ error: 'shelter_required' });
     if (!(await canReceiveDonations(String(shelterId)))) return res.status(403).json({ error: 'shelter_verification_required' });
@@ -71,7 +77,7 @@ r.post(
       cancel_url: base + '/?donation=cancel',
     });
 
-    await Donation.create({ userId: String(userId || ''), animalId, amount, currency: 'eur', status: 'pending', sessionId: session.id });
+    await Donation.create({ userId: String(userId || ''), animalId, amount, currency: 'eur', status: 'pending', sessionId: session.id, shelterId: String(shelterId) });
     res.json({ id: session.id, url: session.url });
   })
 );
