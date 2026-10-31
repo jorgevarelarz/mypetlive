@@ -506,12 +506,17 @@ export async function redeemConfirm(req: Request, res: Response) {
   if (isStripeConfigured() && partnerDoc?.stripeAccountId) {
     try {
       const stripe = getStripeClient();
-      const transfer = await stripe.transfers.create({
-        amount: centsFromPatitas(amount),
-        currency: 'eur',
-        destination: partnerDoc.stripeAccountId,
-        metadata: { code, shelterId, partnerId, patitas: String(amount) },
-      });
+      // Clave fija por canje: cualquier reintento de un canje en `pending_payout`
+      // debe usar esta misma clave (`redeem-${txn.code}`) y el mismo cuerpo.
+      const transfer = await stripe.transfers.create(
+        {
+          amount: centsFromPatitas(amount),
+          currency: 'eur',
+          destination: partnerDoc.stripeAccountId,
+          metadata: { code, shelterId, partnerId, patitas: String(amount) },
+        },
+        { idempotencyKey: `redeem-${code}` },
+      );
       txn.status = 'paid';
       txn.payoutRef = transfer.id;
       await txn.save();
