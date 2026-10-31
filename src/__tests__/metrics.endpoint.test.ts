@@ -2,7 +2,8 @@ import express from 'express';
 import pino from 'pino';
 import request from 'supertest';
 import { Writable } from 'stream';
-import { loggerOptions } from '../utils/logger';
+import logger, { loggerOptions } from '../utils/logger';
+import { requestId } from '../middleware/requestId';
 import { metricsMiddleware, sanitizeUrl } from '../metrics';
 import { app } from '../app';
 
@@ -21,23 +22,32 @@ const captureLogger = () => {
 describe('log HTTP sin el token de invitado', () => {
   it('no deja el token de invitado en el log HTTP', async () => {
     const { log, output } = captureLogger();
+    // El middleware real requestId crea el logger hijo (con la url en sus bindings)
+    // a partir del logger base: lo redirigimos al logger de captura.
+    const childSpy = jest
+      .spyOn(logger, 'child')
+      .mockImplementation(((bindings: any, opts?: any) => log.child(bindings, opts)) as any);
     const mini = express();
-    mini.use((_req, res, next) => {
-      res.locals.logger = log;
-      next();
-    });
+    mini.use(requestId);
     mini.use(metricsMiddleware);
     mini.get('/pedido/:id', (_req, res) => {
       res.status(200).json({ ok: true });
     });
 
-    await request(mini).get('/pedido/1?ok=1&token=abc').expect(200);
-    // 'finish' puede emitirse justo después de que supertest reciba la respuesta.
-    await new Promise((r) => setImmediate(r));
+    let childCalls = 0;
+    try {
+      await request(mini).get('/pedido/1?ok=1&token=abc123secreto').expect(200);
+      // 'finish' puede emitirse justo después de que supertest reciba la respuesta.
+      await new Promise((r) => setImmediate(r));
+    } finally {
+      childCalls = childSpy.mock.calls.length;
+      childSpy.mockRestore();
+    }
 
     const out = output();
+    expect(childCalls).toBeGreaterThan(0);
     expect(out).toContain('"type":"http"');
-    expect(out).not.toContain('abc');
+    expect(out).not.toContain('abc123secreto');
     expect(out).toContain('oculto');
     expect(out).toContain('ok=1');
   });
