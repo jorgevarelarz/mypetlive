@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { randomInt } from 'node:crypto';
 import { isValidObjectId, Types } from 'mongoose';
 import { User } from '../models/user.model';
 import { PatitaTxn } from '../models/patitaTxn.model';
@@ -41,14 +42,28 @@ function actorId(req: Request): string {
 
 // --- Rate-limit en memoria para check-in de visita (1 por usuario+partner / ventana) ---
 const VISIT_WINDOW_MS = 12 * 60 * 60 * 1000; // 12h
-const visitStore = new Map<string, number>();
+export const visitStore = new Map<string, number>();
 
 // --- Códigos cortos de wallet (fallback manual del QR) con TTL ---
 const WALLET_CODE_TTL_MS = 10 * 60 * 1000;
-const walletCodeStore = new Map<string, { shelterId: string; expiresAt: number }>();
-function shortCode(): string {
+// 10 caracteres de 32 posibles (~10^15 códigos): inviable por fuerza bruta con el
+// límite de intentos de las rutas de canje. Cada código vale para un solo canje.
+const WALLET_CODE_LENGTH = 10;
+export const walletCodeStore = new Map<string, { shelterId: string; expiresAt: number }>();
+function shortCode(length = 6): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+  return Array.from({ length }, () => alphabet[randomInt(alphabet.length)]).join('');
+}
+
+// Limpia lo caducado de los dos Map en memoria. Se llama en cada escritura, así
+// que los Map no crecen sin límite y no hace falta ningún temporizador.
+export function purgeExpiredPatitasStores(now = Date.now()): void {
+  for (const [code, entry] of walletCodeStore) {
+    if (entry.expiresAt <= now) walletCodeStore.delete(code);
+  }
+  for (const [key, ts] of visitStore) {
+    if (now - ts >= VISIT_WINDOW_MS) visitStore.delete(key);
+  }
 }
 
 export async function listProtectoras(_req: Request, res: Response) {
@@ -385,6 +400,7 @@ export async function earnVisit(req: Request, res: Response) {
   const user = await User.findById(target).select('role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
+  purgeExpiredPatitasStores();
   const key = `${target}:${partnerId}`;
   const last = visitStore.get(key) || 0;
   if (Date.now() - last < VISIT_WINDOW_MS) {
@@ -409,9 +425,10 @@ export async function getWalletToken(req: Request, res: Response) {
   // Protectoras reales usan role 'protectora'; 'landlord' es el rol legado de
   // RentalApp que las protectoras antiguas aún conservan.
   if (!['landlord', 'protectora'].includes(user?.role)) return res.status(403).json({ error: 'only_shelters' });
+  purgeExpiredPatitasStores();
   const shelter = await User.findById(me).select('patitas patitasLocked');
   const token = signWalletToken(me);
-  const code = shortCode();
+  const code = shortCode(WALLET_CODE_LENGTH);
   walletCodeStore.set(code, { shelterId: me, expiresAt: Date.now() + WALLET_CODE_TTL_MS });
   // El QR que la protectora enseña al partner debe anunciar lo canjeable, no el
   // saldo bruto: lo comprometido en citas no se puede gastar aquí.
@@ -419,14 +436,17 @@ export async function getWalletToken(req: Request, res: Response) {
   res.json({ token, code, balance: spendable, valueEur: eurFromPatitas(spendable) });
 }
 
-function resolveShelterFromBody(body: any): string | null {
+// Devuelve la protectora y, si se resolvió por código corto, el código normalizado
+// (para invalidarlo tras un canje correcto).
+function resolveShelterFromBody(body: any): { shelterId: string; viaCode?: string } | null {
   if (body?.walletToken) {
     const decoded = verifyWalletToken(String(body.walletToken));
-    if (decoded) return decoded.shelterId;
+    if (decoded) return { shelterId: decoded.shelterId };
   }
   if (body?.code) {
-    const entry = walletCodeStore.get(String(body.code).trim().toUpperCase());
-    if (entry && entry.expiresAt > Date.now()) return entry.shelterId;
+    const code = String(body.code).trim().toUpperCase();
+    const entry = walletCodeStore.get(code);
+    if (entry && entry.expiresAt > Date.now()) return { shelterId: entry.shelterId, viaCode: code };
   }
   return null;
 }
@@ -435,8 +455,9 @@ function resolveShelterFromBody(body: any): string | null {
 export async function redeemPreview(req: Request, res: Response) {
   const partner: any = (req as any).user;
   if (!['store', 'vet'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
-  const shelterId = resolveShelterFromBody(req.body || {});
-  if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
+  const resolved = resolveShelterFromBody(req.body || {});
+  if (!resolved) return res.status(400).json({ error: 'invalid_wallet' });
+  const { shelterId } = resolved;
 
   const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
@@ -461,8 +482,9 @@ export async function redeemConfirm(req: Request, res: Response) {
   const partnerId = actorId(req);
   if (!['store', 'vet'].includes(partner?.role)) return res.status(403).json({ error: 'forbidden' });
 
-  const shelterId = resolveShelterFromBody(req.body || {});
-  if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
+  const resolved = resolveShelterFromBody(req.body || {});
+  if (!resolved) return res.status(400).json({ error: 'invalid_wallet' });
+  const { shelterId, viaCode } = resolved;
 
   const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
@@ -486,6 +508,9 @@ export async function redeemConfirm(req: Request, res: Response) {
     { new: true },
   ).select('patitas');
   if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: spendable });
+  // El código corto vale para un solo canje: se invalida tras el débito correcto
+  // (no antes, para que un canje fallido no lo queme) y antes de pagar.
+  if (viaCode) walletCodeStore.delete(viaCode);
 
   const valueEur = eurFromPatitas(amount);
   const code = genRedeemCode();
