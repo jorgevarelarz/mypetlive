@@ -12,6 +12,8 @@ let app: any;
 let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Coupon: any;
+// Las ventas exigen prueba de presencia (QR/código): se manda el userToken del QR.
+let signUserToken: (userId: string) => string;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -22,6 +24,7 @@ beforeAll(async () => {
   app = mod.app || mod.default;
   User = (await import('../models/user.model')).User;
   Coupon = (await import('../models/coupon.model')).Coupon;
+  signUserToken = (await import('../utils/patitas')).signUserToken;
 });
 
 afterAll(async () => {
@@ -53,7 +56,7 @@ describe('Ventas de partner con comisión', () => {
       .post('/api/patitas/sales')
       .set(storeH)
       .send({
-        userId: clientId,
+        userToken: signUserToken(clientId),
         amountEur: 47.5,
         items: [
           { name: 'Pienso cachorro 3kg', qty: 1, priceEur: 32.5 },
@@ -75,16 +78,16 @@ describe('Ventas de partner con comisión', () => {
     const res = await request(app)
       .post('/api/patitas/sales')
       .set(storeH)
-      .send({ userId: clientId, amountEur: 100 })
+      .send({ userToken: signUserToken(clientId), amountEur: 100 })
       .expect(201);
     expect(res.body.commissionPct).toBe(10);
     expect(res.body.commissionEur).toBeCloseTo(10, 2);
   });
 
   it('rechaza importes inválidos y a quien no es partner', async () => {
-    await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: -5 }).expect(400);
-    await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId }).expect(400);
-    await request(app).post('/api/patitas/sales').set(clientH).send({ userId: clientId, amountEur: 10 }).expect(403);
+    await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId), amountEur: -5 }).expect(400);
+    await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId) }).expect(400);
+    await request(app).post('/api/patitas/sales').set(clientH).send({ userToken: signUserToken(clientId), amountEur: 10 }).expect(403);
   });
 
   it('un dedazo por encima del tope no genera venta, ni Patitas, ni comisión', async () => {
@@ -93,7 +96,7 @@ describe('Ventas de partner con comisión', () => {
     const res = await request(app)
       .post('/api/patitas/sales')
       .set(storeH)
-      .send({ userId: clientId, amountEur: SALE_MAX_EUR + 1 })
+      .send({ userToken: signUserToken(clientId), amountEur: SALE_MAX_EUR + 1 })
       .expect(400);
     expect(res.body.error).toBe('amount_too_large');
     expect(res.body.max).toBe(SALE_MAX_EUR);
@@ -108,13 +111,13 @@ describe('Ventas de partner con comisión', () => {
     await request(app)
       .post('/api/patitas/sales')
       .set(storeH)
-      .send({ userId: clientId, amountEur: SALE_MAX_EUR })
+      .send({ userToken: signUserToken(clientId), amountEur: SALE_MAX_EUR })
       .expect(201);
   });
 
   it('el partner ve sus ventas con totales y el admin los informes', async () => {
-    await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 20 }).expect(201);
-    await request(app).post('/api/patitas/sales').set(storeH).send({ userId: client2Id, amountEur: 30 }).expect(201);
+    await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId), amountEur: 20 }).expect(201);
+    await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(client2Id), amountEur: 30 }).expect(201);
 
     const mine = await request(app).get('/api/patitas/sales/mine').set(storeH).expect(200);
     expect(mine.body.totals.count).toBe(2);
@@ -141,7 +144,7 @@ describe('Ventas de partner con comisión', () => {
     const code2 = (await request(app).get('/api/patitas/my-code').set({ 'x-user-id': client2Id, 'x-user-role': 'tenant', 'x-user-verified': 'true' }).expect(200)).body.code;
     await request(app).post('/api/patitas/identify').set(storeH).send({ code: code1 }).expect(200);
     await request(app).post('/api/patitas/identify').set(storeH).send({ code: code2 }).expect(200);
-    await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 25 }).expect(201);
+    await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId), amountEur: 25 }).expect(201);
 
     const leaks = await request(app).get('/api/admin/sales/leaks').set(adminH).expect(200);
     expect(leaks.body.items).toHaveLength(1);
@@ -162,7 +165,7 @@ describe('Cupones aplicados junto con la venta (Caja propia)', () => {
     const res = await request(app)
       .post('/api/patitas/sales')
       .set(storeH)
-      .send({ userId: clientId, amountEur: 47.5, couponIds: [String(coupon._id)] })
+      .send({ userToken: signUserToken(clientId), amountEur: 47.5, couponIds: [String(coupon._id)] })
       .expect(201);
 
     expect(res.body.appliedCoupons).toHaveLength(1);
@@ -181,10 +184,10 @@ describe('Cupones aplicados junto con la venta (Caja propia)', () => {
       { partnerId: storeId, partnerType: 'store', copy: 'Bono B', discount: '-5%', active: true },
     ]);
 
-    const off = await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 10 }).expect(201);
+    const off = await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId), amountEur: 10 }).expect(201);
     expect(off.body.appliedCoupons).toHaveLength(0);
 
-    const on = await request(app).post('/api/patitas/sales').set(storeH).send({ userId: clientId, amountEur: 10, applyCoupons: true }).expect(201);
+    const on = await request(app).post('/api/patitas/sales').set(storeH).send({ userToken: signUserToken(clientId), amountEur: 10, applyCoupons: true }).expect(201);
     expect(on.body.appliedCoupons).toHaveLength(2);
   });
 
@@ -196,7 +199,7 @@ describe('Cupones aplicados junto con la venta (Caja propia)', () => {
     const res = await request(app)
       .post('/api/patitas/sales')
       .set(storeH)
-      .send({ userId: clientId, amountEur: 10, couponIds: [String(foreign._id)] })
+      .send({ userToken: signUserToken(clientId), amountEur: 10, couponIds: [String(foreign._id)] })
       .expect(201);
 
     expect(res.body.appliedCoupons).toHaveLength(0);

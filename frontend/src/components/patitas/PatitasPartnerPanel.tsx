@@ -20,6 +20,11 @@ const input: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, border
 
 type WalletRef = { walletToken?: string; code?: string };
 
+// El límite de intentos de canje e identificación responde 429 y el interceptor de
+// api/client.ts ya muestra su mensaje: aquí no se añade un segundo aviso.
+const isTooManyAttempts = (e: any) =>
+  e?.response?.status === 429 || e?.response?.data?.code === 'too_many_attempts';
+
 // Un fallo de red no puede pintarse como "no tienes nada": se dice y se ofrece reintentar.
 function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
   return (
@@ -385,13 +390,19 @@ function PosIntegration() {
   );
 }
 
+// El QR y el código del cliente caducan a los 10 minutos: si vence entre la
+// identificación y el registro, el servidor responde invalid_user.
+const CUSTOMER_CODE_EXPIRED = 'El código del cliente ha caducado. Vuelve a escanear su QR o a pedirle el código';
+
 // Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
 // Exportado: es también el corazón del Modo Caja (/caja), el alta sin TPV.
 export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; onDone: () => void; catalog?: Array<{ name: string; priceEur?: number }> }) {
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [customer, setCustomer] = useState<{ userId: string; name?: string; coupons?: EligibleCoupon[] } | null>(null);
+  // ref: el QR (userToken) o código con que se identificó al cliente. La venta y
+  // la visita lo reenvían como prueba de presencia: el servidor no acepta userId.
+  const [customer, setCustomer] = useState<{ userId: string; name?: string; coupons?: EligibleCoupon[]; ref: { userToken?: string; code?: string } } | null>(null);
   // Venta con ticket: importe + líneas opcionales (producto/cantidad/precio).
   const [saleAmount, setSaleAmount] = useState('');
   const [saleItems, setSaleItems] = useState<Array<{ name: string; qty: string; priceEur: string }>>([]);
@@ -408,8 +419,9 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     setBusy(true);
     try {
       const u = await identifyUser(ref);
-      setCustomer({ userId: u.userId, name: u.name, coupons: u.coupons });
+      setCustomer({ userId: u.userId, name: u.name, coupons: u.coupons, ref });
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'invalid_user_code' ? 'Código de cliente no válido o caducado' : 'No se pudo identificar al cliente');
     } finally { setBusy(false); }
   };
@@ -423,11 +435,13 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     )) return;
     setBusy(true);
     try {
-      const r = await earnVisit(customer.userId);
+      const r = await earnVisit(customer.ref);
       toast.success(`+${r.earned} 🐾 a ${customer.name || 'el cliente'}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
       reset();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error === 'visit_already_rewarded' ? 'Esa visita ya se premió hoy' : 'No se pudo registrar la visita');
+      const code = e?.response?.data?.error;
+      if (code === 'invalid_user') { toast.error(CUSTOMER_CODE_EXPIRED); reset(); return; }
+      toast.error(code === 'visit_already_rewarded' ? 'Esa visita ya se premió hoy' : 'No se pudo registrar la visita');
     } finally { setBusy(false); }
   };
 
@@ -460,13 +474,14 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     const couponIds = Array.from(selectedCoupons);
     setBusy(true);
     try {
-      const r = await registerSale({ userId: customer.userId, amountEur: amount, items, ...(couponIds.length ? { couponIds } : {}) });
+      const r = await registerSale({ ...customer.ref, amountEur: amount, items, ...(couponIds.length ? { couponIds } : {}) });
       const couponNote = r.appliedCoupons.length ? ` · ${r.appliedCoupons.length} cupón${r.appliedCoupons.length > 1 ? 'es' : ''} aplicado${r.appliedCoupons.length > 1 ? 's' : ''}` : '';
       toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${couponNote}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
       reset();
     } catch (e: any) {
       const code = e?.response?.data?.error;
       const max = e?.response?.data?.max;
+      if (code === 'invalid_user') { toast.error(CUSTOMER_CODE_EXPIRED); reset(); return; }
       toast.error(
         code === 'amount_too_large' ? `El importe máximo por venta es de ${formatEur(Number(max) || SALE_MAX_EUR)} €. Revisa el ticket.`
           : code === 'invalid_amount' ? 'Importe no válido'
@@ -687,6 +702,7 @@ export function RedeemFromShelter() {
       setWalletRef(ref);
       setPreview(p);
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'invalid_wallet' ? 'QR/código no válido o caducado' : 'No se pudo leer la wallet');
     } finally {
       setBusy(false);
@@ -707,6 +723,7 @@ export function RedeemFromShelter() {
       setPreview(null); setWalletRef(null); setCode('');
       qc.invalidateQueries({ queryKey: ['patitas-me'] });
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'insufficient_patitas' ? 'La protectora no tiene saldo suficiente' : 'No se pudo completar el canje');
     } finally {
       setBusy(false);
@@ -739,7 +756,7 @@ export function RedeemFromShelter() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
               <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
                 Código manual
-                <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABC123" style={{ ...input, width: 160, fontFamily: MPL_FONT_MONO, letterSpacing: 1 }} />
+                <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABCD23EFGH" maxLength={10} style={{ ...input, width: 220, fontFamily: MPL_FONT_MONO, letterSpacing: 1 }} />
               </label>
               <button type="button" onClick={submitCode} disabled={busy || !code.trim()} style={{ background: MPL.ink, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
                 {busy ? '…' : 'Buscar'}

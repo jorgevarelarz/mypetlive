@@ -42,6 +42,10 @@ const STATUS_VALUES: AnimalStatus[] = [
   'archivado',
 ];
 
+// Los estados que se ven en el catálogo. El servidor los niega (403
+// `shelter_verification_required`) a una protectora sin verificar.
+const PUBLIC_STATUSES: AnimalStatus[] = ['publicado', 'reservado', 'preadoptado'];
+
 // La especie se guarda canonizada (`set: normalizeSpecies` convierte perro→dog y
 // gato→cat), así que un campo de texto libre acababa pintando "dog" en la ficha y
 // permitía typos ("perrp") que ningún filtro del buscador puede casar. Los valores
@@ -108,7 +112,9 @@ const BACKEND_ERRORS: Record<string, string> = {
   forbidden: 'Esa ficha no es de tu protectora.',
   'No autorizado': 'Tu cuenta no tiene permiso para gestionar fichas de animales.',
   not_found: 'La ficha ya no existe. Recarga el listado.',
+  adoption_in_progress: 'Esta ficha tiene una adopción en curso o aprobada. Cancélala en Adopciones antes de eliminarla.',
   invalid_status: 'Ese estado no existe.',
+  invalid_status_transition: 'Adoptado lo marca el proceso de adopción.',
   invalid_file_type: 'Ese archivo no es una imagen. Sube un JPG o un PNG.',
   missing_file: 'No hemos recibido el archivo. Vuelve a intentarlo.',
   upload_error: 'No se pudo subir la imagen. Inténtalo otra vez.',
@@ -372,11 +378,26 @@ function AnimalFields({
   form,
   onChange,
   publishBlocked,
+  savedStatus,
 }: {
   form: AnimalForm;
   onChange: (patch: Partial<AnimalForm>) => void;
   publishBlocked: boolean;
+  // Estado guardado de la ficha que se edita; sin él es el alta de una ficha nueva.
+  savedStatus?: AnimalStatus;
 }) {
+  const statusDisabled = (value: AnimalStatus) => {
+    // Mantener el estado que ya tiene la ficha siempre se puede: el servidor solo
+    // mira la verificación cuando el estado cambia.
+    if (savedStatus !== undefined && value === savedStatus) return false;
+    // El backend devuelve 403 al pasar a un estado público sin verificación
+    // (`canPublishAnimals`): ofrecerlo sería llevar a la protectora a un error.
+    if (PUBLIC_STATUSES.includes(value) && publishBlocked) return true;
+    // Al editar, `adoptado` lo pone el proceso de adopción (400 en el servidor).
+    if (savedStatus !== undefined && value === 'adoptado') return true;
+    return false;
+  };
+
   // Una especie o un rasgo antiguo que no esté entre las opciones seguiría en la
   // ficha pero sin control visible, y al guardar se perdería sin avisar: lo
   // añadimos a la lista para que se vea y se pueda mantener.
@@ -455,13 +476,11 @@ function AnimalFields({
         </Field>
         <Field
           label="Estado"
-          hint={publishBlocked ? 'Publicado no está disponible hasta que la protectora esté verificada.' : undefined}
+          hint={publishBlocked ? 'Publicado, reservado y preadoptado no están disponibles hasta que la protectora esté verificada.' : undefined}
         >
           <select style={inputStyle} value={form.status} onChange={e => onChange({ status: e.target.value as AnimalStatus })}>
             {STATUS_VALUES.map(value => (
-              // El backend devuelve 403 al pasar a `publicado` sin verificación
-              // (`canPublishAnimals`): ofrecerlo sería llevar a la protectora a un error.
-              <option key={value} value={value} disabled={value === 'publicado' && publishBlocked}>
+              <option key={value} value={value} disabled={statusDisabled(value)}>
                 {statusLabel(value)}
               </option>
             ))}
@@ -683,8 +702,8 @@ export default function AnimalsPage() {
 
   const onChangeStatus = async (animal: any, status: AnimalStatus) => {
     const id = String(animal._id || animal.id || '');
-    if (status === 'publicado' && publishBlocked) {
-      toast.error('Verifica tu protectora antes de publicar animales.');
+    if (PUBLIC_STATUSES.includes(status) && publishBlocked && animal.status !== status) {
+      toast.error('Verifica tu protectora antes de publicar, reservar o preadoptar animales.');
       return;
     }
     setBusyId(id);
@@ -904,7 +923,7 @@ export default function AnimalsPage() {
                             <option value={animal.status}>Estado desconocido: {animal.status}</option>
                           )}
                           {STATUS_VALUES.map(value => (
-                            <option key={value} value={value} disabled={value === 'publicado' && publishBlocked && animal.status !== 'publicado'}>
+                            <option key={value} value={value} disabled={PUBLIC_STATUSES.includes(value) && publishBlocked && animal.status !== value}>
                               {statusLabel(value)}
                             </option>
                           ))}
@@ -980,6 +999,7 @@ export default function AnimalsPage() {
               form={editForm}
               onChange={patch => setEditForm(prev => ({ ...prev, ...patch }))}
               publishBlocked={publishBlocked}
+              savedStatus={STATUS_VALUES.includes(editing?.status) ? editing.status : undefined}
             />
 
             <div style={{ display: 'grid', gap: 8 }}>
