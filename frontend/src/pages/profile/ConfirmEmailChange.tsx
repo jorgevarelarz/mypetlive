@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { readUrlToken } from '../../utils/urlToken';
 import { Link } from 'react-router-dom';
 import { confirmEmailChange } from '../../api/users';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
@@ -7,7 +8,7 @@ import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 // buzón nuevo, donde puede no haber sesión iniciada: no va dentro de
 // ProtectedRoute, el token del enlace es la credencial.
 export default function ConfirmEmailChange() {
-  const token = useMemo(() => new URLSearchParams(window.location.search).get('token') || '', []);
+  const token = useMemo(() => readUrlToken(), []);
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');

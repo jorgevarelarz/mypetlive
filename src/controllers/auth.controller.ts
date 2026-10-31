@@ -26,7 +26,7 @@ function buildResetLink(token: string) {
     if (template.includes('{token}')) return template.replace(/{token}/g, encoded);
     try {
       const url = new URL(template);
-      url.searchParams.set('token', token);
+      url.hash = `token=${encoded}`;
       return url.toString();
     } catch {
       // ignore malformed template, fall back to defaults
@@ -38,7 +38,9 @@ function buildResetLink(token: string) {
     process.env.APP_URL ||
     DEFAULT_FRONTEND_URL;
   const normalized = base.replace(/\/$/, '');
-  return `${normalized}/reset?token=${encoded}`;
+  // El token va detrás de '#': esa parte de la URL no sale del navegador, así que
+  // no llega a los logs de Apache ni de la API, ni a la cabecera Referer.
+  return `${normalized}/reset#token=${encoded}`;
 }
 
 /**

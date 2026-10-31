@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { readUrlToken } from '../../utils/urlToken';
 import PasswordField from '../../components/auth/PasswordField';
 import { Link } from "react-router-dom";
 import { resetPassword as apiResetPassword } from "../../api/auth";
@@ -51,7 +52,7 @@ const messageStyle: React.CSSProperties = {
 };
 
 const ResetPassword: React.FC = () => {
-  const token = useMemo(() => new URLSearchParams(window.location.search).get("token") || "", []);
+  const token = useMemo(() => readUrlToken(), []);
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");

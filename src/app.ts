@@ -149,7 +149,7 @@ app.use(
   cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-admin', 'x-user-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-admin', 'x-user-id', 'X-Order-Token'],
     exposedHeaders: ['Content-Disposition'],
     credentials: true,
     // El navegador cachea el preflight OPTIONS 24h: una petición menos por llamada.

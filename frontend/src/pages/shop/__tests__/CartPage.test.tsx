@@ -91,7 +91,7 @@ describe('Carrito y checkout', () => {
     // El pedido ya vive en el servidor: el carrito local ha cumplido, y el
     // invitado se va a su pedido con el token, que es su única credencial.
     await waitFor(() => expect(getCart()).toEqual([]));
-    expect(mockNavigate).toHaveBeenCalledWith('/pedido/o1?token=tok');
+    expect(mockNavigate).toHaveBeenCalledWith('/pedido/o1#token=tok');
   });
 
   it('a quien tiene sesión no le vuelve a pedir sus datos', () => {
@@ -118,6 +118,6 @@ describe('Carrito y checkout', () => {
     fireEvent.change(screen.getByLabelText('Ciudad'), { target: { value: 'A Coruña' } });
     fireEvent.click(screen.getByText('Ir a pagar'));
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pedido/o9?token=tok9'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pedido/o9#token=tok9'));
   });
 });

@@ -24,7 +24,8 @@ export default function HashScroll() {
     // `hash` viene siempre del router de verdad, pero no de un useLocation
     // mockeado en tests: sin el fallback, montar la app los rompía.
     const id = decodeURIComponent((hash || '').replace('#', ''));
-    if (!id) return;
+    // `#token=…` lleva credenciales, no el id de una sección.
+    if (!id || id.includes('=')) return;
 
     let cancelled = false;
     let scrolledOnce = false;

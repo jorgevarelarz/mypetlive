@@ -1,4 +1,5 @@
 import React from 'react';
+import { rememberOrderToken } from '../../utils/urlToken';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { ShoppingCart, Trash2 } from 'lucide-react';
@@ -72,7 +73,8 @@ export default function CartPage() {
 
       // El pedido existe ya en el servidor: el carrito local ha cumplido.
       cart.clear();
-      const suffix = result.guestToken ? `?token=${result.guestToken}` : '';
+      rememberOrderToken(result.orderId, result.guestToken);
+      const suffix = result.guestToken ? `#token=${result.guestToken}` : '';
       if (result.url) {
         // En la app el pago se abre en Safari y debajo queda el pedido, que se
         // actualiza solo cuando Stripe confirma.
@@ -88,7 +90,8 @@ export default function CartPage() {
       if ((code === 'payments_unavailable' || code === 'checkout_failed') && data?.orderId) {
         // Retomar el pedido existente evita reservar las mismas unidades otra vez.
         cart.clear();
-        const suffix = data.guestToken ? `?token=${data.guestToken}` : '';
+        rememberOrderToken(data.orderId, data.guestToken);
+        const suffix = data.guestToken ? `#token=${data.guestToken}` : '';
         navigate(`/pedido/${data.orderId}${suffix}`);
         return;
       }
