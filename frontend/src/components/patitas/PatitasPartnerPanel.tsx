@@ -20,6 +20,11 @@ const input: React.CSSProperties = { border: `1.5px solid ${MPL.border}`, border
 
 type WalletRef = { walletToken?: string; code?: string };
 
+// El límite de intentos de canje e identificación responde 429 y el interceptor de
+// api/client.ts ya muestra su mensaje: aquí no se añade un segundo aviso.
+const isTooManyAttempts = (e: any) =>
+  e?.response?.status === 429 || e?.response?.data?.code === 'too_many_attempts';
+
 // Un fallo de red no puede pintarse como "no tienes nada": se dice y se ofrece reintentar.
 function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
   return (
@@ -410,6 +415,7 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
       const u = await identifyUser(ref);
       setCustomer({ userId: u.userId, name: u.name, coupons: u.coupons });
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'invalid_user_code' ? 'Código de cliente no válido o caducado' : 'No se pudo identificar al cliente');
     } finally { setBusy(false); }
   };
@@ -687,6 +693,7 @@ export function RedeemFromShelter() {
       setWalletRef(ref);
       setPreview(p);
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'invalid_wallet' ? 'QR/código no válido o caducado' : 'No se pudo leer la wallet');
     } finally {
       setBusy(false);
@@ -707,6 +714,7 @@ export function RedeemFromShelter() {
       setPreview(null); setWalletRef(null); setCode('');
       qc.invalidateQueries({ queryKey: ['patitas-me'] });
     } catch (e: any) {
+      if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'insufficient_patitas' ? 'La protectora no tiene saldo suficiente' : 'No se pudo completar el canje');
     } finally {
       setBusy(false);
