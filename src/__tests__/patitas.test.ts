@@ -205,7 +205,7 @@ describe('Patitas API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBeTruthy();
-      expect(res.body.code).toMatch(/^[A-Z2-9]{6}$/);
+      expect(res.body.code).toMatch(/^[A-Z2-9]{10}$/);
       expect(res.body.balance).toBe(50);
     }
 

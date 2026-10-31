@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import asyncHandler from '../utils/asyncHandler';
 import { assertRole } from '../middleware/assertRole';
 import { authenticate } from '../middleware/auth.middleware';
@@ -27,6 +28,23 @@ import { shelterMetrics, partnerMetrics } from '../controllers/metrics.controlle
 
 const router = Router();
 
+// Intentos fallidos de identificación y canje por partner (no por IP): frena la
+// fuerza bruta de códigos. Solo cuentan las respuestas >= 400 y el contador es
+// compartido entre identify, preview y confirm.
+const redeemAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: any) => String(req.user._id || req.user.id),
+  handler: (_req, res) =>
+    res.status(429).json({
+      code: 'too_many_attempts',
+      message: 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.',
+    }),
+});
+
 router.get('/protectoras', asyncHandler(listProtectoras));
 
 // Perfil público de presentación de una protectora (sin auth): info + contadores.
@@ -49,7 +67,7 @@ router.post('/patitas/donate', ...assertRole('tenant', 'adoptante'), asyncHandle
 
 // Identidad del usuario para ganar Patitas (QR que muestra el cliente).
 router.get('/patitas/my-code', authenticate, asyncHandler(getMyCode));
-router.post('/patitas/identify', ...assertRole('store', 'vet', 'admin'), asyncHandler(identifyUser));
+router.post('/patitas/identify', ...assertRole('store', 'vet', 'admin'), redeemAttemptLimiter, asyncHandler(identifyUser));
 
 // Generación por visita a tienda (el partner identifica al usuario).
 router.post('/patitas/earn/visit', ...assertRole('store', 'vet', 'admin'), asyncHandler(earnVisit));
@@ -78,8 +96,8 @@ router.delete('/partners/me/pos-keys/:keyId', ...assertRole('store', 'vet'), asy
 router.get('/patitas/wallet/token', ...assertRole('landlord', 'protectora'), asyncHandler(getWalletToken));
 
 // Canje partner ← protectora.
-router.post('/patitas/redeem/preview', ...assertRole('store', 'vet'), asyncHandler(redeemPreview));
-router.post('/patitas/redeem/confirm', ...assertRole('store', 'vet'), asyncHandler(redeemConfirm));
+router.post('/patitas/redeem/preview', ...assertRole('store', 'vet'), redeemAttemptLimiter, asyncHandler(redeemPreview));
+router.post('/patitas/redeem/confirm', ...assertRole('store', 'vet'), redeemAttemptLimiter, asyncHandler(redeemConfirm));
 
 // Alta manual (admin).
 router.post('/protectora/:id/patitas/add', authenticate, requireAdmin, asyncHandler(addPatitas));
