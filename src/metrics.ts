@@ -27,36 +27,40 @@ const httpRequestDurationSeconds = new Histogram({
 });
 
 /**
- * `token` y sus variantes con corchetes (`token[]`, `token[0]`, `token[a][b]`…),
- * que el parser de query de Express (qs) también entrega como `req.query.token`.
- * La clave llega ya decodificada, así que cubre `token%5B%5D` y `%74oken`.
+ * Cualquier parámetro cuyo nombre contenga `token` (sin distinguir mayúsculas),
+ * mirado tanto en bruto como descodificado. El parser de query de Express (qs)
+ * entrega como `req.query.token` muchas formas: `token`, `token[]`, `token[0]`,
+ * `[token]`, `%5Btoken%5D`, `%74oken`… Enumerarlas una a una siempre deja
+ * alguna fuera; todas ellas contienen `token` una vez descodificadas, así que
+ * se oculta ese superconjunto. Ocultar de más en un log no rompe nada.
  */
-const isTokenKey = (key: string) => key === 'token' || key.startsWith('token[');
+function isTokenKey(rawKey: string): boolean {
+  if (/token/i.test(rawKey)) return true;
+  try {
+    return /token/i.test(decodeURIComponent(rawKey.replace(/\+/g, ' ')));
+  } catch {
+    return false; // qs, si no puede descodificar, usa la clave en bruto: ya mirada arriba
+  }
+}
 
 /**
- * Sustituye el valor del parámetro `token` de la query (credencial del pedido de
- * invitado) por `[oculto]`. El resto de la URL se conserva. Si el parseo falla,
- * devuelve solo la ruta para no registrar nunca la query en bruto.
+ * Sustituye el valor de los parámetros de tipo `token` de la query (credencial
+ * del pedido de invitado) por `[oculto]`. El resto de la URL queda tal cual,
+ * byte a byte: se trocea por `&` (el separador de qs) y solo se tocan esos pares.
  */
 export function sanitizeUrl(url: string): string {
   const q = url.indexOf('?');
   if (q === -1) return url;
   const path = url.slice(0, q);
-  try {
-    const params = new URLSearchParams(url.slice(q + 1));
-    let found = false;
-    params.forEach((_value, key) => {
-      if (isTokenKey(key)) found = true;
-    });
-    if (!found) return url;
-    const rewritten = new URLSearchParams();
-    params.forEach((value, key) => {
-      rewritten.append(key, isTokenKey(key) ? '[oculto]' : value);
-    });
-    return `${path}?${rewritten.toString()}`;
-  } catch {
-    return path;
-  }
+  let found = false;
+  const parts = url.slice(q + 1).split('&').map(part => {
+    const eq = part.indexOf('=');
+    const rawKey = eq === -1 ? part : part.slice(0, eq);
+    if (!isTokenKey(rawKey)) return part;
+    found = true;
+    return `${rawKey}=[oculto]`;
+  });
+  return found ? `${path}?${parts.join('&')}` : url;
 }
 
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction) {
