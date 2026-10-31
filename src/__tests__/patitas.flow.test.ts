@@ -8,6 +8,7 @@ let mongo: MongoMemoryServer | undefined;
 let User: any;
 let Coupon: any;
 let Verification: any;
+let signUserToken: (userId: string) => string;
 
 beforeAll(async () => {
   mongo = await startMongoMemoryServer();
@@ -21,6 +22,7 @@ beforeAll(async () => {
   User = (await import('../models/user.model')).User;
   Coupon = (await import('../models/coupon.model')).Coupon;
   Verification = (await import('../models/verification.model')).Verification;
+  signUserToken = (await import('../utils/patitas')).signUserToken;
 });
 
 afterAll(async () => {
@@ -73,11 +75,13 @@ describe('Flujo de Patitas (moneda de impacto)', () => {
   });
 
   it('genera Patitas por visita y respeta el rate-limit', async () => {
-    const first = await request(app).post('/api/patitas/earn/visit').set(storeH).send({ userId: tenantId }).expect(200);
+    // La visita exige prueba de presencia (QR/código): se manda el userToken del QR.
+    const userToken = signUserToken(tenantId);
+    const first = await request(app).post('/api/patitas/earn/visit').set(storeH).send({ userToken }).expect(200);
     expect(first.body.earned).toBe(5);
     expect(await balance(tenantId)).toBe(5);
     // segunda visita inmediata: bloqueada
-    await request(app).post('/api/patitas/earn/visit').set(storeH).send({ userId: tenantId }).expect(429);
+    await request(app).post('/api/patitas/earn/visit').set(storeH).send({ userToken }).expect(429);
   });
 
   it('el usuario dona Patitas a la protectora', async () => {
