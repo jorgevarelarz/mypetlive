@@ -27,6 +27,13 @@ const httpRequestDurationSeconds = new Histogram({
 });
 
 /**
+ * `token` y sus variantes con corchetes (`token[]`, `token[0]`, `token[a][b]`…),
+ * que el parser de query de Express (qs) también entrega como `req.query.token`.
+ * La clave llega ya decodificada, así que cubre `token%5B%5D` y `%74oken`.
+ */
+const isTokenKey = (key: string) => key === 'token' || key.startsWith('token[');
+
+/**
  * Sustituye el valor del parámetro `token` de la query (credencial del pedido de
  * invitado) por `[oculto]`. El resto de la URL se conserva. Si el parseo falla,
  * devuelve solo la ruta para no registrar nunca la query en bruto.
@@ -37,10 +44,14 @@ export function sanitizeUrl(url: string): string {
   const path = url.slice(0, q);
   try {
     const params = new URLSearchParams(url.slice(q + 1));
-    if (!params.has('token')) return url;
+    let found = false;
+    params.forEach((_value, key) => {
+      if (isTokenKey(key)) found = true;
+    });
+    if (!found) return url;
     const rewritten = new URLSearchParams();
     params.forEach((value, key) => {
-      rewritten.append(key, key === 'token' ? '[oculto]' : value);
+      rewritten.append(key, isTokenKey(key) ? '[oculto]' : value);
     });
     return `${path}?${rewritten.toString()}`;
   } catch {

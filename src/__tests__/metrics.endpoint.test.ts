@@ -52,6 +52,54 @@ describe('log HTTP sin el token de invitado', () => {
     expect(out).toContain('ok=1');
   });
 
+  it('no deja en el log las variantes de token con corchetes (que Express lee como req.query.token)', async () => {
+    const { log, output } = captureLogger();
+    const childSpy = jest
+      .spyOn(logger, 'child')
+      .mockImplementation(((bindings: any, opts?: any) => log.child(bindings, opts)) as any);
+    const mini = express();
+    mini.use(requestId);
+    mini.use(metricsMiddleware);
+    const vistos: unknown[] = [];
+    mini.get('/pedido/:id', (req, res) => {
+      vistos.push(req.query.token);
+      res.status(200).json({ ok: true });
+    });
+
+    const urls = [
+      '/pedido/1?ok=1&token[]=secretoA',
+      '/pedido/1?ok=1&token[0]=secretoB',
+      '/pedido/1?ok=1&token%5B%5D=secretoC',
+      '/pedido/1?ok=1&token%5b0%5d=secretoD',
+      '/pedido/1?ok=1&%74oken=secretoE',
+    ];
+    try {
+      for (const url of urls) {
+        await request(mini).get(url).expect(200);
+      }
+      await new Promise((r) => setImmediate(r));
+    } finally {
+      childSpy.mockRestore();
+    }
+
+    // Express sí las interpreta como el token del pedido.
+    expect(vistos.map((v) => String(v))).toEqual(['secretoA', 'secretoB', 'secretoC', 'secretoD', 'secretoE']);
+
+    const out = output();
+    expect(out).toContain('"type":"http"');
+    expect(out).not.toMatch(/secreto[A-E]/);
+    expect(out).toContain('oculto');
+    expect(out).toContain('ok=1');
+  });
+
+  it('sanitizeUrl oculta token con corchetes y deja otros parámetros parecidos', () => {
+    expect(sanitizeUrl('/x?token[]=s1&ok=1')).not.toContain('s1');
+    expect(sanitizeUrl('/x?token[0]=s2&token[1]=s3')).not.toMatch(/s2|s3/);
+    expect(sanitizeUrl('/x?token%5B%5D=s4')).not.toContain('s4');
+    expect(sanitizeUrl('/x?token[a][b]=s5')).not.toContain('s5');
+    expect(sanitizeUrl('/x?tokens=1&mytoken=2')).toBe('/x?tokens=1&mytoken=2');
+  });
+
   it('sanitizeUrl deja intactas las URLs sin token', () => {
     expect(sanitizeUrl('/health')).toBe('/health');
     expect(sanitizeUrl('/x?ok=1')).toBe('/x?ok=1');
