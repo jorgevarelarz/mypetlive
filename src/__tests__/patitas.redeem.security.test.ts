@@ -98,6 +98,35 @@ describe('Seguridad del canje de Patitas por código de wallet', () => {
     expect(await balance(shelterId)).toBe(20);
   });
 
+  it('dos confirm simultáneos con el mismo código solo canjean una vez', async () => {
+    const PatitaTxn = (await import('../models/patitaTxn.model')).PatitaTxn;
+    const shelterId = await createShelter(100);
+    const storeId = await createStore();
+    const code = await walletCode(shelterId);
+
+    const confirm = () =>
+      request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ code, amount: 20 });
+    const responses = await Promise.all([confirm(), confirm()]);
+    const statuses = responses.map(r => r.status).sort();
+    expect(statuses).toEqual([200, 400]);
+    expect(responses.find(r => r.status === 400)!.body.error).toBe('invalid_wallet');
+    expect(await balance(shelterId)).toBe(80);
+    expect(await PatitaTxn.countDocuments({ type: 'redeem', shelterId })).toBe(1);
+  });
+
+  it('un canje con importe no válido no consume el código', async () => {
+    const shelterId = await createShelter(30);
+    const storeId = await createStore();
+    const code = await walletCode(shelterId);
+
+    const failed = await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ code, amount: 0 });
+    expect(failed.status).toBe(400);
+    expect(failed.body.error).toBe('invalid_amount');
+
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ code, amount: 10 }).expect(200);
+    expect(await balance(shelterId)).toBe(20);
+  });
+
   it('preview no consume el código', async () => {
     const shelterId = await createShelter(50);
     const storeId = await createStore();

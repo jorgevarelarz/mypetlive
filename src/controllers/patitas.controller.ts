@@ -486,31 +486,42 @@ export async function redeemConfirm(req: Request, res: Response) {
   if (!resolved) return res.status(400).json({ error: 'invalid_wallet' });
   const { shelterId, viaCode } = resolved;
 
-  const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
-  if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
-    return res.status(404).json({ error: 'protectora_not_found' });
-  }
-
-  // Lo comprometido en citas del vet no se puede canjear en un partner: si no,
-  // la reserva no serviría de nada y el vet volvería a quedarse sin cobrar.
-  const spendable = availablePatitas(shelter as any);
-  const rawAmount = (req.body || {}).amount;
-  const amount = rawAmount === 'all' ? spendable : Math.round(Number(rawAmount));
-  if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
-
-  // Débito atómico de la protectora (solo si tiene disponible suficiente).
-  const debited = await User.findOneAndUpdate(
-    {
-      _id: shelterId,
-      $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
-    },
-    { $inc: { patitas: -amount } },
-    { new: true },
-  ).select('patitas');
-  if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: spendable });
-  // El código corto vale para un solo canje: se invalida tras el débito correcto
-  // (no antes, para que un canje fallido no lo queme) y antes de pagar.
+  // El código corto vale para un solo canje. Se reserva aquí, de forma síncrona y
+  // antes del primer await, para que dos confirm en paralelo no lo usen a la vez;
+  // si el canje no llega a debitar, se devuelve al almacén y sigue sirviendo.
+  const claimedEntry = viaCode ? walletCodeStore.get(viaCode) : undefined;
   if (viaCode) walletCodeStore.delete(viaCode);
+  let debited: any = null;
+  let shelter: any;
+  let amount = 0;
+  try {
+    shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
+    if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
+      return res.status(404).json({ error: 'protectora_not_found' });
+    }
+
+    // Lo comprometido en citas del vet no se puede canjear en un partner: si no,
+    // la reserva no serviría de nada y el vet volvería a quedarse sin cobrar.
+    const spendable = availablePatitas(shelter as any);
+    const rawAmount = (req.body || {}).amount;
+    amount = rawAmount === 'all' ? spendable : Math.round(Number(rawAmount));
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
+
+    // Débito atómico de la protectora (solo si tiene disponible suficiente).
+    debited = await User.findOneAndUpdate(
+      {
+        _id: shelterId,
+        $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
+      },
+      { $inc: { patitas: -amount } },
+      { new: true },
+    ).select('patitas');
+    if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: spendable });
+  } finally {
+    // Sin débito (protectora no válida, importe no válido, saldo insuficiente o
+    // error): el código no se ha consumido y se restaura.
+    if (!debited && viaCode && claimedEntry) walletCodeStore.set(viaCode, claimedEntry);
+  }
 
   const valueEur = eurFromPatitas(amount);
   const code = genRedeemCode();
