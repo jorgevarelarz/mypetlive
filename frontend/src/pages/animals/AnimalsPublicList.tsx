@@ -226,6 +226,10 @@ export default function AnimalsPublicList() {
               <Heart size={16} fill={favorites.ids.length ? MPL.coral : 'none'} color={favorites.ids.length ? MPL.coral : 'currentColor'} />
               Favoritos{favorites.ids.length ? ` · ${favorites.ids.length}` : ''}
             </Link>
+            {/* Animales que alguien ha encontrado y que buscan a su familia. */}
+            <Link to="/encontrados" className="catalog-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 12, border: `1.5px solid ${MPL.border}`, background: '#fff', fontWeight: 800, fontSize: 14, color: MPL.ink, textDecoration: 'none' }}>
+              🔎 Encontrados
+            </Link>
           </div>
 
           {/* Lo primero que se elige: qué animal. Tarjetas con su dibujo; al

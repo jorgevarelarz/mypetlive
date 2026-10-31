@@ -14,6 +14,10 @@ const SEGMENT_LABEL: Record<string, string> = {
   '/buscar-casa/nuevo': 'Publicar',
   '/buscar-casa/elegir': 'Publicar otro',
   '/adoptions': 'Solicitudes',
+  '/buscar-casa/encontrado': 'Encontrado',
+  '/buscar-casa/encontrado/nuevo': 'Publicar',
+  '/encontrados': 'Animales encontrados',
+  '/acogida': 'Acogida',
 };
 
 function labelFor(path: string): string {

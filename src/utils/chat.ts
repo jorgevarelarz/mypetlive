@@ -3,6 +3,7 @@ import Message from '../models/message.model';
 import { Adoption } from '../models/adoption.model';
 import { Animal } from '../models/animal.model';
 import { VetAppointment } from '../models/vetAppointment.model';
+import { FoundAnimal, FoundClaim } from '../models/foundAnimal.model';
 import { User } from '../models/user.model';
 import logger from './logger';
 
@@ -38,6 +39,17 @@ async function resolve(kind: string, refId: string): Promise<Resolved> {
     const vetId = String(appt.vetId);
     const ownerId = String(appt.userId);
     return { participants: [ownerId, vetId], meta: { appointmentId: refId, vetId, ownerId } };
+  }
+  if (kind === 'found_claim') {
+    const claim: any = await FoundClaim.findById(refId).lean();
+    if (!claim) throw new ChatError('Claim not found', 404);
+    return { participants: [claim.claimantId, claim.finderId], meta: { foundId: claim.foundId, claimantId: claim.claimantId, finderId: claim.finderId } };
+  }
+  if (kind === 'foster') {
+    const found: any = await FoundAnimal.findById(refId).select('finderId foster').lean();
+    if (!found?.foster?.shelterId) throw new ChatError('Foster not found', 404);
+    const finderId = String(found.finderId);
+    return { participants: [finderId, found.foster.shelterId], meta: { foundId: refId, finderId, shelterId: found.foster.shelterId } };
   }
   throw new ChatError('Invalid kind', 400);
 }
@@ -131,7 +143,12 @@ export async function summarize(convs: IConversation[] | any[], userId: string) 
   const others = convs.map(c => c.participants.find((p: string) => p !== userId) || c.participants[0]);
   const adoptionIds = convs.filter(c => c.kind === 'adoption').map(c => c.refId);
   const apptIds = convs.filter(c => c.kind === 'vet_appointment').map(c => c.refId);
+  const foundIds = convs.filter(c => c.kind === 'found_claim' || c.kind === 'foster').map(c => c.meta?.foundId || c.refId);
 
+  const founds: any[] = foundIds.length
+    ? await FoundAnimal.find({ _id: { $in: foundIds } }).select('name species images status foster animalId').lean()
+    : [];
+  const foundMap = new Map(founds.map((f: any) => [String(f._id), f]));
   const [users, adoptions, appts, lastMsgs] = await Promise.all([
     User.find({ _id: { $in: others } }).select('name role profile.orgName profile.avatarUrl deletedAt').lean(),
     Adoption.find({ _id: { $in: adoptionIds } }).select('animalId status visit').lean(),
@@ -175,6 +192,21 @@ export async function summarize(convs: IConversation[] | any[], userId: string) 
         role: c.meta?.shelterId === userId ? 'shelter' : 'adopter',
         // Cesión de un particular: se cierra con contrato, no aprobando.
         cession: Boolean(animal?.cession),
+      };
+    } else if (c.kind === 'found_claim' || c.kind === 'foster') {
+      const f: any = foundMap.get(String(c.meta?.foundId || c.refId));
+      // Animal encontrado: aún no es un Animal (no tiene ficha), así que la
+      // foto y el nombre salen del propio registro de «encontrado».
+      const SP: Record<string, string> = { dog: 'Perro', cat: 'Gato', rabbit: 'Conejo', bird: 'Ave', ferret: 'Hurón' };
+      animal = f ? { _id: f._id, name: f.name || `${SP[f.species] || 'Animal'} encontrado`, images: f.images, species: f.species } : undefined;
+      context = {
+        type: c.kind === 'foster' ? 'foster' : 'found',
+        foundId: String(c.meta?.foundId || c.refId),
+        status: f?.status,
+        animalId: f?.animalId,
+        fosterAccepted: Boolean(f?.foster?.acceptedAt),
+        fosterSigned: Boolean(f?.foster?.signatures?.length),
+        role: c.meta?.finderId === userId ? 'finder' : c.kind === 'foster' ? 'shelter' : 'claimant',
       };
     } else {
       const ap: any = apptMap.get(String(c.refId));

@@ -8,6 +8,7 @@ import {
 } from '../../api/rehome';
 import OpenChatButton from '../../components/chat/OpenChatButton';
 import { MPL, MPL_FONT_DISPLAY, speciesLabel } from '../../styles/mypetlive';
+import { listMyFound } from '../../api/found';
 import { toAbsoluteUrl } from '../../utils/media';
 
 // «Buscar casa a un animal»: solo para particulares que el admin ha activado.
@@ -33,10 +34,10 @@ export function PathChooser() {
         <span style={{ width: 48, height: 48, borderRadius: 14, background: MPL.teal100, display: 'grid', placeItems: 'center', fontSize: 24, flex: 'none' }}>🏠</span>
         <span><strong style={{ display: 'block', fontSize: 16 }}>Es mío</strong><span style={{ color: MPL.muted, fontSize: 13.5 }}>Por ejemplo, la camada de tu gata. Lo cedes gratis, con contrato.</span></span>
       </button>
-      <div style={{ ...opt, cursor: 'default', opacity: .65 }}>
+      <button type="button" style={opt} onClick={() => nav('/buscar-casa/encontrado/nuevo')}>
         <span style={{ width: 48, height: 48, borderRadius: 14, background: MPL.gold100, display: 'grid', placeItems: 'center', fontSize: 24, flex: 'none' }}>🔎</span>
-        <span><strong style={{ display: 'block', fontSize: 16 }}>Lo he encontrado <span style={{ fontSize: 12, color: MPL.goldDark, background: MPL.gold100, borderRadius: 999, padding: '2px 8px', marginLeft: 4 }}>Muy pronto</span></strong><span style={{ color: MPL.muted, fontSize: 13.5 }}>Primero buscamos a su familia y luego una protectora que lo acoja.</span></span>
-      </div>
+        <span><strong style={{ display: 'block', fontSize: 16 }}>Lo he encontrado</strong><span style={{ color: MPL.muted, fontSize: 13.5 }}>Primero buscamos a su familia. Si no aparece, una protectora lo registra sin llevárselo, y puedes quedártelo.</span></span>
+      </button>
       <div style={{ ...card, fontSize: 13.5, color: MPL.muted }}>
         En ningún caso se puede cobrar por un animal. Si es una protectora quien lo da, se llama adopción; si lo das tú, es una cesión.
       </div>
@@ -134,8 +135,11 @@ export default function RehomePage() {
   const qc = useQueryClient();
   const statusQ = useQuery({ queryKey: ['rehome-status'], queryFn: getRehomeStatus });
   const listQ = useQuery({ queryKey: ['rehome-mine'], queryFn: listMyRehome, enabled: statusQ.data === true });
+  const foundQ = useQuery({ queryKey: ['found-mine'], queryFn: listMyFound, enabled: statusQ.data === true });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['rehome-mine'] }); };
   const items = listQ.data || [];
+  const found = foundQ.data || [];
+  const FOUND_STATUS: Record<string, string> = { buscando: 'Buscando a su familia', acogida_pedida: 'Ayuda pedida a una protectora', en_acogida: 'En acogida', reunido: 'Con su familia', retirado: 'Retirado' };
 
   return (
     <div style={{ display: 'grid', gap: 18, padding: 'clamp(14px, 4vw, 24px)', maxWidth: 720 }}>
@@ -147,13 +151,23 @@ export default function RehomePage() {
         <div style={{ color: MPL.muted }}>Cargando…</div>
       ) : !statusQ.data ? (
         <div style={card}>Esta opción solo está disponible para algunas cuentas. Si quieres usarla, escríbenos a info@mypetlive.es.</div>
-      ) : listQ.isLoading ? (
+      ) : listQ.isLoading || foundQ.isLoading ? (
         <div style={{ color: MPL.muted }}>Cargando…</div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && found.length === 0 ? (
         <PathChooser />
       ) : (
         <>
           <Link to="/buscar-casa/elegir" style={{ ...btn(true), justifySelf: 'start', background: MPL.coral, padding: '11px 18px' }}>Publicar otro animal</Link>
+          {found.map(f => (
+            <Link key={f._id} to={`/buscar-casa/encontrado/${f._id}`} style={{ ...card, display: 'flex', gap: 12, alignItems: 'center', color: MPL.ink, textDecoration: 'none' }}>
+              <div style={{ width: 64, height: 64, borderRadius: 16, overflow: 'hidden', background: MPL.panel, flex: 'none' }}>{f.images[0] && <img src={toAbsoluteUrl(f.images[0])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 17 }}>{f.name || `${speciesLabel(f.species)} encontrado`} <span style={{ fontSize: 12, color: MPL.goldDark, background: MPL.gold100, borderRadius: 999, padding: '2px 8px' }}>Encontrado</span></div>
+                <div style={{ color: MPL.muted, fontSize: 13.5 }}>{FOUND_STATUS[f.status]}{f.blockers?.length && f.status === 'buscando' ? ' · faltan pasos' : ''}</div>
+              </div>
+              <span style={{ color: MPL.tealDark, fontWeight: 800 }}>›</span>
+            </Link>
+          ))}
           {items.map(a => <ListingCard key={a._id} a={a} onDone={refresh} />)}
         </>
       )}

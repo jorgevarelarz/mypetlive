@@ -3,7 +3,9 @@ import { Schema, model, Document } from 'mongoose';
 // Conversación de dos personas sobre algo concreto: una solicitud de adopción
 // (adoptante ↔ protectora) o una cita veterinaria (dueño ↔ veterinario). Una
 // por cosa: `kind` + `refId` es único.
-export const CONVERSATION_KINDS = ['adoption', 'vet_appointment'] as const;
+// found_claim: alguien cree que un animal encontrado es suyo (con quien lo encontró).
+// foster: quien encontró un animal pide acogida a una protectora.
+export const CONVERSATION_KINDS = ['adoption', 'vet_appointment', 'found_claim', 'foster'] as const;
 export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
 
 export interface IConversation extends Document {

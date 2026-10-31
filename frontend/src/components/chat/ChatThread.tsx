@@ -8,6 +8,7 @@ import {
   type ConversationSummary, type Message,
 } from '../../api/chat';
 import { acceptAdoptionVisit } from '../../api/adoptions';
+import { acceptFoster, foundError, rejectFoster } from '../../api/found';
 import { uploadImage } from '../../api/uploads';
 import { useAuth } from '../../context/AuthContext';
 import { MPL } from '../../styles/mypetlive';
@@ -26,9 +27,62 @@ const isTouch = () => typeof window !== 'undefined' && window.matchMedia?.('(poi
 
 /** Enlace a la página de Citas con la cita o visita resaltada. */
 function citasLink(conv: ConversationSummary) {
-  return conv.context.type === 'adoption'
-    ? `/citas?visita=${conv.context.adoptionId}`
-    : `/citas?cita=${conv.context.appointmentId}`;
+  const c = conv.context;
+  if (c.type === 'adoption') return `/citas?visita=${c.adoptionId}`;
+  if (c.type === 'vet_appointment') return `/citas?cita=${c.appointmentId}`;
+  return '/citas';
+}
+
+/** Franja de arriba de un animal encontrado: qué es y a dónde lleva. */
+function foundHeader(c: Extract<ConversationSummary['context'], { type: 'found' | 'foster' }>) {
+  if (c.type === 'found') {
+    return c.role === 'finder'
+      ? { text: 'Cree que es suyo', link: `/buscar-casa/encontrado/${c.foundId}`, label: 'Ver pasos ›' }
+      : { text: 'Animal encontrado', link: `/encontrados/${c.foundId}`, label: 'Ver ficha ›' };
+  }
+  if (c.role === 'finder') return { text: 'Ayuda de una protectora', link: c.fosterAccepted ? `/acogida/${c.foundId}` : `/buscar-casa/encontrado/${c.foundId}`, label: c.fosterAccepted ? 'Ver acuerdo ›' : 'Ver pasos ›' };
+  return { text: 'Animal encontrado: piden ayuda', link: c.fosterAccepted ? `/acogida/${c.foundId}` : `/encontrados/${c.foundId}`, label: c.fosterAccepted ? 'Ver acuerdo ›' : 'Ver ficha ›' };
+}
+
+/** Tarjetas de un animal encontrado y su acogida. La protectora responde desde aquí. */
+function FosterCard({ m, conv, onChanged }: { m: Message; conv: ConversationSummary; onChanged: () => void }) {
+  const [busy, setBusy] = React.useState(false);
+  const c = conv.context;
+  if (c.type !== 'foster') return <div className="mpl-sys">{m.body}</div>;
+  const code = m.systemCode || '';
+  const respond = async (accept: boolean) => {
+    if (!window.confirm(accept ? '¿Aceptáis? El animal sigue en su casa; vosotros lo registráis y firmáis su adopción.' : '¿Seguro que no podéis? Podrá pedírselo a otra protectora.')) return;
+    setBusy(true);
+    try { await (accept ? acceptFoster(c.foundId) : rejectFoster(c.foundId)); toast.success(accept ? 'Aceptada' : 'Respondido'); onChanged(); }
+    catch (e) { toast.error(foundError(e)); } finally { setBusy(false); }
+  };
+  const pendingForShelter = code === 'foster.requested' && c.role === 'shelter' && c.status === 'acogida_pedida' && !c.fosterAccepted;
+  const signForFinder = code === 'foster.accepted' && c.role === 'finder' && !c.fosterSigned;
+  const keep = Boolean(m.payload?.keep);
+  return (
+    <div className="mpl-card" style={{ borderTop: `4px solid ${code === 'foster.requested' ? MPL.gold : MPL.teal}` }}>
+      <div style={{ fontWeight: 800, fontSize: 14.5 }}>
+        {code === 'foster.requested' ? '🏠 Piden ayuda con un animal encontrado' : code === 'foster.accepted' ? '✅ Acogida aceptada' : '📄 Acuerdo de acogida firmado'}
+      </div>
+      <div style={{ color: MPL.muted, fontSize: 13.5, marginTop: 4 }}>{m.body}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+        {pendingForShelter && (
+          <>
+            <CardButton primary onClick={() => respond(true)} disabled={busy}>Aceptar</CardButton>
+            <CardButton onClick={() => respond(false)} disabled={busy}>No podemos</CardButton>
+          </>
+        )}
+        {code === 'foster.requested' && c.role === 'finder' && !c.fosterAccepted && c.status === 'acogida_pedida' && (
+          <span style={{ fontSize: 13, color: MPL.muted, alignSelf: 'center' }}>Esperando respuesta de la protectora.</span>
+        )}
+        {code === 'foster.requested' && <CardButton to={`/encontrados/${c.foundId}`}>Ver ficha</CardButton>}
+        {code === 'foster.accepted' && <CardButton primary={signForFinder} to={`/acogida/${c.foundId}`}>{signForFinder ? 'Firmar el acuerdo' : 'Ver el acuerdo'}</CardButton>}
+        {code === 'foster.signed' && c.role === 'shelter' && <CardButton primary to={keep ? '/landlord/adoptions' : '/landlord/animals'}>{keep ? 'Ver su adopción' : 'Ver en Mis animales'}</CardButton>}
+        {code === 'foster.signed' && <CardButton to={`/acogida/${c.foundId}`}>Ver el acuerdo</CardButton>}
+      </div>
+      <div style={{ textAlign: 'right', fontSize: 11, color: MPL.muted, marginTop: 4 }}>{timeOf(m.createdAt)}</div>
+    </div>
+  );
 }
 
 function CardButton({ to, onClick, primary, children, disabled }: { to?: string; onClick?: () => void; primary?: boolean; children: React.ReactNode; disabled?: boolean }) {
@@ -46,7 +100,7 @@ function CardButton({ to, onClick, primary, children, disabled }: { to?: string;
  * con su fecha y un botón a Citas; el resto, como una línea centrada.
  */
 function SystemCard({
-  m, conv, isLatestVisit, onAccept, onAskOther, onChangeVisit, accepting,
+  m, conv, isLatestVisit, onAccept, onAskOther, onChangeVisit, accepting, onChanged,
 }: {
   m: Message;
   conv: ConversationSummary;
@@ -55,6 +109,7 @@ function SystemCard({
   onAskOther: () => void;
   onChangeVisit: () => void;
   accepting: boolean;
+  onChanged: () => void;
 }) {
   const code = m.systemCode || '';
   const p = m.payload || {};
@@ -99,6 +154,10 @@ function SystemCard({
         <div style={{ textAlign: 'right', fontSize: 11, color: MPL.muted, marginTop: 4 }}>{timeOf(m.createdAt)}</div>
       </div>
     );
+  }
+
+  if (['foster.requested', 'foster.accepted', 'foster.signed'].includes(code)) {
+    return <FosterCard m={m} conv={conv} onChanged={onChanged} />;
   }
 
   // Cesión entre particulares: contrato listo, firmas y cambio de titular del chip.
@@ -343,10 +402,11 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
   // Las visitas son de protectoras; en una cesión lo que hay es un contrato.
   const canProposeVisit = ctx?.type === 'adoption' && ctx.role === 'shelter' && !isCession && !CLOSED_ADOPTION.includes(ctx.status || '');
   const hasContract = isCession && ['preaprobada', 'aprobada'].includes(ctx?.status || '');
-  const detailLink = ctx?.type === 'adoption'
+  const fh = ctx && (ctx.type === 'found' || ctx.type === 'foster') ? foundHeader(ctx) : null;
+  const detailLink = fh ? fh.link : ctx?.type === 'adoption'
     ? hasContract ? `/contratos/${ctx.adoptionId}` : isCession && ctx.role === 'shelter' ? '/buscar-casa' : `/adoptions/${ctx.adoptionId}`
     : ctx ? citasLink(conv!) : '#';
-  const detailLabel = ctx?.type === 'adoption' ? (hasContract ? 'Ver contrato ›' : 'Ver solicitud ›') : 'Ver cita ›';
+  const detailLabel = fh ? fh.label : ctx?.type === 'adoption' ? (hasContract ? 'Ver contrato ›' : 'Ver solicitud ›') : 'Ver cita ›';
 
   return (
     <div className="mpl-thread">
@@ -371,7 +431,8 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
                 ? ctx.visit?.status === 'aceptada' && new Date(ctx.visit.at).getTime() > Date.now()
                   ? `Visita: ${whenLong(ctx.visit.at)}`
                   : isCession ? 'Cesión entre particulares' : 'Solicitud de adopción'
-                : ctx?.at ? `${ctx.service || 'Cita'} · ${whenLong(ctx.at)}` : 'Cita veterinaria'}
+                : fh ? fh.text
+                  : ctx?.type === 'vet_appointment' && ctx.at ? `${ctx.service || 'Cita'} · ${whenLong(ctx.at)}` : 'Cita veterinaria'}
             </span>
             {canProposeVisit && (
               <button type="button" onClick={() => setVisitDialog(true)} className="mpl-link-btn">
@@ -408,6 +469,7 @@ export default function ChatThread({ conversationId, onBack }: { conversationId:
                     onAccept={acceptVisit}
                     onAskOther={askOther}
                     onChangeVisit={() => setVisitDialog(true)}
+                    onChanged={() => { void convQ.refetch(); tickRef.current(); }}
                     accepting={accepting}
                   />
                 )

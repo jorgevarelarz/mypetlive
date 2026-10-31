@@ -1,6 +1,6 @@
 import { api as axios } from '../api/client';
 
-export type ConversationKind = 'adoption' | 'vet_appointment';
+export type ConversationKind = 'adoption' | 'vet_appointment' | 'found_claim' | 'foster';
 
 export type AdoptionVisit = {
   at: string;
@@ -11,6 +11,8 @@ export type AdoptionVisit = {
 
 export type ConversationContext =
   | { type: 'adoption'; adoptionId: string; status?: string; visit: AdoptionVisit | null; role: 'shelter' | 'adopter'; cession?: boolean }
+  | { type: 'found'; foundId: string; status?: string; animalId?: string; fosterAccepted: boolean; fosterSigned: boolean; role: 'finder' | 'claimant' }
+  | { type: 'foster'; foundId: string; status?: string; animalId?: string; fosterAccepted: boolean; fosterSigned: boolean; role: 'finder' | 'shelter' }
   | { type: 'vet_appointment'; appointmentId: string; status?: string; at?: string; service?: string; reason?: string; role: 'vet' | 'owner' };
 
 /** Conversación tal y como la pinta la bandeja: con quién, sobre qué y el último mensaje. */

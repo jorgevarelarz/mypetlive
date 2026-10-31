@@ -329,6 +329,11 @@ const animalSchema = new Schema(
         { _id: false },
       ),
     },
+    // Animal encontrado por un particular que lo cuida como casa de acogida de
+    // esta protectora (FoundAnimal → acogida aceptada).
+    foster: {
+      type: new Schema({ userId: String, since: Date, foundId: String }, { _id: false }),
+    },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   },
   { timestamps: true },

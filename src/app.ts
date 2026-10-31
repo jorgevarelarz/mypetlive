@@ -21,6 +21,7 @@ import notifyRoutes from './routes/notify.routes';
 import userRoutes from './routes/user.routes';
 import chatRoutes from './routes/chat.routes';
 import rehomeRoutes from './routes/rehome.routes';
+import foundRoutes from './routes/found.routes';
 import paymentsRoutes from './routes/payments.routes';
 import connectRoutes from './routes/connect.routes';
 import adminRoutes from './routes/admin.routes';
@@ -249,6 +250,7 @@ app.use('/api/notify', notifyRoutes);
 // SEO / Open Graph (público, sin auth): /sitemap.xml y /og/animals/:id (para bots).
 app.use(seoRoutes);
 app.use('/api/animals', animalRoutes);
+app.use('/api/found', foundRoutes);
 // Chapas físicas del collar. Montado aquí arriba (zona pública) porque
 // resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
 // tiene cuenta. Cada ruta pone su propio `authenticate` donde hace falta.

@@ -40,6 +40,10 @@ import MessagesPage from "./pages/messages/MessagesPage";
 import RehomePage, { PathChooser } from "./pages/rehome/RehomePage";
 import RehomeNewPage from "./pages/rehome/RehomeNewPage";
 import ContractPage from "./pages/rehome/ContractPage";
+import FoundNewPage from "./pages/rehome/FoundNewPage";
+import FoundStepsPage from "./pages/rehome/FoundStepsPage";
+import FosterAgreementPage from "./pages/rehome/FosterAgreementPage";
+import { FoundListPage, FoundDetailPage } from "./pages/found/FoundPublicPages";
 import ConfirmEmailChange from "./pages/profile/ConfirmEmailChange";
 import AnimalsPublicList from "./pages/animals/AnimalsPublicList";
 import AnimalDetail from "./pages/animals/AnimalDetail";
@@ -165,6 +169,11 @@ export default function AppRoutes() {
               <Route path="/buscar-casa/elegir" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><div style={{ padding: 'clamp(14px, 4vw, 24px)', maxWidth: 720 }}><PathChooser /></div></RoleGuard></ProtectedRoute>} />
               <Route path="/buscar-casa/nuevo" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><RehomeNewPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/contratos/:adoptionId" element={<ProtectedRoute><ContractPage /></ProtectedRoute>} />
+              <Route path="/buscar-casa/encontrado/nuevo" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><FoundNewPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/buscar-casa/encontrado/:id" element={<ProtectedRoute><RoleGuard roles={["tenant"]}><FoundStepsPage /></RoleGuard></ProtectedRoute>} />
+              <Route path="/acogida/:id" element={<ProtectedRoute><FosterAgreementPage /></ProtectedRoute>} />
+              <Route path="/encontrados" element={<FoundListPage />} />
+              <Route path="/encontrados/:id" element={<FoundDetailPage />} />
               <Route path="/mensajes" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
               <Route path="/mensajes/:conversationId" element={<ProtectedRoute><RoleGuard roles={["tenant", "landlord", "vet"]}><MessagesPage /></RoleGuard></ProtectedRoute>} />
 

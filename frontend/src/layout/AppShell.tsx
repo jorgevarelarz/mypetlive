@@ -451,7 +451,7 @@ export default function AppShell() {
         <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 md:py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
           <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pt-6 pb-24 md:pt-0 md:pb-0">
-            {!pathname.startsWith('/mensajes') && !pathname.startsWith('/contratos') && <div className="mpl-crumbs"><Breadcrumbs /></div>}
+            {!pathname.startsWith('/mensajes') && !pathname.startsWith('/contratos') && !pathname.startsWith('/acogida') && !pathname.startsWith('/buscar-casa/encontrado') && <div className="mpl-crumbs"><Breadcrumbs /></div>}
             <Outlet />
           </main>
         </div>

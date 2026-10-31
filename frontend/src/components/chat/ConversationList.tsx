@@ -34,6 +34,8 @@ export function contextLine(conv: ConversationSummary): string {
     if (ctx.cession) return ctx.role === 'shelter' ? `Quiere a ${name}` : `Traspaso de ${name}`;
     return ctx.role === 'shelter' ? `Quiere adoptar a ${name}` : `Solicitud por ${name}`;
   }
+  if (ctx.type === 'found') return ctx.role === 'finder' ? `Cree que ${name ? `«${name}»` : 'el animal'} es suyo` : `Animal encontrado${name ? `: «${name}»` : ''}`;
+  if (ctx.type === 'foster') return ctx.role === 'shelter' ? `Pide ayuda con un animal encontrado` : `Acogida${name ? ` de «${name}»` : ''}`;
   const when = ctx.at
     ? new Date(ctx.at).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'short', day: 'numeric', month: 'short' })
     : '';
@@ -43,10 +45,21 @@ export function contextLine(conv: ConversationSummary): string {
 // En una cesión no hay «preaprobada» ni «aprobada»: hay alguien elegido y un animal cedido.
 const CESSION_LABEL: Record<string, string> = { preaprobada: 'Elegida', aprobada: 'Cedido' };
 
+const FOSTER_PILL: Record<string, { label: string; bg: string; color: string }> = {
+  acogida_pedida: { label: 'Pendiente', bg: MPL.gold100, color: MPL.goldDark },
+  en_acogida: { label: 'En acogida', bg: MPL.teal100, color: MPL.tealDark },
+};
+
 export function statusPillOf(conv: ConversationSummary) {
-  if (conv.context.type !== 'adoption') return VET_PILL[conv.context.status || ''] || null;
+  const c = conv.context;
+  if (c.type === 'found') return null;
+  if (c.type === 'foster') {
+    if (c.status === 'acogida_pedida' && c.fosterAccepted) return { label: 'Aceptada', bg: MPL.teal100, color: MPL.tealDark };
+    return FOSTER_PILL[c.status || ''] || null;
+  }
+  if (c.type !== 'adoption') return VET_PILL[c.status || ''] || null;
   const pill = adoptionPill(conv.context.status);
-  const relabel = conv.context.cession && CESSION_LABEL[conv.context.status || ''];
+  const relabel = c.cession && CESSION_LABEL[c.status || ''];
   return pill && relabel ? { ...pill, label: relabel } : pill;
 }
 
