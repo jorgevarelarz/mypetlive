@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 import logger from './utils/logger';
@@ -25,6 +26,28 @@ const httpRequestDurationSeconds = new Histogram({
   registers: [metricsRegistry],
 });
 
+/**
+ * Sustituye el valor del parámetro `token` de la query (credencial del pedido de
+ * invitado) por `[oculto]`. El resto de la URL se conserva. Si el parseo falla,
+ * devuelve solo la ruta para no registrar nunca la query en bruto.
+ */
+export function sanitizeUrl(url: string): string {
+  const q = url.indexOf('?');
+  if (q === -1) return url;
+  const path = url.slice(0, q);
+  try {
+    const params = new URLSearchParams(url.slice(q + 1));
+    if (!params.has('token')) return url;
+    const rewritten = new URLSearchParams();
+    params.forEach((value, key) => {
+      rewritten.append(key, key === 'token' ? '[oculto]' : value);
+    });
+    return `${path}?${rewritten.toString()}`;
+  } catch {
+    return path;
+  }
+}
+
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction) {
   const method = (req.method || 'GET').toUpperCase();
   const started = process.hrtime.bigint();
@@ -43,7 +66,7 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
       type: 'http',
       requestId,
       method,
-      url: req.originalUrl,
+      url: sanitizeUrl(req.originalUrl),
       status,
       responseTimeMs: durationSeconds * 1000,
     });
@@ -52,7 +75,24 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-export async function metricsHandler(_req: Request, res: Response) {
+function hasValidMetricsToken(req: Request): boolean {
+  const expected = process.env.METRICS_TOKEN;
+  if (!expected) return false;
+  const header = req.headers.authorization;
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;
+  const given = Buffer.from(header.slice('Bearer '.length));
+  const wanted = Buffer.from(expected);
+  if (given.length !== wanted.length) return false;
+  return crypto.timingSafeEqual(given, wanted);
+}
+
+export async function metricsHandler(req: Request, res: Response) {
+  // 404 tanto si no está configurado como si la credencial falta o no coincide:
+  // así no se revela que el endpoint existe.
+  if (!hasValidMetricsToken(req)) {
+    res.status(404).end();
+    return;
+  }
   res.setHeader('Content-Type', metricsRegistry.contentType);
   res.end(await metricsRegistry.metrics());
 }
