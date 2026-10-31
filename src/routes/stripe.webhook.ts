@@ -77,165 +77,181 @@ r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req,
     return res.status(500).json({ error: 'idempotency_store_failed' });
   }
 
-  switch (event.type) {
-    case 'payment_intent.succeeded': {
-      const intent = event.data.object as Stripe.PaymentIntent;
-      const contractId = intent.metadata?.contractId as string | undefined;
-      const offerId = intent.metadata?.offerId as string | undefined;
-      if (contractId) {
-        await Contract.findByIdAndUpdate(contractId, { lastPaidAt: new Date(), paymentRef: intent.id });
-      }
-      if (offerId) {
-        const offer = await ServiceOffer.findById(offerId);
-        if (offer) {
-          const fee = calcServiceFee(offer.amount);
-          offer.status = 'confirmed';
-          await offer.save();
-          if (offer.appointmentId) {
-            await Appointment.findByIdAndUpdate(offer.appointmentId, { status: 'confirmed' });
-          }
-          const conv = await Conversation.findById(offer.conversationId);
-          if (conv) {
-            await publishSystem(conv.id, 'PAYMENT_SUCCEEDED', { offerId });
-            if (conv.meta?.contractId) {
-              const contractConvId = await ensureContractConversation(conv.meta.contractId);
-              await publishSystem(contractConvId, 'APPOINTMENT_CONFIRMED', { offerId });
-            }
-          }
-          if (offer.appointmentId) {
-            const appointment = await Appointment.findById(offer.appointmentId).lean();
-            if (appointment) {
-              let aConv = await Conversation.findOne({ kind: 'appointment', refId: offer.appointmentId });
-              if (!aConv) {
-                aConv = await Conversation.create({ kind: 'appointment', refId: offer.appointmentId, participants: [appointment.proId, appointment.tenantId], meta: { appointmentId: offer.appointmentId, proUserId: appointment.proId, tenantId: appointment.tenantId, ownerId: appointment.ownerId, ticketId: appointment.ticketId }, unread: {} });
-              }
-              await publishSystem(aConv.id, 'APPOINTMENT_CONFIRMED', { offerId });
-            }
-          }
-          await PlatformEarning.create({ kind: 'service', offerId, proId: offer.proId, serviceKey: offer.serviceKey, gross: fee.gross, fee: fee.fee, netToPro: fee.netToPro, currency: offer.currency, paymentRef: intent.id });
-        }
-      }
-      break;
-    }
-    case 'payment_intent.payment_failed': {
-      const intent = event.data.object as Stripe.PaymentIntent;
-      const offerId = intent.metadata?.offerId as string | undefined;
-      if (offerId) {
-        const offer = await ServiceOffer.findById(offerId);
-        if (offer) {
-          await publishSystem(offer.conversationId, 'PAYMENT_FAILED', { offerId });
-        }
-      }
-      break;
-    }
-    case 'payment_intent.processing': {
-      const intent = event.data.object as Stripe.PaymentIntent;
-      const offerId = intent.metadata?.offerId as string | undefined;
-      if (offerId) {
-        const offer = await ServiceOffer.findById(offerId);
-        if (offer) {
-          await publishSystem(offer.conversationId, 'PAYMENT_PROCESSING', { offerId });
-        }
-      }
-      break;
-    }
-    case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.metadata?.donation === 'true') {
-        const amount = session.amount_total || 0;
-        const paymentRef = session.payment_intent as string | undefined;
-        const { Donation } = await import('../models/donation.model');
-        const donation = await Donation.findOneAndUpdate(
-          { sessionId: session.id },
-          { status: 'completed', paymentRef, amount, currency: session.currency?.toLowerCase() || 'eur' },
-          { new: true }
-        );
-        // Patitas de impacto por la donación (1 Patita por euro) a la protectora del animal.
-        try {
-          const animalId = donation?.animalId || (session.metadata?.animalId as string | undefined);
-          const patitas = Math.max(0, Math.round(amount / 100));
-          if (animalId && Types.ObjectId.isValid(animalId) && patitas > 0) {
-            const { Animal } = await import('../models/animal.model');
-            const animal = await Animal.findById(animalId).select('shelter').lean();
-            if (animal?.shelter) {
-              const { User } = await import('../models/user.model');
-              const { PatitaLog } = await import('../models/patitaLog.model');
-              await User.updateOne(
-                { _id: animal.shelter, role: { $in: ['landlord', 'protectora'] } },
-                { $inc: { patitas } },
-              );
-              const donorId = donation?.userId && Types.ObjectId.isValid(String(donation.userId))
-                ? String(donation.userId)
-                : String(animal.shelter);
-              await PatitaLog.create({
-                shelterId: animal.shelter,
-                userId: donorId,
-                animalId,
-                amount: patitas,
-                source: 'donation',
-                concept: 'Donación directa',
-              });
-            }
-          }
-        } catch (err: any) {
-          logger.error({ err, sessionId: session.id }, 'Error generando Patitas por donación');
-        }
-      } else if (session.metadata?.sponsoredCouponId) {
-        // Placement destacado pagado por el partner: activar el cupón como sponsored.
-        const couponId = session.metadata.sponsoredCouponId;
-        if (couponId && Types.ObjectId.isValid(couponId)) {
-          const { Coupon } = await import('../models/coupon.model');
-          await Coupon.findByIdAndUpdate(couponId, {
-            sponsored: true,
-            sponsorshipStatus: 'active',
-            sponsorPaymentRef: (session.payment_intent as string) || session.id,
-          });
-        }
-      } else if (session.metadata?.marketplaceOrderId) {
-        // Pedido del marketplace: hasta aquí no hay venta, solo una intención.
-        // `fulfillPaidOrder` es idempotente porque Stripe reintenta y descontar
-        // el stock dos veces dejaría sin producto a alguien que sí lo tenía.
-        const { fulfillPaidOrder } = await import('../controllers/marketplace.controller');
-        const paymentRef = (session.payment_intent as string) || session.id;
-        const fulfilled = await fulfillPaidOrder(session.metadata.marketplaceOrderId, paymentRef);
-        if (!fulfilled) {
-          // No es un error: es el reintento de un pedido ya cobrado, o uno que
-          // alguien canceló antes. Se registra para no confundirlo con un cobro
-          // perdido si algún día falta un pedido.
-          logger.info(
-            { sessionId: session.id, orderId: session.metadata.marketplaceOrderId },
-            'Webhook de marketplace sin efecto (pedido ya procesado o no pendiente)',
-          );
-        }
-      } else if (session.metadata?.deposit === 'true') {
-        const contractId = session.metadata?.contractId;
+  // Si el procesado falla, se desmarca el evento y se responde 500: así el
+  // reintento de Stripe lo procesa de verdad en vez de recibir `duplicate`.
+  try {
+    switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        const contractId = intent.metadata?.contractId as string | undefined;
+        const offerId = intent.metadata?.offerId as string | undefined;
         if (contractId) {
-          const contract = await Contract.findById(contractId);
-          if (contract && !contract.depositPaid) {
-            contract.depositPaid = true;
-            contract.depositPaidAt = new Date();
-            await contract.save();
-            await recordContractHistory(contract.id, 'depositPaid', 'Fianza pagada a través de la plataforma');
+          await Contract.findByIdAndUpdate(contractId, { lastPaidAt: new Date(), paymentRef: intent.id });
+        }
+        if (offerId) {
+          const offer = await ServiceOffer.findById(offerId);
+          if (offer) {
+            const fee = calcServiceFee(offer.amount);
+            offer.status = 'confirmed';
+            await offer.save();
+            if (offer.appointmentId) {
+              await Appointment.findByIdAndUpdate(offer.appointmentId, { status: 'confirmed' });
+            }
+            const conv = await Conversation.findById(offer.conversationId);
+            if (conv) {
+              await publishSystem(conv.id, 'PAYMENT_SUCCEEDED', { offerId });
+              if (conv.meta?.contractId) {
+                const contractConvId = await ensureContractConversation(conv.meta.contractId);
+                await publishSystem(contractConvId, 'APPOINTMENT_CONFIRMED', { offerId });
+              }
+            }
+            if (offer.appointmentId) {
+              const appointment = await Appointment.findById(offer.appointmentId).lean();
+              if (appointment) {
+                let aConv = await Conversation.findOne({ kind: 'appointment', refId: offer.appointmentId });
+                if (!aConv) {
+                  aConv = await Conversation.create({ kind: 'appointment', refId: offer.appointmentId, participants: [appointment.proId, appointment.tenantId], meta: { appointmentId: offer.appointmentId, proUserId: appointment.proId, tenantId: appointment.tenantId, ownerId: appointment.ownerId, ticketId: appointment.ticketId }, unread: {} });
+                }
+                await publishSystem(aConv.id, 'APPOINTMENT_CONFIRMED', { offerId });
+              }
+            }
+            await PlatformEarning.create({ kind: 'service', offerId, proId: offer.proId, serviceKey: offer.serviceKey, gross: fee.gross, fee: fee.fee, netToPro: fee.netToPro, currency: offer.currency, paymentRef: intent.id });
           }
         }
+        break;
       }
-      break;
-    }
-    // Checkout sin pagar que Stripe da por caducado (24h por defecto). Solo
-    // aplica al marketplace: es el único flujo que reserva existencias antes
-    // de cobrar, así que es el único que necesita liberarlas si nadie paga.
-    case 'checkout.session.expired': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.metadata?.marketplaceOrderId) {
-        const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
-        await releaseExpiredOrder(session.metadata.marketplaceOrderId);
+      case 'payment_intent.payment_failed': {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        const offerId = intent.metadata?.offerId as string | undefined;
+        if (offerId) {
+          const offer = await ServiceOffer.findById(offerId);
+          if (offer) {
+            await publishSystem(offer.conversationId, 'PAYMENT_FAILED', { offerId });
+          }
+        }
+        break;
       }
-      break;
+      case 'payment_intent.processing': {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        const offerId = intent.metadata?.offerId as string | undefined;
+        if (offerId) {
+          const offer = await ServiceOffer.findById(offerId);
+          if (offer) {
+            await publishSystem(offer.conversationId, 'PAYMENT_PROCESSING', { offerId });
+          }
+        }
+        break;
+      }
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.donation === 'true') {
+          const amount = session.amount_total || 0;
+          const paymentRef = session.payment_intent as string | undefined;
+          const { Donation } = await import('../models/donation.model');
+          const donation = await Donation.findOneAndUpdate(
+            { sessionId: session.id },
+            { status: 'completed', paymentRef, amount, currency: session.currency?.toLowerCase() || 'eur' },
+            { new: true }
+          );
+          // Patitas de impacto por la donación (1 Patita por euro) a la protectora del animal.
+          try {
+            const animalId = donation?.animalId || (session.metadata?.animalId as string | undefined);
+            const patitas = Math.max(0, Math.round(amount / 100));
+            if (animalId && Types.ObjectId.isValid(animalId) && patitas > 0) {
+              const { Animal } = await import('../models/animal.model');
+              const animal = await Animal.findById(animalId).select('shelter').lean();
+              if (animal?.shelter) {
+                const { User } = await import('../models/user.model');
+                const { PatitaLog } = await import('../models/patitaLog.model');
+                await User.updateOne(
+                  { _id: animal.shelter, role: { $in: ['landlord', 'protectora'] } },
+                  { $inc: { patitas } },
+                );
+                const donorId = donation?.userId && Types.ObjectId.isValid(String(donation.userId))
+                  ? String(donation.userId)
+                  : String(animal.shelter);
+                await PatitaLog.create({
+                  shelterId: animal.shelter,
+                  userId: donorId,
+                  animalId,
+                  amount: patitas,
+                  source: 'donation',
+                  concept: 'Donación directa',
+                });
+              }
+            }
+          } catch (err: any) {
+            logger.error({ err, sessionId: session.id }, 'Error generando Patitas por donación');
+          }
+        } else if (session.metadata?.sponsoredCouponId) {
+          // Placement destacado pagado por el partner: activar el cupón como sponsored.
+          const couponId = session.metadata.sponsoredCouponId;
+          if (couponId && Types.ObjectId.isValid(couponId)) {
+            const { Coupon } = await import('../models/coupon.model');
+            await Coupon.findByIdAndUpdate(couponId, {
+              sponsored: true,
+              sponsorshipStatus: 'active',
+              sponsorPaymentRef: (session.payment_intent as string) || session.id,
+            });
+          }
+        } else if (session.metadata?.marketplaceOrderId) {
+          // Pedido del marketplace: hasta aquí no hay venta, solo una intención.
+          // `fulfillPaidOrder` es idempotente porque Stripe reintenta y descontar
+          // el stock dos veces dejaría sin producto a alguien que sí lo tenía.
+          const { fulfillPaidOrder } = await import('../controllers/marketplace.controller');
+          const paymentRef = (session.payment_intent as string) || session.id;
+          const fulfilled = await fulfillPaidOrder(session.metadata.marketplaceOrderId, paymentRef);
+          if (!fulfilled) {
+            // No es un error: es el reintento de un pedido ya cobrado, o uno que
+            // alguien canceló antes. Se registra para no confundirlo con un cobro
+            // perdido si algún día falta un pedido.
+            logger.info(
+              { sessionId: session.id, orderId: session.metadata.marketplaceOrderId },
+              'Webhook de marketplace sin efecto (pedido ya procesado o no pendiente)',
+            );
+          }
+        } else if (session.metadata?.deposit === 'true') {
+          const contractId = session.metadata?.contractId;
+          if (contractId) {
+            const contract = await Contract.findById(contractId);
+            if (contract && !contract.depositPaid) {
+              contract.depositPaid = true;
+              contract.depositPaidAt = new Date();
+              await contract.save();
+              await recordContractHistory(contract.id, 'depositPaid', 'Fianza pagada a través de la plataforma');
+            }
+          }
+        }
+        break;
+      }
+      // Checkout sin pagar que Stripe da por caducado (24h por defecto). Solo
+      // aplica al marketplace: es el único flujo que reserva existencias antes
+      // de cobrar, así que es el único que necesita liberarlas si nadie paga.
+      case 'checkout.session.expired': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.marketplaceOrderId) {
+          const { releaseExpiredOrder } = await import('../controllers/marketplace.controller');
+          await releaseExpiredOrder(session.metadata.marketplaceOrderId);
+        }
+        break;
+      }
+      case 'charge.refunded': {
+        // handle refund record logic
+        break;
+      }
     }
-    case 'charge.refunded': {
-      // handle refund record logic
-      break;
+  } catch (err: any) {
+    try {
+      await ProcessedEvent.deleteOne({ provider: 'stripe', eventId: event.id });
+    } catch {
+      logger.error({ eventId: event.id }, 'No se pudo desmarcar el evento de Stripe tras fallar su procesado');
     }
+    // Sin `err` ni el objeto del evento: los errores de Mongo pueden llevar datos de documentos.
+    logger.error(
+      { eventId: event.id, eventType: event.type, errName: err?.name, errCode: err?.code },
+      'Error procesando webhook de Stripe; se devuelve 500 para que reintente',
+    );
+    return res.status(500).json({ error: 'webhook_processing_failed' });
   }
 
   res.json({ received: true });
