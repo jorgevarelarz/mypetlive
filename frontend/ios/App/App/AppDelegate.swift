@@ -46,4 +46,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    // Notificaciones (APNs): el token del iPhone va al plugin @capacitor/push-notifications,
+    // que lo entrega a la web (utils/nativePush) para registrarlo en el servidor.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+}
+
+// Controlador de la vista web. Vive aquí y no en su propio fichero para no
+// tener que tocar el proyecto de Xcode. El gesto de deslizar para volver ya no
+// es nativo: el UIScreenEdgePanGestureRecognizer que había aquí no llegaba a
+// dispararse (el contenido se desplaza dentro de #root) y ahora lo detecta la
+// web (NativeBackListener en BackButton.tsx). Se desactiva el de WebKit para
+// que no vuelva dos veces.
+class MainViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        webView?.allowsBackForwardNavigationGestures = false
+    }
 }

@@ -7,6 +7,7 @@ const LINKS: Array<{ to: string; label: string; desc: string; accent: string }> 
   { to: '/admin/animals', label: 'Animales', desc: 'Fichas publicadas en la plataforma', accent: MPL.coral },
   { to: '/admin/adoptions', label: 'Adopciones', desc: 'Solicitudes y su estado', accent: MPL.olive },
   { to: '/admin/coupons', label: 'Cupones', desc: 'Crea y gestiona cupones de partners', accent: MPL.gold },
+  { to: '/admin/settlements', label: 'Liquidaciones', desc: 'Comisiones de partners mes a mes', accent: MPL.olive },
   { to: '/admin/reports', label: 'Reportes', desc: 'Métricas del ecosistema', accent: MPL.teal },
 ];
 

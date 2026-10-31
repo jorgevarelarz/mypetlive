@@ -21,7 +21,8 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@rental-app/types": ["../packages/types"]
+      "@rental-app/types": ["../packages/types"],
+      "@rental-app/types/*": ["../packages/types/*"]
     }
   },
   "include": [

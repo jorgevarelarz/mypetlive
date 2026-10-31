@@ -2,6 +2,8 @@ services:
   mongo:
     image: mongo:6
     container_name: mypetlive_mongo
+    # replica set de un nodo: las transacciones (tienda, Patitas) lo exigen
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
@@ -23,9 +25,11 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: development
-      ALLOW_UNVERIFIED: "true"
+      # Señal explícita de producción: NODE_ENV se queda en development por los mocks,
+      # pero los bypasses de verificación (ALLOW_UNVERIFIED, /dev/verify) miran APP_ENV.
+      APP_ENV: production
       PORT: "3000"
-      MONGO_URI: "mongodb://mongo:27017/mypetlive"
+      MONGO_URI: "mongodb://mongo:27017/mypetlive?replicaSet=rs0"
       JWT_SECRET: "${JWT_SECRET}"
       CORS_ORIGIN: "${CORS_ORIGIN}"
       VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY}"
@@ -46,32 +50,44 @@ services:
       STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
       STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
       DONATION_FEE_PERCENT: "${DONATION_FEE_PERCENT}"
+      # Topes de importe (utils/limits.ts). Sin valor caen a los defaults del
+      # código: 1 €/2.000 € por donación y 3.000 € por venta.
+      DONATION_MIN_EUR: "${DONATION_MIN_EUR}"
+      DONATION_MAX_EUR: "${DONATION_MAX_EUR}"
+      SALE_MAX_EUR: "${SALE_MAX_EUR}"
       PATITA_VALUE_EUR: "${PATITA_VALUE_EUR}"
       VISIT_PATITAS_REWARD: "${VISIT_PATITAS_REWARD}"
       COUPON_PATITAS_REWARD_DEFAULT: "${COUPON_PATITAS_REWARD_DEFAULT}"
+      # Notificaciones de la app de iPhone (APNs). Clave «Valeris APNs» del equipo
+      # CDR8TRU744 (vale para todas las apps; el topic elige cuál).
+      APNS_KEY_ID: "6VNVM69KQF"
+      APNS_TEAM_ID: "CDR8TRU744"
+      APNS_KEY_PATH: "/app/secrets/apns.p8"
+      APNS_TOPIC: "es.mypetlive.app"
+      # Acceso con Google (client ids web e iOS, separados por comas) y Apple (bundle id de la app).
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      APPLE_CLIENT_ID: "${APPLE_CLIENT_ID}"
     # Las fotos subidas (uploads) viven en el host: sin este volumen se pierden
     # cada vez que se recrea el contenedor.
     volumes:
       - ./uploads:/app/uploads
+      - ./secrets/apns.p8:/app/secrets/apns.p8:ro
     # Mapea el hostname del cert de mail al host para que el contenedor alcance
     # el Postfix de Plesk a través del gateway de la red Docker.
     extra_hosts:
       - "panel.valerisstudio.es:host-gateway"
+    # Solo accesible desde el host: Apache (Plesk) hace de proxy inverso a
+    # 127.0.0.1:3000 (ver vhost.conf). Publicar en 0.0.0.0 exponía la API en
+    # HTTP plano a internet saltándose el firewall de Plesk (Docker inserta su
+    # propio DNAT por debajo del INPUT DROP), y con trust proxy=1 permitía
+    # falsear X-Forwarded-For y anular el rate-limit.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     networks: [mypetlive]
 
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-      args:
-        REACT_APP_API_URL: "${REACT_APP_API_URL}"
-    container_name: mypetlive_web
-    restart: unless-stopped
-    ports:
-      - "8080:80"
-    networks: [mypetlive]
+  # El contenedor `web` (mypetlive_web) servía un build viejo del frontend en
+  # 0.0.0.0:8080. Está obsoleto: el frontend en producción se sirve desde el
+  # docroot de Plesk (/var/www/vhosts/mypetlive.es/httpdocs), no desde aquí.
 
 networks:
   mypetlive:

@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { PushSubscription } from '../models/pushSubscription.model';
 import logger from './logger';
+import { sendApnsToUser } from './apns';
 
 const configured = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 if (configured) {
@@ -16,11 +17,13 @@ export const pushConfigured = configured;
 export type PushPayload = { title: string; body?: string; url?: string };
 
 /**
- * Envía una notificación push a todos los dispositivos suscritos del usuario.
+ * Envía una notificación push a todos los dispositivos del usuario: los
+ * navegadores/PWA suscritos (Web Push) y los iPhone con la app (APNs).
  * Nunca lanza: los fallos se registran y las suscripciones caducadas (404/410)
  * se eliminan para no reintentarlas.
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+  await sendApnsToUser(userId, payload);
   if (!configured) {
     logger.info({ userId, title: payload.title }, '[Mock push]');
     return;

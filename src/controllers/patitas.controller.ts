@@ -14,13 +14,16 @@ import {
   verifyUserToken,
   transferPatitas,
   earnForUser,
+  availablePatitas,
 } from '../utils/patitas';
+import { SALE_MAX_EUR, eurAmountError } from '../utils/limits';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
 import { UserCode } from '../models/userCode.model';
-import { recordSale, recordIdentification } from '../utils/sales';
+import { recordSale, recordIdentification, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
+import { partnerStatements } from '../utils/settlement';
 import { canReceiveDonations } from '../utils/shelterVerification';
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
@@ -49,7 +52,7 @@ function shortCode(): string {
 }
 
 export async function listProtectoras(_req: Request, res: Response) {
-  const items = await User.find({ role: { $in: ['landlord', 'protectora'] } })
+  const items = await User.find({ role: { $in: ['landlord', 'protectora'] }, deletedAt: null })
     .select('name')
     .sort({ name: 1 })
     .lean();
@@ -114,9 +117,13 @@ async function fetchHistory(meId: string, opts: { limit?: number; type?: string 
 export async function getMyPatitas(req: Request, res: Response) {
   const me = actorId(req);
   if (!me) return res.status(401).json({ error: 'unauthorized' });
-  const user = await User.findById(me).select('patitas role profile.autoDonate').lean();
+  const user = await User.findById(me).select('patitas patitasLocked role profile.autoDonate').lean();
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   const balance = (user as any).patitas || 0;
+  // Comprometidas y aún no gastadas (citas del vet pagadas con Patitas): siguen
+  // en el saldo pero no se pueden gastar en otra cosa.
+  const locked = (user as any).patitasLocked || 0;
+  const available = availablePatitas(user as any);
 
   // Total histórico generado (solo para usuarios).
   const earnedAgg = await PatitaTxn.aggregate([
@@ -127,6 +134,8 @@ export async function getMyPatitas(req: Request, res: Response) {
 
   res.json({
     balance,
+    locked,
+    available,
     valueEur: eurFromPatitas(balance),
     patitaValueEur: PATITA_VALUE_EUR,
     totalGenerated,
@@ -140,6 +149,61 @@ export async function getMyPatitasHistory(req: Request, res: Response) {
   if (!me) return res.status(401).json({ error: 'unauthorized' });
   const { type, limit } = req.query as any;
   res.json({ items: await fetchHistory(me, { type: type ? String(type) : undefined, limit: Number(limit) || 50 }) });
+}
+
+// GET /api/patitas/me/impact — «Qué se ha hecho con tus Patitas» en la
+// pantalla de Patitas: de dónde salieron, a qué protectoras fueron y en qué
+// las ha usado cada una. Lo último es lo que ha canjeado la protectora en
+// total: una vez donadas, las Patitas de todos se juntan en su saldo.
+export async function getMyPatitasImpact(req: Request, res: Response) {
+  const me = actorId(req);
+  if (!me) return res.status(401).json({ error: 'unauthorized' });
+  const meId = new Types.ObjectId(me);
+
+  const [earnedBySource, donatedByShelter] = await Promise.all([
+    PatitaTxn.aggregate([
+      { $match: { userId: meId, type: 'earn' } },
+      { $group: { _id: '$source', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    PatitaTxn.aggregate([
+      { $match: { userId: meId, type: 'donate', shelterId: { $ne: null } } },
+      {
+        $group: {
+          _id: '$shelterId',
+          amount: { $sum: '$amount' },
+          auto: { $sum: { $cond: [{ $eq: ['$concept', 'Auto-donación'] }, '$amount', 0] } },
+          last: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { amount: -1 } },
+    ]),
+  ]);
+
+  const shelterIds = donatedByShelter.map((d: any) => d._id);
+  const [shelters, uses] = await Promise.all([
+    User.find({ _id: { $in: shelterIds } }).select('name').lean(),
+    PatitaTxn.aggregate([
+      { $match: { type: 'redeem', shelterId: { $in: shelterIds } } },
+      { $group: { _id: { shelter: '$shelterId', concept: '$concept' }, amount: { $sum: '$amount' }, valueEur: { $sum: '$valueEur' } } },
+    ]),
+  ]);
+  const nameOf = new Map(shelters.map((u: any) => [String(u._id), u.name]));
+
+  res.json({
+    patitaValueEur: PATITA_VALUE_EUR,
+    earned: earnedBySource.map((e: any) => ({ source: e._id || 'otros', amount: e.amount, count: e.count })),
+    shelters: donatedByShelter.map((d: any) => ({
+      id: String(d._id),
+      name: nameOf.get(String(d._id)) || 'Protectora',
+      donated: d.amount,
+      donatedEur: eurFromPatitas(d.amount),
+      auto: d.auto,
+      last: d.last,
+      uses: uses
+        .filter((u: any) => String(u._id.shelter) === String(d._id))
+        .map((u: any) => ({ concept: u._id.concept || 'Canje', amount: u.amount, valueEur: u.valueEur || eurFromPatitas(u.amount) })),
+    })),
+  });
 }
 
 // Donación manual de Patitas de un usuario a una protectora.
@@ -238,7 +302,10 @@ export async function identifyUser(req: Request, res: Response) {
 
 // POST /api/patitas/sales — el partner registra una venta con el código del cliente:
 // importe del ticket + líneas opcionales (producto/cantidad/precio). Deja calculada
-// la comisión de plataforma y da al cliente Patitas proporcionales al importe.
+// la comisión de plataforma, da al cliente Patitas proporcionales al importe y, si
+// el body trae couponIds o applyCoupons:true, consume esos cupones como parte de la
+// misma venta (mismo criterio que el TPV: POST /api/pos/sales) — el cupón se activa
+// solo, sin un paso aparte de "aplicar cupón".
 export async function registerSale(req: Request, res: Response) {
   const partner: any = (req as any).user;
   const partnerId = actorId(req);
@@ -251,16 +318,23 @@ export async function registerSale(req: Request, res: Response) {
   const user = await User.findById(target).select('role');
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
+  // El tope anterior eran 100.000 €, que no es un tope: un dedazo (1000 en vez
+  // de 100) se registraba y generaba Patitas y comisión sobre dinero inexistente.
   const amountEur = Number(req.body?.amountEur);
-  if (!Number.isFinite(amountEur) || amountEur <= 0 || amountEur > 100000) {
-    return res.status(400).json({ error: 'invalid_amount' });
-  }
+  const amountError = eurAmountError(amountEur, { min: 0, max: SALE_MAX_EUR });
+  if (amountError) return res.status(400).json(amountError);
 
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
   const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);
 
+  const candidates = await couponsToApplyForSale(partnerId, target, req.body);
+  const { appliedCoupons, couponPatitas } = candidates.length
+    ? await applyCouponsToSale(r.saleId, partnerId, target, candidates)
+    : { appliedCoupons: [] as any[], couponPatitas: 0 };
+
   res.status(201).json({
-    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur, patitasEarned: r.patitasEarned,
+    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur,
+    patitasEarned: r.patitasEarned + couponPatitas, appliedCoupons,
     ...(r.earn ? { balance: r.earn.balance, autoDonated: r.earn.autoDonated } : {}),
   });
 }
@@ -278,6 +352,25 @@ export async function listMySales(req: Request, res: Response) {
     { amountEur: 0, commissionEur: 0 },
   );
   res.json({ items, totals: { ...totals, count: items.length } });
+}
+
+// GET /api/patitas/sales/statements[?format=csv] — extracto mensual de liquidación
+// del partner: por cada mes con ventas, base, comisión de plataforma y estado
+// (pendiente / facturado / pagado, derivado de Sale.settlementStatus).
+export async function listMyStatements(req: Request, res: Response) {
+  const partnerId = new Types.ObjectId(actorId(req));
+  const items = await partnerStatements(partnerId);
+
+  if (String(req.query.format || '') === 'csv') {
+    const header = 'periodo;ventas;base_eur;comision_eur;estado;factura';
+    const lines = items.map(r => `${r.period};${r.sales};${r.amountEur};${r.commissionEur};${r.status};${r.invoiceRef || ''}`);
+    const csv = [header, ...lines].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="extracto-liquidacion.csv"');
+    // BOM para que Excel abra el UTF-8 con acentos correctos.
+    return res.send('\uFEFF' + csv);
+  }
+  res.json({ items });
 }
 
 // Check-in de visita a tienda: el partner identifica a un usuario y le genera Patitas.
@@ -316,11 +409,14 @@ export async function getWalletToken(req: Request, res: Response) {
   // Protectoras reales usan role 'protectora'; 'landlord' es el rol legado de
   // RentalApp que las protectoras antiguas aún conservan.
   if (!['landlord', 'protectora'].includes(user?.role)) return res.status(403).json({ error: 'only_shelters' });
-  const shelter = await User.findById(me).select('patitas');
+  const shelter = await User.findById(me).select('patitas patitasLocked');
   const token = signWalletToken(me);
   const code = shortCode();
   walletCodeStore.set(code, { shelterId: me, expiresAt: Date.now() + WALLET_CODE_TTL_MS });
-  res.json({ token, code, balance: shelter?.patitas || 0, valueEur: eurFromPatitas(shelter?.patitas || 0) });
+  // El QR que la protectora enseña al partner debe anunciar lo canjeable, no el
+  // saldo bruto: lo comprometido en citas no se puede gastar aquí.
+  const spendable = availablePatitas(shelter as any);
+  res.json({ token, code, balance: spendable, valueEur: eurFromPatitas(spendable) });
 }
 
 function resolveShelterFromBody(body: any): string | null {
@@ -342,11 +438,12 @@ export async function redeemPreview(req: Request, res: Response) {
   const shelterId = resolveShelterFromBody(req.body || {});
   if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
 
-  const shelter = await User.findById(shelterId).select('name patitas role');
+  const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
     return res.status(404).json({ error: 'protectora_not_found' });
   }
-  const available = shelter.patitas || 0;
+  // Lo que el partner ve como canjeable debe ser lo mismo que el confirm acepta.
+  const available = availablePatitas(shelter as any);
   const rawAmount = (req.body || {}).amount;
   const amount = rawAmount === 'all' || rawAmount == null ? available : Math.round(Number(rawAmount));
   res.json({
@@ -367,22 +464,28 @@ export async function redeemConfirm(req: Request, res: Response) {
   const shelterId = resolveShelterFromBody(req.body || {});
   if (!shelterId) return res.status(400).json({ error: 'invalid_wallet' });
 
-  const shelter = await User.findById(shelterId).select('name patitas role');
+  const shelter = await User.findById(shelterId).select('name patitas patitasLocked role');
   if (!shelter || !['landlord', 'protectora'].includes(String(shelter.role))) {
     return res.status(404).json({ error: 'protectora_not_found' });
   }
 
+  // Lo comprometido en citas del vet no se puede canjear en un partner: si no,
+  // la reserva no serviría de nada y el vet volvería a quedarse sin cobrar.
+  const spendable = availablePatitas(shelter as any);
   const rawAmount = (req.body || {}).amount;
-  const amount = rawAmount === 'all' ? shelter.patitas || 0 : Math.round(Number(rawAmount));
+  const amount = rawAmount === 'all' ? spendable : Math.round(Number(rawAmount));
   if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
 
-  // Débito atómico de la protectora (solo si tiene saldo suficiente).
+  // Débito atómico de la protectora (solo si tiene disponible suficiente).
   const debited = await User.findOneAndUpdate(
-    { _id: shelterId, patitas: { $gte: amount } },
+    {
+      _id: shelterId,
+      $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, amount] },
+    },
     { $inc: { patitas: -amount } },
     { new: true },
   ).select('patitas');
-  if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: shelter.patitas || 0 });
+  if (!debited) return res.status(400).json({ error: 'insufficient_patitas', available: spendable });
 
   const valueEur = eurFromPatitas(amount);
   const code = genRedeemCode();

@@ -32,6 +32,10 @@ const vetAppointmentSchema = new Schema(
     // Pago con Patitas (solo cuando agenda una protectora): coste comprometido y
     // liquidación al completar (debita a la protectora, paga € al vet, como un canje).
     patitasCost: { type: Number, default: 0, min: 0 },
+    // Si el coste quedó bloqueado en el saldo de la protectora al pedir la cita.
+    // Las citas creadas antes de existir la reserva no lo tienen, y esas se
+    // liquidan con el débito directo de siempre.
+    patitasReserved: { type: Boolean, default: false },
     patitasPaid: { type: Boolean, default: false },
     patitasCode: { type: String }, // código del PatitaTxn de canje generado
     // Recordatorio 24h antes enviado (jobs/reminders); evita reenvíos.

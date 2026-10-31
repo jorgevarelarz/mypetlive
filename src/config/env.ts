@@ -3,6 +3,7 @@ import logger from '../utils/logger';
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  APP_ENV: z.enum(['development', 'test', 'production']).optional(),
   PORT: z.string().regex(/^\d+$/).transform(Number).default('3000'),
   MONGO_URL: z.string().optional(),
   MONGO_URI: z.string().optional(),
@@ -31,8 +32,11 @@ export function loadEnv(): Env {
 
   const MONGO = e.MONGO_URL || e.MONGO_URI || '';
 
+  // APP_ENV es la señal explícita del despliegue cuando NODE_ENV no puede cambiarse.
+  const production = e.NODE_ENV === 'production' || e.APP_ENV === 'production';
+
   // Validaciones estrictas en producción
-  if (e.NODE_ENV === 'production') {
+  if (production) {
     if (!MONGO) throw new Error('MONGO_URL/MONGO_URI requerido en producción');
     if (!e.JWT_SECRET || e.JWT_SECRET.length < 16) {
       throw new Error('JWT_SECRET fuerte requerido en producción');

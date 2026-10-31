@@ -6,9 +6,16 @@ import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
-import { logAnimalEvent } from '../utils/animalEvents';
+import { sendPushToUser } from '../utils/push';
+import { formatWhen, postSystemMessage } from '../utils/chat';
+import { AnimalEvent } from '../models/animalEvent.model';
+import { withRequiredTxn, withTxnIfAvailable } from '../utils/txn';
+import { AppError } from '../utils/errors';
 import { PatitaTxn } from '../models/patitaTxn.model';
-import { eurFromPatitas, centsFromPatitas, genRedeemCode } from '../utils/patitas';
+import {
+  eurFromPatitas, centsFromPatitas, genRedeemCode,
+  lockPatitas, releasePatitas, consumeLockedPatitas, availablePatitas,
+} from '../utils/patitas';
 import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import logger from '../utils/logger';
 
@@ -22,8 +29,19 @@ function fmtDate(d?: Date | string) {
   return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
 }
 
-// Notifica por email a la parte indicada. Best-effort: nunca rompe el flujo.
-async function notify(to: string | undefined, subject: string, body: string) {
+// Notifica por email a la parte indicada y, si se pasa `push`, también a su
+// móvil (abre la agenda al tocarlo). Best-effort: nunca rompe el flujo.
+async function notify(
+  to: string | undefined,
+  subject: string,
+  body: string,
+  push?: { userId: unknown; title: string; body?: string },
+) {
+  if (push?.userId) {
+    void sendPushToUser(String(push.userId), { title: push.title, body: push.body, url: '/citas' }).catch(err =>
+      logger.error({ err }, '[vet-appointments] fallo al enviar push'),
+    );
+  }
   if (!to) return;
   try {
     await sendEmail(to, subject, body);
@@ -35,7 +53,7 @@ async function notify(to: string | undefined, subject: string, body: string) {
 // GET /api/vets — directorio público de veterinarios (para que el dueño elija).
 export async function listVets(req: Request, res: Response) {
   const { city, q } = req.query as Record<string, string>;
-  const filter: any = { role: 'vet' };
+  const filter: any = { role: 'vet', deletedAt: null };
   if (city) filter['profile.address.city'] = new RegExp(String(city).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   if (q) {
     const rx = new RegExp(String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -138,7 +156,7 @@ export async function createAppointment(req: Request, res: Response) {
   const { vetId, animalCode, reason, requestedAt, serviceName } = req.body || {};
 
   if (!vetId || !Types.ObjectId.isValid(String(vetId))) return res.status(400).json({ error: 'invalid_vet' });
-  const vet: any = await User.findOne({ _id: vetId, role: 'vet' }).select('_id profile.vet.serviceCatalog').lean();
+  const vet: any = await User.findOne({ _id: vetId, role: 'vet', deletedAt: null }).select('_id profile.vet.serviceCatalog').lean();
   if (!vet) return res.status(404).json({ error: 'vet_not_found' });
 
   const cleanReason = typeof reason === 'string' ? reason.trim() : '';
@@ -175,24 +193,40 @@ export async function createAppointment(req: Request, res: Response) {
     code = animal.code;
   }
 
-  // Pago con Patitas: solo cuando agenda una protectora (landlord). Validamos saldo
-  // ahora (la liquidación real se hace al completar la cita).
+  // Pago con Patitas: solo cuando agenda una protectora (landlord). Decidir
+  // pagar con Patitas las BLOQUEA en el acto — antes solo se comprobaba el saldo
+  // aquí y se debitaba al completar, así que gastarlo entre medias dejaba al vet
+  // sin cobrar. El bloqueo es atómico, no un "leer y luego escribir".
   let patitasCost = 0;
   if ((role === 'landlord' || role === 'admin') && req.body?.patitasCost != null) {
     const n = Number(req.body.patitasCost);
     if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_patitas_cost' });
     patitasCost = Math.round(n);
-    if (patitasCost > 0) {
-      const shelter: any = await User.findById(userId).select('patitas').lean();
-      if ((shelter?.patitas || 0) < patitasCost) {
-        return res.status(400).json({ error: 'insufficient_patitas', available: shelter?.patitas || 0 });
-      }
+  }
+  const payload = {
+    vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
+    patitasCost, patitasReserved: patitasCost > 0, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
+  };
+  let appt;
+  if (patitasCost > 0) {
+    appt = await withRequiredTxn(async session => {
+      if (!(await lockPatitas(userId, patitasCost, session))) return null;
+      const [created] = await VetAppointment.create([payload], { session });
+      return created;
+    });
+    if (!appt) {
+      const shelter = await User.findById(userId).select('patitas patitasLocked').lean();
+      return res.status(400).json({ error: 'insufficient_patitas', available: availablePatitas(shelter) });
     }
+  } else {
+    appt = await VetAppointment.create(payload);
   }
 
-  const appt = await VetAppointment.create({
-    vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
-    patitasCost, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
+  // Abre la conversación con el veterinario: la cita sale en Mensajes de los dos.
+  await postSystemMessage({
+    kind: 'vet_appointment', refId: String(appt._id), code: 'vet.requested', actorId: userId,
+    body: `Cita solicitada para el ${formatWhen(when)}${service ? `: ${service.name}` : ''}. Motivo: ${cleanReason.slice(0, 300)}`,
+    payload: { at: when, service: service?.name, reason: cleanReason.slice(0, 300) },
   });
 
   // Avisar al veterinario de la nueva solicitud.
@@ -205,6 +239,7 @@ export async function createAppointment(req: Request, res: Response) {
     'Nueva solicitud de cita en MyPetLive',
     `${(owner as any)?.name || 'Un cliente'} ha solicitado una cita para el ${fmtDate(when)}.\n` +
       `Motivo: ${cleanReason}${service ? `\nServicio: ${service.name}${service.priceEur != null ? ` (${service.priceEur} €${service.pricingType === 'fijo' ? '' : ', orientativo'})` : ' (presupuesto)'}` : ''}${code ? `\nMascota: ${code}` : ''}\n\nRevísala en tu panel de MyPetLive.`,
+    { userId: vetId, title: 'Nueva solicitud de cita', body: `${(owner as any)?.name || 'Un cliente'} pide cita para el ${fmtDate(when)}.` },
   );
 
   res.status(201).json(appt);
@@ -236,98 +271,124 @@ const VET_TRANSITIONS: Record<string, string[]> = {
 // PATCH /api/vet-appointments/:id/status
 export async function updateAppointmentStatus(req: Request, res: Response) {
   const { id: actorId, role } = actor(req);
-  const appt: any = await VetAppointment.findById(req.params.id);
-  if (!appt) return res.status(404).json({ error: 'not_found' });
-
-  const isVet = role === 'vet' && String(appt.vetId) === actorId;
-  const isOwner = String(appt.userId) === actorId;
-  const isAdmin = role === 'admin';
-  if (!isVet && !isOwner && !isAdmin) return res.status(403).json({ error: 'forbidden' });
-
+  if (!Types.ObjectId.isValid(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  const initial = await VetAppointment.findById(req.params.id).lean();
+  if (!initial) return res.status(404).json({ error: 'not_found' });
   const { status, scheduledAt, vetNotes, cancelReason } = req.body || {};
-  if (!status) return res.status(400).json({ error: 'status_required' });
+  if (typeof status !== 'string') return res.status(400).json({ error: 'status_required' });
 
-  // El dueño solo puede cancelar; el vet/admin manejan el resto de transiciones.
-  if (isOwner && !isVet && !isAdmin && status !== 'cancelled') {
-    return res.status(403).json({ error: 'owner_can_only_cancel' });
-  }
-  if (['completed', 'confirmed', 'rescheduled'].includes(status) && !(isVet || isAdmin)) {
-    return res.status(403).json({ error: 'vet_only' });
-  }
-
-  const allowed = VET_TRANSITIONS[appt.status] || [];
-  if (!allowed.includes(status)) {
-    return res.status(409).json({ error: 'invalid_transition', from: appt.status, to: status });
-  }
-
-  if (status === 'confirmed' || status === 'rescheduled') {
-    if (scheduledAt) {
-      const when = new Date(scheduledAt);
-      if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
-      appt.scheduledAt = when;
-    } else if (status === 'confirmed' && !appt.scheduledAt) {
-      // Confirmar sin nueva fecha = se acepta la propuesta del dueño.
-      appt.scheduledAt = appt.requestedAt;
-    } else if (status === 'rescheduled') {
-      return res.status(400).json({ error: 'scheduled_at_required' });
-    }
-  }
-  if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
-  if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
-
-  appt.status = status;
-  await appt.save();
-
-  // Al completar: si la protectora comprometió Patitas, se liquida (debita a la
-  // protectora y paga € al vet, gateado por Stripe — mismo modelo que el canje).
-  if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
-    const debited = await User.findOneAndUpdate(
-      { _id: appt.userId, patitas: { $gte: appt.patitasCost } },
-      { $inc: { patitas: -appt.patitasCost } },
-      { new: true },
-    ).select('patitas');
-    if (debited) {
-      const valueEur = eurFromPatitas(appt.patitasCost);
-      const code = genRedeemCode();
-      const txn: any = await PatitaTxn.create({
-        type: 'redeem', shelterId: appt.userId, partnerId: appt.vetId,
-        amount: appt.patitasCost, valueEur, code, status: 'pending_payout',
-        concept: 'Cita veterinaria',
-      });
-      let payoutStatus = 'pending_payout';
-      const vetDoc: any = await User.findById(appt.vetId).select('stripeAccountId');
-      if (isStripeConfigured() && vetDoc?.stripeAccountId) {
-        try {
-          const stripe = getStripeClient();
-          const transfer = await stripe.transfers.create({
-            amount: centsFromPatitas(appt.patitasCost), currency: 'eur',
-            destination: vetDoc.stripeAccountId,
-            metadata: { code, appointmentId: String(appt._id), patitas: String(appt.patitasCost) },
-          });
-          txn.status = 'paid'; txn.payoutRef = transfer.id; await txn.save();
-          payoutStatus = 'paid';
-        } catch (err) {
-          logger.error({ err, code }, '[vet-appointments] fallo en transfer de Patitas');
+  // Leer y validar de nuevo dentro de la transacción: dos cancelaciones o dos
+  // confirmaciones simultáneas no pueden gastar/liberar la misma reserva.
+  const transact = initial.patitasCost > 0 ? withRequiredTxn : withTxnIfAvailable;
+  let result;
+  try {
+    result = await transact(async session => {
+      const appt: any = await VetAppointment.findById(req.params.id).session(session ?? null);
+      if (!appt) throw new AppError('not_found', { status: 404 });
+      const isVet = role === 'vet' && String(appt.vetId) === actorId;
+      const isOwner = String(appt.userId) === actorId;
+      const isAdmin = role === 'admin';
+      if (!isVet && !isOwner && !isAdmin) throw new AppError('forbidden', { status: 403 });
+      if (!isVet && !isAdmin && status !== 'cancelled') throw new AppError('owner_can_only_cancel', { status: 403 });
+      const retrySettlement = status === 'completed' && appt.status === status && appt.patitasCost > 0 && !appt.patitasPaid;
+      if (!(VET_TRANSITIONS[appt.status] || []).includes(status) && !retrySettlement) {
+        throw new AppError('invalid_transition', { status: 409 });
+      }
+      if (status === 'confirmed' || status === 'rescheduled') {
+        if (scheduledAt) {
+          const when = new Date(scheduledAt);
+          if (Number.isNaN(when.getTime()) || when.getTime() < Date.now() - 60_000) throw new AppError('invalid_date', { status: 400 });
+          appt.scheduledAt = when;
+        } else if (status === 'confirmed' && !appt.scheduledAt) {
+          appt.scheduledAt = appt.requestedAt;
+        } else if (status === 'rescheduled') throw new AppError('scheduled_at_required', { status: 400 });
+      }
+      if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
+      if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
+      appt.status = status;
+      let patitasSettlementFailed = false;
+      if (status === 'cancelled' && appt.patitasReserved && !appt.patitasPaid) {
+        if (!(await releasePatitas(String(appt.userId), appt.patitasCost, session))) {
+          throw new AppError('reservation_inconsistent', { status: 409 });
+        }
+        appt.patitasReserved = false;
+        appt.payoutStatus = 'none';
+      }
+      if (status === 'completed' && appt.patitasCost > 0 && !appt.patitasPaid) {
+        const debited = appt.patitasReserved
+          ? await consumeLockedPatitas(String(appt.userId), appt.patitasCost, session)
+          : await User.findOneAndUpdate(
+              { _id: appt.userId, $expr: { $gte: [{ $subtract: [{ $ifNull: ['$patitas', 0] }, { $ifNull: ['$patitasLocked', 0] }] }, appt.patitasCost] } },
+              { $inc: { patitas: -appt.patitasCost } }, { new: true, session },
+            );
+        if (debited) {
+          const code = genRedeemCode();
+          await PatitaTxn.create([{
+            type: 'redeem', shelterId: appt.userId, partnerId: appt.vetId,
+            amount: appt.patitasCost, valueEur: eurFromPatitas(appt.patitasCost), code,
+            status: 'pending_payout', concept: 'Cita veterinaria',
+          }], { session });
+          appt.patitasReserved = false;
+          appt.patitasPaid = true;
+          appt.patitasCode = code;
+          appt.payoutStatus = 'pending_payout';
+        } else patitasSettlementFailed = true;
+      }
+      let clinicalRecordAdded = false;
+      if (!retrySettlement && status === 'completed' && req.body?.addToHistory && appt.animalCode) {
+        const animal: any = await Animal.findOne({ code: appt.animalCode }).session(session ?? null);
+        if (animal) {
+          const note = appt.vetNotes || appt.reason || 'Visita veterinaria';
+          animal.vetHistory.push({ date: appt.scheduledAt || appt.requestedAt, note });
+          await animal.save({ session });
+          await AnimalEvent.create([{ animalId: String(animal._id), code: animal.code, type: 'vet', actorId, data: { note, fromAppointment: String(appt._id) } }], { session });
+          clinicalRecordAdded = true;
         }
       }
-      appt.patitasPaid = true; appt.patitasCode = code; appt.payoutStatus = payoutStatus as any;
-      await appt.save();
-    } else {
-      logger.warn({ appt: String(appt._id) }, '[vet-appointments] saldo de Patitas insuficiente al completar');
+      await appt.save({ session });
+      return { appt, isVet, isOwner, clinicalRecordAdded, patitasSettlementFailed };
+    });
+  } catch (err) {
+    if (err instanceof AppError) return res.status(err.status).json({ error: err.message });
+    throw err;
+  }
+  const { appt, isVet, isOwner, clinicalRecordAdded, patitasSettlementFailed } = result;
+  const isAdmin = role === 'admin';
+
+  // Stripe queda fuera del callback, que Mongo puede repetir. El asiento ya
+  // existe aunque el proveedor falle; la clave impide duplicar el mismo pago.
+  if (status === 'completed' && appt.patitasPaid && appt.payoutStatus === 'pending_payout') {
+    const vetDoc = await User.findById(appt.vetId).select('stripeAccountId').lean();
+    if (isStripeConfigured() && vetDoc?.stripeAccountId) {
+      try {
+        const transfer = await getStripeClient().transfers.create({
+          amount: centsFromPatitas(appt.patitasCost), currency: 'eur', destination: vetDoc.stripeAccountId,
+          metadata: { code: appt.patitasCode, appointmentId: String(appt._id), patitas: String(appt.patitasCost) },
+        }, { idempotencyKey: `vet-appointment-${appt._id}` });
+        await withRequiredTxn(async session => {
+          await PatitaTxn.updateOne({ code: appt.patitasCode }, { status: 'paid', payoutRef: transfer.id }, { session });
+          await VetAppointment.updateOne({ _id: appt._id }, { payoutStatus: 'paid' }, { session });
+        });
+        appt.payoutStatus = 'paid';
+      } catch (err) {
+        logger.error({ err, appointmentId: String(appt._id) }, '[vet-appointments] liquidación pendiente');
+      }
     }
   }
 
-  // Al completar, el vet puede volcar la cita al historial clínico del animal.
-  let clinicalRecordAdded = false;
-  if (status === 'completed' && (isVet || isAdmin) && req.body?.addToHistory && appt.animalCode) {
-    const animal: any = await Animal.findOne({ code: appt.animalCode });
-    if (animal) {
-      const note = (appt.vetNotes && appt.vetNotes.trim()) || appt.reason || 'Visita veterinaria';
-      animal.vetHistory.push({ date: appt.scheduledAt || appt.requestedAt || new Date(), note });
-      await animal.save();
-      await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'vet', actorId, data: { note, fromAppointment: String(appt._id) } });
-      clinicalRecordAdded = true;
-    }
+  // Tarjeta en el chat de la cita (no en el reintento de liquidar: no cambia nada).
+  const CHAT_TEXT: Record<string, string> = {
+    confirmed: `Cita confirmada para el ${formatWhen(appt.scheduledAt || appt.requestedAt)}.`,
+    rescheduled: `Nueva fecha propuesta para la cita: ${formatWhen(appt.scheduledAt || appt.requestedAt)}.`,
+    completed: 'Cita completada.',
+    cancelled: `Cita cancelada.${appt.cancelReason ? ` Motivo: ${appt.cancelReason}` : ''}`,
+  };
+  if (CHAT_TEXT[status] && !(status === 'completed' && initial.status === 'completed')) {
+    await postSystemMessage({
+      kind: 'vet_appointment', refId: String(appt._id), code: `vet.${status}`, actorId,
+      body: CHAT_TEXT[status],
+      payload: { status, at: appt.scheduledAt || appt.requestedAt, ...(appt.cancelReason && status === 'cancelled' ? { reason: appt.cancelReason } : {}) },
+    });
   }
 
   // Notificar a la contraparte del cambio de estado.
@@ -345,11 +406,25 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
     // Avisar a la otra parte de quien canceló.
     const cancelledByOwner = isOwner && !isVet && !isAdmin;
     const to = cancelledByOwner ? (vetUser as any)?.email : (owner as any)?.email;
-    await notify(to, 'Cita cancelada — MyPetLive', `La cita del ${fmtDate(appt.scheduledAt || appt.requestedAt)} ha sido cancelada.${appt.cancelReason ? `\nMotivo: ${appt.cancelReason}` : ''}`);
+    const when = fmtDate(appt.scheduledAt || appt.requestedAt);
+    await notify(to, 'Cita cancelada — MyPetLive', `La cita del ${when} ha sido cancelada.${appt.cancelReason ? `\nMotivo: ${appt.cancelReason}` : ''}`, {
+      userId: cancelledByOwner ? appt.vetId : appt.userId,
+      title: 'Cita cancelada',
+      body: `La cita del ${when}${appt.cancelReason ? `. Motivo: ${appt.cancelReason}` : ''}`,
+    });
   } else if (STATUS_TEXT[status]) {
     // Confirmaciones/reprogramaciones/completar las hace el vet → avisar al dueño.
-    await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status]);
+    const PUSH_TITLE: Record<string, string> = {
+      confirmed: 'Cita confirmada ✅',
+      rescheduled: 'Nueva fecha para tu cita',
+      completed: 'Cita completada',
+    };
+    await notify((owner as any)?.email, 'Actualización de tu cita veterinaria — MyPetLive', STATUS_TEXT[status], {
+      userId: appt.userId,
+      title: PUSH_TITLE[status],
+      body: STATUS_TEXT[status],
+    });
   }
 
-  res.json({ ...appt.toObject(), clinicalRecordAdded });
+  res.json({ ...appt.toObject(), clinicalRecordAdded, patitasSettlementFailed });
 }

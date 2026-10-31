@@ -8,46 +8,39 @@ import path from 'path';
 import { purgeOldTenantProDocs } from './jobs/tenantProRetention';
 import { startReminderJobs } from './jobs/reminders';
 import logger from './utils/logger';
+import { isProduction } from './utils/env';
 
 import stripeWebhookRoutes from './routes/stripe.webhook';
 
 import authRoutes from './routes/auth.routes';
 import seoRoutes from './routes/seo.routes';
 import verificationRoutes from './routes/verification.routes';
-import identityRoutes from './routes/identity.routes';
-import propertyRoutes from './routes/property.routes';
-import clausesRoutes from './routes/clauses.routes';
 import legalRoutes from './routes/legal.routes';
 import uploadRoutes from './routes/upload.routes';
-import demoContractRoutes from './routes/demoContract.routes';
 import notifyRoutes from './routes/notify.routes';
-import postsignRouter from './routes/postsign';
-import tenantProRoutes from './routes/tenantPro.routes';
-import tenantProMeRoutes from './routes/tenantPro.me';
-import appointmentsRoutes from './routes/appointments.routes';
-import contractRoutes, { contractPublicRoutes } from './routes/contract.routes';
 import userRoutes from './routes/user.routes';
-import proRoutes from './routes/pro.routes';
-import ticketRoutes from './routes/ticket.routes';
-import reviewRoutes from './routes/review.routes';
 import chatRoutes from './routes/chat.routes';
-import contractPaymentsRoutes from './routes/contract.payments.routes';
+import rehomeRoutes from './routes/rehome.routes';
+import foundRoutes from './routes/found.routes';
 import paymentsRoutes from './routes/payments.routes';
 import connectRoutes from './routes/connect.routes';
-import signatureRoutes from './routes/signature.routes';
-import serviceOffersRoutes from './routes/serviceOffers.routes';
 import adminRoutes from './routes/admin.routes';
 import adminEarningsRoutes from './routes/admin.earnings.routes';
 import adminSalesRoutes from './routes/admin.sales.routes';
+import adminMetricsRoutes from './routes/admin.metrics.routes';
 import posRoutes from './routes/pos.routes';
 import { posAuth } from './middleware/posAuth';
 import asyncHandlerApp from './utils/asyncHandler';
 import adminTenantProRoutes from './routes/admin.tenantPro.routes';
-import applicationRoutes from './routes/application.routes';
-import colivingRoutes from './routes/coliving.routes';
 import animalRoutes from './routes/animal.routes';
+import tagRoutes from './routes/tag.routes';
+import catalogRoutes from './routes/catalog.routes';
+import adminTagsRoutes from './routes/admin.tags.routes';
 import adoptionRoutes from './routes/adoption.routes';
+import shoppingRoutes from './routes/shopping.routes';
+import marketplaceRoutes from './routes/marketplace.routes';
 import welcomeRoutes from './routes/welcome.routes';
+import publicStatsRoutes from './routes/publicStats.routes';
 import donationsRoutes from './routes/donations.routes';
 import pushRoutes from './routes/push.routes';
 import patitasRoutes from './routes/patitas.routes';
@@ -73,7 +66,7 @@ if (!globalAny.__rentalAppProcessHandlers) {
 
   process.on('uncaughtException', (error) => {
     logger.fatal({ err: error }, 'Uncaught exception detected');
-    if (process.env.NODE_ENV === 'production') {
+    if (isProduction()) {
       process.exit(1);
     }
   });
@@ -85,6 +78,7 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import { requestId } from './middleware/requestId';
+import { mongoSanitize } from './middleware/mongoSanitize';
 import { loadEnv } from './config/env';
 import { metricsMiddleware, metricsHandler } from './metrics';
 
@@ -102,7 +96,7 @@ app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy:
-      process.env.NODE_ENV === 'production'
+      isProduction()
         ? {
             useDefaults: true,
             directives: {
@@ -120,7 +114,7 @@ app.use(
             },
           }
         : false,
-    hsts: process.env.NODE_ENV === 'production' ? undefined : false,
+    hsts: isProduction() ? undefined : false,
   }),
 );
 
@@ -138,7 +132,7 @@ app.use(metricsMiddleware);
 
 // Log HTTP legible solo en desarrollo: en producción ya está pino (logger) con
 // request-id y métricas; morgan ahí duplicaba cada línea y metía colores ANSI.
-if (process.env.NODE_ENV !== 'production') {
+if (!isProduction()) {
   app.use(morgan('dev'));
 }
 
@@ -146,7 +140,7 @@ app.use('/api', stripeWebhookRoutes);
 
 const allowedOrigins = (
   process.env.CORS_ORIGIN ||
-  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000,http://localhost:3001')
+  (isProduction() ? '' : 'http://localhost:3000,http://localhost:3001')
 )
   .split(',')
   .map(s => s.trim())
@@ -181,16 +175,22 @@ app.use(
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Proteger contra HTTP Parameter Pollution en query; no tocar body JSON para evitar falsos positivos
 app.use(hpp({ checkBody: false, checkQuery: true }));
+// Quitar claves `$...` y `a.b` de body/query/params antes de que lleguen a los
+// controladores: varios construyen el filtro de Mongo copiando el valor tal
+// cual, y sin esto `?campo[$ne]=x` colaría un operador. Va después del webhook
+// de Stripe (montado arriba con su propio raw body) para no tocarlo.
+app.use(mongoSanitize);
 // Serve uploaded files (fotos de animales, etc.): inmutables en la práctica,
 // así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
-
-const tenantProLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// CORP cross-origin: helmet pone same-origin a todo, y la app de iPhone
+// (origen capacitor://localhost) se quedaba sin ver ninguna foto subida.
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, '../uploads'), {
+    maxAge: '7d',
+    setHeaders: res => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  }),
+);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -215,8 +215,20 @@ const posLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Checkout del marketplace: se puede pedir sin cuenta, así que lo único que hay
+// entre un bot y una tabla de pedidos llena de basura es este límite por IP.
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// /health es público (Apache lo proxya), así que no publica el entorno: además
+// de ser información interna, decía "development" porque el despliegue corre a
+// propósito con NODE_ENV=development (la señal real es APP_ENV, ver utils/env).
 app.get('/health', (_req, res) =>
-  res.json({ ok: true, env: process.env.NODE_ENV, mongo: { state: mongoose.connection.readyState } }),
+  res.json({ ok: true, mongo: { state: mongoose.connection.readyState } }),
 );
 // Readiness: 200 solo si la BD está conectada (readyState 1). /health es liveness
 // (el proceso responde); este es el que deben usar deploy y monitorización para
@@ -232,31 +244,32 @@ app.get('/metrics', metricsHandler);
 // Public routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/verification', verificationRoutes);
-app.use('/api/kyc', identityRoutes);
 app.use('/api', legalRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/notify', notifyRoutes);
 // SEO / Open Graph (público, sin auth): /sitemap.xml y /og/animals/:id (para bots).
 app.use(seoRoutes);
-// [FROZEN RentalApp] Mounts de alquiler desactivados durante la migración a MyPetLive.
-// OJO: postsign y appointments montaban authenticate/requireVerified sobre '/api' global,
-// lo que bloqueaba el catálogo público de animales. Congelados aquí.
-// app.use('/api', propertyRoutes);
-// app.use('/api', clausesRoutes);
-// app.use('/api', demoContractRoutes);
-// app.use('/api', authenticate, postsignRouter);
-// app.use('/api/tenant-pro', tenantProLimiter);
-// app.use('/api', tenantProRoutes);
-// app.use('/api', tenantProMeRoutes);
-// app.use('/api', requireVerified, appointmentsRoutes);
-// app.use('/api/applications', applicationRoutes);
-// app.use('/api/coliving', colivingRoutes);
-// Rental routes/UI preserved but hidden for tenants — kept for future reuse
 app.use('/api/animals', animalRoutes);
+app.use('/api/found', foundRoutes);
+// Chapas físicas del collar. Montado aquí arriba (zona pública) porque
+// resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
+// tiene cuenta. Cada ruta pone su propio `authenticate` donde hace falta.
+app.use('/api/tags', tagRoutes);
+app.use('/api/catalog', catalogRoutes);
 app.use('/api/adoptions', adoptionRoutes);
+// "Dónde comprarlo": primer peldaño del marketplace, medido desde el día uno.
+app.use('/api/shop', shoppingRoutes);
+// Marketplace: catálogo, checkout y pedidos. El limitador solo cubre el cobro.
+app.use('/api/marketplace/checkout', checkoutLimiter);
+app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/welcome', welcomeRoutes);
+app.use('/api', publicStatsRoutes);
 app.use('/api', donationsRoutes);
-app.use('/api', authenticate, pushRoutes);
+// El guard va acotado a /api/push: montado como app.use('/api', authenticate, …)
+// se ejecutaba para CUALQUIER /api/*, dejando tras el login todo lo montado
+// debajo (protectoras, cupones, vets…). Las URLs no cambian.
+app.use('/api/push', authenticate);
+app.use('/api', pushRoutes);
 app.use('/api', patitasRoutes);
 app.use('/api', couponRoutes);
 app.use('/api', offersRoutes);
@@ -276,20 +289,12 @@ app.use('/api', questionnaireRoutes);
 
 // Protected routes (autenticación + rol; sin verificación KYC — adopción libre)
 app.use('/api/users', authenticate, userRoutes);
-app.use('/api/reviews', authenticate, reviewRoutes);
 app.use('/api/chat', authenticate, chatRoutes);
+app.use('/api/rehome', authenticate, rehomeRoutes);
 app.use('/api/payments', paymentsLimiter);
 app.use('/api', paymentsRoutes);
-// [FROZEN RentalApp] Rutas protegidas de alquiler congeladas.
-// app.use('/api/contracts', contractPublicRoutes);
-// app.use('/api/contracts', authenticate, requireVerified, contractRoutes);
-// app.use('/api', authenticate, requireVerified, contractPaymentsRoutes);
-// app.use('/api/pros', authenticate, requireVerified, proRoutes);
-// app.use('/api/tickets', authenticate, requireVerified, ticketRoutes);
 // Stripe Connect: onboarding de cobro para protectoras (donaciones). Sin requireVerified.
 app.use('/api', authenticate, connectRoutes);
-// app.use('/api', authenticate, requireVerified, signatureRoutes);
-// app.use('/api', authenticate, requireVerified, serviceOffersRoutes);
 
 // Admin
 app.use(
@@ -299,7 +304,9 @@ app.use(
   adminRoutes,
   adminEarningsRoutes,
   adminSalesRoutes,
+  adminMetricsRoutes,
   adminTenantProRoutes,
+  adminTagsRoutes,
 );
 
 // Error handler

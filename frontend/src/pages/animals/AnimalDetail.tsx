@@ -13,6 +13,7 @@ import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, spe
 import PublicHeader from '../../components/PublicHeader';
 import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
 import { usePageMeta } from '../../utils/usePageMeta';
+import { shareLink } from '../../utils/native';
 
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
@@ -35,6 +36,12 @@ function DetailBlock({ icon, title, children }: { icon: React.ReactNode; title: 
     </section>
   );
 }
+
+const ADOPTION_ERROR_TEXT: Record<string, string> = {
+  animal_not_available: 'Este compañero ya no está disponible para adopción.',
+  animal_not_found: 'No encontramos este compañero.',
+  unauthorized: 'Inicia sesión para enviar la solicitud.',
+};
 
 export default function AnimalDetail() {
   const { id } = useParams();
@@ -76,7 +83,15 @@ export default function AnimalDetail() {
     return value;
   }, [data?.shelter]);
 
-  const { data: questionnaireData } = useQuery({
+  // Quien mantiene la ficha: la protectora dueña o un admin.
+  const canManageAnimal = useMemo(() => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    const me = String((user as any)._id || (user as any).id || '');
+    return Boolean(me && shelterId && String(shelterId) === me);
+  }, [user, shelterId]);
+
+  const { data: questionnaireData, refetch: refetchQuestionnaire } = useQuery({
     queryKey: ['questionnaire', shelterId],
     queryFn: () => getQuestionnaireByProtectora(String(shelterId)),
     enabled: Boolean(shelterId),
@@ -103,6 +118,8 @@ export default function AnimalDetail() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    // En la app lo que se desplaza es #root (ver index.css).
+    document.getElementById('root')?.scrollTo(0, 0);
   }, [id]);
 
   const handleFavoriteClick = () => {
@@ -110,20 +127,13 @@ export default function AnimalDetail() {
   };
 
   const handleShareClick = async () => {
-    const shareData = {
+    const ok = await shareLink({
       title: `${data?.name || 'Compañero'} en adopción`,
       text: `Conoce a ${data?.name || 'este compañero'} en MyPetLive`,
-      url: window.location.href,
-    };
-    try {
-      if (navigator.share) await navigator.share(shareData);
-      else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success('Enlace copiado');
-      }
-    } catch (error: any) {
-      if (error?.name !== 'AbortError') toast.error('No se pudo compartir');
-    }
+      path: `/animals/${id}`,
+      onCopied: () => toast.success('Enlace copiado'),
+    });
+    if (!ok) toast.error('No se pudo compartir');
   };
 
   const adoptionMutation = useMutation({
@@ -136,12 +146,25 @@ export default function AnimalDetail() {
       nav('/adoptions/mine');
     },
     onError: (e: any) => {
-      toast.error(e?.response?.data?.error || 'No se pudo crear la solicitud');
+      const code = e?.response?.data?.error;
+      // El servidor exige responder a las preguntas VIGENTES, casadas por texto. Si la
+      // protectora las cambia con la ficha ya abierta, el adoptante respondía a las
+      // viejas y solo veía "answers_incomplete" (29 sep 2026). Recargamos las preguntas
+      // (las respuestas a las que no cambian se conservan) y se lo explicamos.
+      if (code === 'answers_incomplete' || code === 'answers_required') {
+        refetchQuestionnaire();
+        setQuestionnaireOpen(true);
+        toast.error('La protectora ha actualizado el cuestionario. Revisa las preguntas y vuelve a enviarlo.');
+        return;
+      }
+      toast.error(ADOPTION_ERROR_TEXT[code] || 'No se pudo enviar la solicitud. Inténtalo de nuevo.');
     },
   });
 
-  const proceedAdopt = () => {
-    if (questions.length > 0) {
+  const proceedAdopt = async () => {
+    // Preguntas frescas al abrir: la ficha puede llevar rato abierta.
+    const fresh = shelterId ? (await refetchQuestionnaire()).data?.questions ?? questions : questions;
+    if (fresh.length > 0) {
       setQuestionnaireOpen(true);
       return;
     }
@@ -203,7 +226,12 @@ export default function AnimalDetail() {
   const likes = Array.isArray(a.likes) ? a.likes : [];
   const environment = Array.isArray(a.environment) ? a.environment : [];
   const story = a.story || a.description || 'Aún no tenemos historia para este compañero.';
-  const shelterName = typeof a.shelter === 'object' ? a.shelter?.name || a.shelter?.email : 'Protectora verificada';
+  // Cesión de un particular (Ley 7/2023): no es una adopción de protectora.
+  const isCession = a.createdByRole === 'particular';
+  const shelterName = typeof a.shelter === 'object'
+    ? isCession ? `${a.shelter?.name || 'Particular'} · lo cede un particular` : a.shelter?.name || a.shelter?.email
+    : 'Protectora verificada';
+  const askLabel = isCession ? 'Solicitar traspaso' : 'Solicitar adopción';
   const gallery: Array<string | null> = images.slice(0, 4);
   const meta = [speciesLabel(a.species), sexLabel(a.sex), sizeLabel(a.size), a.age].filter(Boolean);
 
@@ -235,10 +263,10 @@ export default function AnimalDetail() {
                 )}
                 {images.length > 1 && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 14, pointerEvents: 'none' }}>
-                    <button type="button" aria-label="Imagen anterior" onClick={() => setActiveIndex(prev => (prev - 1 + images.length) % images.length)} style={{ pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <button type="button" aria-label="Imagen anterior" onClick={() => setActiveIndex(prev => (prev - 1 + images.length) % images.length)} style={{ padding: 0, pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <ChevronLeft size={18} />
                     </button>
-                    <button type="button" aria-label="Imagen siguiente" onClick={() => setActiveIndex(prev => (prev + 1) % images.length)} style={{ pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <button type="button" aria-label="Imagen siguiente" onClick={() => setActiveIndex(prev => (prev + 1) % images.length)} style={{ padding: 0, pointerEvents: 'auto', width: 40, height: 40, borderRadius: 999, border: 0, background: 'rgba(255,255,255,.88)', color: MPL.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <ChevronRight size={18} />
                     </button>
                   </div>
@@ -258,7 +286,7 @@ export default function AnimalDetail() {
                 <div>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.teal100, color: MPL.tealDark, fontSize: 12.5, fontWeight: 800, padding: '7px 12px', borderRadius: 999, marginBottom: 14 }}>
                     <PawMark size={14} />
-                    {canAdopt ? 'Disponible para adopción' : `Estado: ${a.status}`}
+                    {canAdopt ? (isCession ? 'Busca casa · cesión gratuita' : 'Disponible para adopción') : `Estado: ${a.status}`}
                   </div>
                   <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 46, lineHeight: 1, fontWeight: 800, margin: 0 }}>{a.name}</h1>
                   {shelterName && (
@@ -270,19 +298,24 @@ export default function AnimalDetail() {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {a.code && (
-                    <button type="button" onClick={() => nav(`/p/${encodeURIComponent(a.code)}`)} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Ver pasaporte" title="Ver pasaporte">
+                    <button type="button" onClick={() => nav(`/p/${encodeURIComponent(a.code)}`)} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Ver pasaporte" title="Ver pasaporte">
                       <ScrollText size={18} />
                     </button>
                   )}
-                  <button type="button" onClick={handleShareClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
+                  <button type="button" onClick={handleShareClick} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Compartir compañero" title="Compartir">
                     <Share2 size={18} />
                   </button>
-                  <button type="button" onClick={handleFavoriteClick} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                  <button type="button" onClick={handleFavoriteClick} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', color: favorite ? MPL.coral : MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                     <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
                   </button>
-                  <button type="button" onClick={() => refetch()} style={{ width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha">
-                    <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
-                  </button>
+                  {/* Recargar la ficha solo le sirve a quien la mantiene. Para
+                      un visitante era un botón que aparentaba hacer algo y no
+                      cambiaba nada en pantalla. */}
+                  {canManageAnimal && (
+                    <button type="button" onClick={() => refetch()} style={{ padding: 0, width: 42, height: 42, borderRadius: 13, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Actualizar ficha" title="Actualizar ficha">
+                      <RefreshCw size={17} className={isFetching ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -339,7 +372,9 @@ export default function AnimalDetail() {
                 <p style={{ color: 'rgba(255,255,255,.86)', lineHeight: 1.5, margin: '0 0 20px' }}>
                   {existingRequest
                     ? `Ya has solicitado su adopción (${ADOPTION_STATUS_LABEL[existingRequest.status as AdoptionStatus] || existingRequest.status}).`
-                    : 'Solicita la adopción y la protectora revisará tu candidatura.'}
+                    : isCession
+                      ? 'Lo cede un particular, gratis y con contrato. Pídelo y elegirá familia entre quienes lo pidan.'
+                      : 'Solicita la adopción y la protectora revisará tu candidatura.'}
                 </p>
                 {existingRequest ? (
                   <Link to={`/adoptions/${existingRequest._id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', boxSizing: 'border-box', background: '#fff', color: MPL.tealDark, border: 0, borderRadius: 14, padding: '14px 18px', fontWeight: 800, textDecoration: 'none' }}>
@@ -347,17 +382,25 @@ export default function AnimalDetail() {
                   </Link>
                 ) : (
                   <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ width: '100%', background: canAdopt ? MPL.coral : 'rgba(255,255,255,.25)', color: '#fff', border: 0, borderRadius: 14, padding: '14px 18px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed' }}>
-                    {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+                    {adoptionMutation.isPending ? 'Enviando...' : askLabel}
                   </button>
                 )}
               </div>
             </section>
 
             <section style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 22 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: MPL.muted, fontSize: 14 }}>
-                <CalendarDays size={18} color={MPL.teal} />
-                Si la solicitud avanza, la protectora propondrá una cita desde el panel.
-              </div>
+              {isCession ? (
+                <div style={{ display: 'grid', gap: 6, color: MPL.muted, fontSize: 14 }}>
+                  <div style={{ color: MPL.ink, fontWeight: 800 }}>Cesión gratuita</div>
+                  <div>No se paga nada por él. Si te elige, firmáis los dos el contrato de cesión en la app y pasa a tu «Mi mascota».</div>
+                  {a.cession?.microchipLast4 && <div>Microchip terminado en <strong style={{ color: MPL.ink }}>{a.cession.microchipLast4}</strong>.</div>}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: MPL.muted, fontSize: 14 }}>
+                  <CalendarDays size={18} color={MPL.teal} />
+                  Si la solicitud avanza, la protectora propondrá una cita desde el panel.
+                </div>
+              )}
             </section>
           </aside>
         </div>
@@ -370,13 +413,13 @@ export default function AnimalDetail() {
           </Link>
         ) : (
           <button type="button" onClick={handleAdoptClick} disabled={!canAdopt || adoptionMutation.isPending} style={{ flex: 1, background: canAdopt ? MPL.coral : MPL.faint, color: '#fff', border: 0, borderRadius: 14, padding: '15px 16px', font: 'inherit', fontWeight: 800, cursor: canAdopt ? 'pointer' : 'not-allowed', boxShadow: canAdopt ? '0 8px 18px -8px rgba(232,101,74,.7)' : 'none' }}>
-            {adoptionMutation.isPending ? 'Enviando...' : 'Solicitar adopción'}
+            {adoptionMutation.isPending ? 'Enviando...' : askLabel}
           </button>
         )}
-        <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
+        <button type="button" onClick={handleFavoriteClick} aria-label={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} style={{ padding: 0, width: 50, height: 50, flex: 'none', border: `1.5px solid ${favorite ? MPL.coral : MPL.border}`, background: favorite ? '#FCE9E4' : '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: favorite ? MPL.coral : MPL.muted, cursor: 'pointer' }}>
           <Heart size={22} fill={favorite ? 'currentColor' : 'none'} />
         </button>
-        <button type="button" onClick={handleShareClick} aria-label="Compartir compañero" style={{ width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: 'pointer' }}>
+        <button type="button" onClick={handleShareClick} aria-label="Compartir compañero" style={{ padding: 0, width: 50, height: 50, flex: 'none', border: `1.5px solid ${MPL.border}`, background: '#fff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: 'pointer' }}>
           <Share2 size={21} />
         </button>
       </div>

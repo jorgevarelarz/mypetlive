@@ -1,6 +1,7 @@
 import { api } from '../api/client';
 
-export type LegalSlug = 'terms' | 'privacy' | 'tenant-pro-consent';
+// 'legal-notice' y 'cookies' son informativos: se leen pero no se aceptan.
+export type LegalSlug = 'terms' | 'privacy' | 'tenant-pro-consent' | 'legal-notice' | 'cookies';
 
 export interface LegalDoc {
   slug: LegalSlug;

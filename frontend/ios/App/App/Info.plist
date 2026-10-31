@@ -5,7 +5,7 @@
     <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>es</string>
 	<key>CFBundleDisplayName</key>
         <string>MyPetLive</string>
 	<key>CFBundleExecutable</key>
@@ -22,6 +22,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -47,5 +49,20 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.268255224468-l3i8165nkj06mkkdn9g043codg2ibca5</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>MyPetLive usa la cámara para hacer fotos de tu mascota y escanear el código de barras de su comida o su arena.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Si encuentras una mascota perdida, MyPetLive envía a su familia dónde la has visto. Solo cuando tú lo pides.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyPetLive usa tus fotos para que elijas la foto de tu mascota.</string>
 </dict>
 </plist>

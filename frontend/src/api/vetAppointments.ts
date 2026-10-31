@@ -58,7 +58,9 @@ export async function updateVetAppointmentStatus(
   id: string,
   payload: { status: VetAppointmentStatus; scheduledAt?: string; vetNotes?: string; cancelReason?: string; addToHistory?: boolean },
 ) {
-  const { data } = await client.patch(`/api/vet-appointments/${id}/status`, payload);
+  // El panel ya toastea su propio error (y el aviso de que las Patitas no se
+  // han cobrado); sin esto salían dos.
+  const { data } = await client.patch(`/api/vet-appointments/${id}/status`, payload, { skipErrorToast: true } as any);
   return data as VetAppointment;
 }
 

@@ -13,6 +13,9 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
+# Los textos legales se leen en runtime desde process.cwd()/legal. Sin esta
+# copia la imagen no los tiene y /api/legal/terms responde 404.
+COPY --from=builder /app/legal ./legal
 
 ENV PORT=3000
 EXPOSE 3000

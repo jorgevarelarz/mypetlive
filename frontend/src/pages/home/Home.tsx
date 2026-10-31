@@ -1,12 +1,15 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { markAnimalFeeding, markAnimalLitter } from '../../api/animals';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { listMyPets } from '../../api/animals';
+import PetSwitcher from '../../components/pet/PetSwitcher';
+import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
+import { petAge } from '../../utils/age';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-hot-toast';
 import { fetchFeaturedAnimal } from '../../utils/featuredAnimal';
 import { toAbsoluteUrl } from '../../utils/media';
-import Brand from '../../components/Brand';
+import { moodLabel, speciesLabel } from '../../styles/mypetlive';
+import DailyCareCard from '../../components/pet/DailyCareCard';
 
 const colors = {
   bg: '#F6F3EC',
@@ -17,7 +20,7 @@ const colors = {
   muted: '#6B7464',
   soft: '#98A088',
   teal: '#1F6F6F',
-  coral: '#E8654A',
+  coral: '#C0512F',
   olive: '#6A7B4F',
   gold: '#E9A93C',
   goldSoft: '#FBEFD4',
@@ -102,45 +105,41 @@ export default function Home() {
 
   const assignedAnimalId = (user as any)?.assignedAnimalId || (user as any)?.animalId || (user as any)?.petId || null;
 
-  const { data: featuredAnimal, isLoading } = useQuery({
-    queryKey: ['tenant-featured-animal', assignedAnimalId],
-    queryFn: () => fetchFeaturedAnimal(assignedAnimalId),
+  // Todas sus mascotas: con varias se elige cuál se ve (la elegida se comparte
+  // con «Mi mascota», ver utils/selectedPet).
+  const { data: myPets } = useQuery({ queryKey: ['my-pets'], queryFn: listMyPets, staleTime: 60_000 });
+  // Las que ya han fallecido no salen en el inicio (es el sitio del cuidado de
+  // cada día); su mural vive en «Mi mascota».
+  const allPets = React.useMemo(() => (myPets?.items || []).map(item => item.animal).filter(Boolean), [myPets?.items]);
+  const pets = React.useMemo(() => allPets.filter((p: any) => !p.memorial?.active), [allPets]);
+  const [selectedPetId, setSelectedPetIdState] = React.useState<string | null>(() => loadSelectedPet());
+  const selectPet = (id: string) => {
+    setSelectedPetIdState(id);
+    saveSelectedPet(id);
+  };
+  const petIds = pets.map((p: any) => String(p._id || p.id));
+  const currentId = selectedPetId && petIds.includes(selectedPetId) ? selectedPetId : petIds[0] || null;
+
+  const { data: featuredRaw, isLoading, isError, refetch } = useQuery({
+    queryKey: ['tenant-featured-animal', currentId || assignedAnimalId],
+    queryFn: () => fetchFeaturedAnimal(currentId || assignedAnimalId),
     staleTime: 60_000,
   });
+  const featuredAnimal = (featuredRaw as any)?.memorial?.active ? null : featuredRaw;
 
-  const careMutation = useMutation<{ ok: boolean } | any, unknown, 'feed' | 'litter'>({
-    mutationFn: async type => {
-      if (!featuredAnimal) throw new Error('missing_animal');
-      const animalId = String(featuredAnimal._id || featuredAnimal.id || '');
-      if (!animalId) throw new Error('missing_animal');
-      if (type === 'feed') return markAnimalFeeding(animalId);
-      return markAnimalLitter(animalId);
-    },
-    onSuccess: (_data, type) => {
-      queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal', assignedAnimalId] });
-      toast.success(type === 'feed' ? 'Comida registrada' : 'Cambio de arena registrado');
-    },
-    onError: () => toast.error('No se pudo registrar el cuidado'),
-  });
-
-  const describeFeeding = () => {
-    if (!featuredAnimal?.lastFeeding) return 'Sin comida registrada todavía.';
-    const last = new Date(featuredAnimal.lastFeeding);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 24 ? 'Comida registrada hoy.' : 'Puede tocar rellenar comida.';
-  };
-
-  const describeLitter = () => {
-    if (!featuredAnimal?.lastLitterChange) return 'Sin cambio de arena registrado.';
-    const last = new Date(featuredAnimal.lastLitterChange);
-    const hours = (Date.now() - last.getTime()) / 36e5;
-    return hours < 72 ? 'Arena en buen estado.' : 'Conviene revisar la arena pronto.';
-  };
 
   const hasPet = Boolean(featuredAnimal);
   const displayName = featuredAnimal?.name || 'tu mascota';
-  const displaySpecies = featuredAnimal?.species || '';
-  const displayAge = featuredAnimal?.age || '';
+  // Título: el nombre con una mascota, los nombres con dos o tres, el número
+  // con cuatro o más; sin ninguna, «tu mascota».
+  const names = pets.map((p: any) => p.name).filter(Boolean) as string[];
+  const titleTarget = names.length >= 4
+    ? `tus ${names.length} mascotas`
+    : names.length >= 2
+      ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`
+      : names[0] || displayName;
+  const displaySpecies = speciesLabel(featuredAnimal?.species);
+  const displayAge = petAge(featuredAnimal);
   const image = featuredAnimal?.images?.[0] ? toAbsoluteUrl(featuredAnimal.images[0]) : '';
 
   return (
@@ -154,25 +153,13 @@ export default function Home() {
           }}
         >
           <div className="grid gap-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Brand size={22} />
-              <span
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold"
-                style={{ background: '#E2EEEC', color: colors.teal }}
-              >
-                {paw} Adopción responsable
-              </span>
-            </div>
-
+            {/* Sin logo ni etiquetas: la cabecera ya lleva la marca. */}
             <div className="grid gap-4">
-              <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: colors.soft }}>
-                Home del adoptante
-              </p>
               <h1
                 className="max-w-3xl text-4xl font-extrabold leading-none sm:text-5xl lg:text-6xl"
                 style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}
               >
-                Cuida, sigue y acompaña a {displayName}.
+                Cuida, sigue y acompaña a {titleTarget}.
               </h1>
               <p className="max-w-2xl text-base leading-7 sm:text-lg" style={{ color: colors.muted }}>
                 Tu espacio para ver cómo está tu mascota, apoyar a su protectora y registrar pequeños cuidados sin ruido.
@@ -183,12 +170,20 @@ export default function Home() {
               <ActionButton variant="primary" onClick={() => nav('/animals')}>
                 Ver animales en adopción
               </ActionButton>
+              {/* Sin mascota registrada, /pet abre el alta: el botón lo dice. Mientras
+                  carga o si falla la consulta se queda en «Ver mi mascota». */}
               <ActionButton variant="ghost" onClick={() => nav('/pet')}>
-                Ver mi mascota
+                {!isLoading && !isError && !featuredAnimal && !allPets.length ? 'Registrar mi mascota' : 'Ver mi mascota'}
               </ActionButton>
             </div>
           </div>
 
+          {/* Sin mascota registrada no se enseña: el botón de arriba ya invita a registrarla. */}
+          {(isLoading || isError || featuredAnimal) && (
+          <div className="grid gap-3">
+          {pets.length > 1 && (
+            <PetSwitcher pets={pets} selectedId={currentId} onSelect={selectPet} onAdd={() => nav('/pet?nueva=1')} />
+          )}
           <Card className="overflow-hidden">
             <div className="relative aspect-[4/3]" style={{ background: colors.panel }}>
               {isLoading ? (
@@ -212,7 +207,22 @@ export default function Home() {
                 </span>
               )}
             </div>
-            {hasPet ? (
+            {isError ? (
+              <div className="grid gap-3 p-5">
+                <h2
+                  className="text-2xl font-extrabold"
+                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
+                >
+                  No hemos podido cargar tu mascota
+                </h2>
+                <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                  Puede ser un problema de conexión. Vuelve a intentarlo en un momento.
+                </p>
+                <ActionButton variant="ghost" onClick={() => refetch()}>
+                  Reintentar
+                </ActionButton>
+              </div>
+            ) : hasPet ? (
               <div className="grid gap-3 p-5">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2
@@ -227,12 +237,14 @@ export default function Home() {
                   {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                    Cerca de ti
-                  </span>
+                  {featuredAnimal?.city && (
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
+                      {featuredAnimal.city}
+                    </span>
+                  )}
                   {featuredAnimal?.mood && (
                     <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
-                      {featuredAnimal.mood}
+                      {moodLabel(featuredAnimal.mood)}
                     </span>
                   )}
                 </div>
@@ -254,53 +266,27 @@ export default function Home() {
               </div>
             )}
           </Card>
+          </div>
+          )}
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr]">
-          <Card className="grid gap-5 p-5 lg:col-span-2">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em]" style={{ color: colors.soft }}>
-                  Pequeños cuidados
-                </p>
-                <h2
-                  className="mt-2 text-2xl font-extrabold"
-                  style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
-                >
-                  Lo importante, en dos gestos.
-                </h2>
-              </div>
-              <Link to="/adoptions/mine" className="text-sm font-bold underline" style={{ color: colors.teal, textUnderlineOffset: 4 }}>
-                Ver adopciones
-              </Link>
+          {/* El mismo cuidado diario que «Mi mascota»: pregunta qué comió, qué
+              arena y cómo fue el paseo. Antes el inicio tenía botones propios que
+              marcaban sin preguntar nada. La despensa se queda en «Mi mascota». */}
+          {featuredAnimal && (
+            <div className="lg:col-span-2">
+              <DailyCareCard
+                animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
+                species={featuredAnimal.species}
+                showPantry={false}
+                onMarked={() => {
+                  queryClient.invalidateQueries({ queryKey: ['tenant-featured-animal'] });
+                  queryClient.invalidateQueries({ queryKey: ['my-pets'] });
+                }}
+              />
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                <p className="text-sm font-bold" style={{ color: colors.soft }}>Comida</p>
-                <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeFeeding()}</p>
-                <ActionButton
-                  variant="secondary"
-                  onClick={() => careMutation.mutate('feed')}
-                  disabled={!featuredAnimal || careMutation.isPending}
-                >
-                  Marcar comida
-                </ActionButton>
-              </div>
-
-              <div className="rounded-2xl border p-4" style={{ borderColor: colors.border, background: colors.bg }}>
-                <p className="text-sm font-bold" style={{ color: colors.soft }}>Arena</p>
-                <p className="mt-2 min-h-[48px] text-base font-semibold leading-6">{describeLitter()}</p>
-                <ActionButton
-                  variant="ghost"
-                  onClick={() => careMutation.mutate('litter')}
-                  disabled={!featuredAnimal || careMutation.isPending}
-                >
-                  Cambiar arena
-                </ActionButton>
-              </div>
-            </div>
-          </Card>
+          )}
 
           <Card className="grid gap-5 p-5">
             <div>

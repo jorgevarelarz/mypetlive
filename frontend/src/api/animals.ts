@@ -1,3 +1,4 @@
+import type { PublicMemorial } from './memorial';
 import { api as client } from './client';
 
 export type AnimalStatus =
@@ -8,7 +9,7 @@ export type AnimalStatus =
   | 'adoptado'
   | 'no_disponible'
   | 'archivado';
-export type AnimalMood = 'relajado' | 'timido' | 'energico' | 'en_adaptacion';
+export type AnimalMood = 'relajado' | 'timido' | 'energico' | 'en_adaptacion' | 'carinoso' | 'independiente';
 
 export type AnimalSearchParams = {
   q?: string;
@@ -32,6 +33,29 @@ export type AnimalSearchParams = {
 export async function searchAnimals(params: AnimalSearchParams = {}) {
   const { data } = await client.get('/api/animals', { params });
   return data as { items: any[]; page: number; limit: number; total: number };
+}
+
+// El servidor topa `limit` en 100 (`Math.min(100, …)` en animal.controller.search),
+// así que un panel que pedía 200 recibía 100 en silencio: por encima de 100 fichas
+// el listado quedaba truncado sin avisar y cualquier contador derivado mentía.
+// Paginamos hasta `maxItems`, devolvemos el `total` real del servidor y `truncated`
+// para poder decir en pantalla que falta cola.
+const SHELTER_ANIMALS_PAGE_SIZE = 100;
+
+export async function listAllShelterAnimals(shelterId: string, maxItems = 400) {
+  const fetchPage = (page: number) =>
+    searchAnimals({ shelter: shelterId, page, limit: SHELTER_ANIMALS_PAGE_SIZE, sort: 'createdAt', dir: 'desc' });
+  const first = await fetchPage(1);
+  const items = [...(first.items || [])];
+  const total = typeof first.total === 'number' ? first.total : items.length;
+  const target = Math.min(total, maxItems);
+  const lastPage = Math.ceil(maxItems / SHELTER_ANIMALS_PAGE_SIZE);
+  for (let page = 2; items.length < target && page <= lastPage; page += 1) {
+    const next = await fetchPage(page);
+    if (!next.items?.length) break;
+    items.push(...next.items);
+  }
+  return { items, total, truncated: total > items.length };
 }
 
 export async function getAnimal(id: string) {
@@ -112,9 +136,25 @@ export type AnimalPassport = {
   personality: string[];
   status?: string;
   isPersonalPet?: boolean;
+  // Solo para animales de protectora: de dónde viene. En una mascota de familia
+  // llega `null` y lo que viene es `family`.
   provenance?: { shelterName?: string; city?: string } | null;
+  // La familia, con el nombre de pila y nada más.
+  family?: { name?: string } | null;
+  // El episodio de pérdida. `contact` solo viaja mientras `isLost`, y es lo que
+  // la familia escribió a sabiendas de que se publicaba.
+  lost?: {
+    isLost: boolean;
+    since?: string;
+    area?: string | null;
+    notes?: string | null;
+    contact?: string | null;
+    contactName?: string | null;
+  };
   health: { vetVisits: number; healthMilestones: number };
   timeline: AnimalTimelineItem[];
+  // Mascota fallecida: el pasaporte se convierte en su mural.
+  memorial?: PublicMemorial | null;
 };
 
 // Pasaporte público por código (sin datos personales del dueño).
@@ -131,10 +171,23 @@ export async function getAnimalTimeline(code: string) {
 
 export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'surgery' | 'checkup' | 'test' | 'other';
 
-// El veterinario añade un registro clínico al animal por su código (alimenta el pasaporte).
-export async function addHealthRecord(code: string, payload: { category: HealthCategory; note: string; treatment?: string; date?: string }) {
+// Añade un registro clínico al animal por su código (alimenta el pasaporte).
+// Lo usan el veterinario y también la familia desde la ficha de su mascota.
+//
+// `nextDueAt` decide si esto genera un aviso: una fecha lo programa, `null` lo
+// desactiva a propósito, y omitirlo deja que el servidor ponga el intervalo
+// habitual de la categoría (vacuna al año, desparasitación a los tres meses).
+export async function addHealthRecord(
+  code: string,
+  payload: { category: HealthCategory; note: string; treatment?: string; date?: string; nextDueAt?: string | null },
+) {
   const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload);
-  return data as { ok: boolean; category: HealthCategory; health: { vetVisits: number; healthMilestones: number } };
+  return data as {
+    ok: boolean;
+    category: HealthCategory;
+    nextDueAt: string | null;
+    health: { vetVisits: number; healthMilestones: number };
+  };
 }
 
 export async function createAnimal(payload: any) {
@@ -157,14 +210,106 @@ export async function updateAnimalStatus(id: string, status: AnimalStatus) {
   return data as { _id: string; status: AnimalStatus };
 }
 
-export async function markAnimalFeeding(id: string) {
-  const { data } = await client.post(`/api/animals/${id}/care/feed`);
-  return data as { ok: boolean; lastFeeding: string };
+export type CareEntry = {
+  _id: string;
+  type: 'feed' | 'litter' | 'walk';
+  actorName?: string;
+  foods?: string[];
+  litterType?: string;
+  walk?: { kind?: string; minutes?: number; distanceKm?: number; place?: string };
+  createdAt: string;
+};
+
+export type SupplyUnit = 'g' | 'kg' | 'ml' | 'l' | 'ud';
+
+/**
+ * Producto de la despensa. Las cantidades llegan en la unidad base de su familia
+ * (g, ml, ud); `usesLeft`/`daysLeft` los calcula el servidor a partir del ritmo
+ * real de consumo, y son `null` cuando no hay datos para afirmarlo.
+ */
+export type CareSupply = {
+  name: string;
+  unit?: SupplyUnit;
+  packSize?: number;
+  perUse?: number;
+  remaining?: number;
+  usesLeft: number | null;
+  daysLeft: number | null;
+  runningLow: boolean;
+};
+
+export type CarePantry = { foods: CareSupply[]; litters: CareSupply[] };
+
+export type CareSummary = {
+  feedings: number;
+  litterChanges: number;
+  walks: number;
+  walkKm: number;
+  walkMinutes: number;
+};
+
+// La despensa viaja en la respuesta de cada marca para que los chips de "lo de
+// siempre" se actualicen sin una segunda petición.
+export async function markAnimalFeeding(id: string, foods: string[] = []) {
+  const { data } = await client.post(`/api/animals/${id}/care/feed`, { foods });
+  return data as { ok: boolean; lastFeeding: string; entry: CareEntry; pantry: CarePantry };
 }
 
-export async function markAnimalLitter(id: string) {
-  const { data } = await client.post(`/api/animals/${id}/care/litter`);
-  return data as { ok: boolean; lastLitterChange: string };
+export async function markAnimalLitter(id: string, litterType?: string) {
+  const { data } = await client.post(`/api/animals/${id}/care/litter`, { litterType });
+  return data as { ok: boolean; lastLitterChange: string; entry: CareEntry; pantry: CarePantry };
+}
+
+export async function markAnimalWalk(
+  id: string,
+  walk: { kind: string; minutes?: number; distanceKm?: number; place?: string },
+) {
+  const { data } = await client.post(`/api/animals/${id}/care/walk`, walk);
+  return data as { ok: boolean; lastWalk: string; entry: CareEntry };
+}
+
+/** Alta, edición, reposición (`refill`) o baja (`remove`) de un producto. */
+export async function upsertAnimalSupply(
+  id: string,
+  supply: {
+    kind: 'food' | 'litter';
+    name: string;
+    packSize?: number;
+    packUnit?: SupplyUnit;
+    perUse?: number;
+    perUseUnit?: SupplyUnit;
+    refill?: boolean;
+    remove?: boolean;
+  },
+) {
+  const { data } = await client.put(`/api/animals/${id}/care/supplies`, supply);
+  return data as { ok: boolean; pantry: CarePantry };
+}
+
+export async function getAnimalCare(id: string) {
+  const { data } = await client.get(`/api/animals/${id}/care`);
+  return data as {
+    items: CareEntry[];
+    summary: CareSummary;
+    pantry: CarePantry;
+    last: { feeding?: string; litterChange?: string; walk?: string };
+    reminders?: CareReminders;
+  };
+}
+
+/**
+ * Avisos de cuidado al móvil. Sin horas = «por olvido» (avisa si lleva mucho
+ * sin marcarse); `off` = nada. Horas «HH:MM» de hora española.
+ */
+export type CareReminders = {
+  feed: { off: boolean; times: string[] };
+  walk: { off: boolean; times: string[] };
+  litter: { off: boolean; everyDays: number | null; time: string | null };
+};
+
+export async function updateCareReminders(id: string, reminders: CareReminders) {
+  const { data } = await client.put(`/api/animals/${id}/care/reminders`, reminders);
+  return data as { ok: boolean; reminders: CareReminders };
 }
 
 export type UserPet = {
@@ -172,6 +317,67 @@ export type UserPet = {
   adoptionId?: string;
   animal: any;
 };
+
+export type PersonalPetUpdate = {
+  name?: string;
+  species?: string;
+  breed?: string;
+  age?: string;
+  birthDate?: string;
+  mood?: AnimalMood | null;
+  sex?: 'male' | 'female' | null;
+  size?: 'small' | 'medium' | 'large' | null;
+  images?: string[];
+};
+
+// Edición de la ficha de una mascota propia (incluidas las fotos). Endpoint
+// distinto de `updateAnimal`, que es el de las protectoras y exige rol landlord.
+export async function updateMyPet(id: string, payload: PersonalPetUpdate) {
+  const { data } = await client.put(`/api/animals/mine/${id}`, payload);
+  return data;
+}
+
+/**
+ * Modo perdido. `contact` es lo que se publicará en el pasaporte —la página del
+ * QR de la chapa— mientras dure la pérdida; la familia lo escribe en el diálogo,
+ * que se lo advierte antes de guardar.
+ */
+export async function markPetLost(id: string, payload: { area?: string; notes?: string; contact?: string }) {
+  const { data } = await client.post(`/api/animals/${id}/lost`, payload);
+  return data;
+}
+
+export type PetSighting = {
+  at: string;
+  lat?: number;
+  lng?: number;
+  accuracy?: number;
+  note?: string;
+  contact?: string;
+};
+
+/**
+ * Quien encuentra a un animal perdido avisa desde su pasaporte, sin cuenta. El
+ * servidor hace de relé: la familia recibe el aviso y quien avisa no ve sus datos.
+ */
+export async function reportSighting(
+  code: string,
+  sighting: { lat?: number; lng?: number; accuracy?: number; note?: string; contact?: string },
+) {
+  const { data } = await client.post(`/api/animals/passport/${encodeURIComponent(code)}/sighting`, sighting);
+  return data as { ok: boolean };
+}
+
+/** Avisos de quien ha escaneado la chapa mientras está perdido. Solo la familia. */
+export async function listPetSightings(id: string) {
+  const { data } = await client.get(`/api/animals/${id}/sightings`);
+  return data as { items: PetSighting[] };
+}
+
+export async function markPetFound(id: string) {
+  const { data } = await client.post(`/api/animals/${id}/found`, {});
+  return data;
+}
 
 export async function listMyPets() {
   const { data } = await client.get('/api/animals/mine');
@@ -181,7 +387,9 @@ export async function listMyPets() {
 export async function createPersonalPet(payload: {
   name: string;
   species: string;
-  age: string;
+  age?: string;
+  /** AAAA-MM-DD: el servidor calcula la edad con ella. */
+  birthDate?: string;
   images?: string[];
   mood?: string;
   sex?: 'male' | 'female';
@@ -190,4 +398,27 @@ export async function createPersonalPet(payload: {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const { data } = await client.post('/api/animals/personal', payload, { headers });
   return data;
+}
+
+/** Autocompletado de comida y arena (catálogo de productos, ver petCatalog del servidor). */
+export async function searchPetProducts(q: string, kind: 'food' | 'litter', species?: string) {
+  const { data } = await client.get('/api/catalog/pet-products', { params: { q, kind, species } });
+  return (data?.items || []) as Array<{ name: string; brand: string | null }>;
+}
+
+/** Producto por código de barras (lector). Null si nadie lo conoce todavía. */
+export async function lookupBarcode(code: string) {
+  try {
+    const { data } = await client.get(`/api/catalog/pet-products/barcode/${encodeURIComponent(code)}`);
+    return data as { name: string; kind: 'food' | 'litter'; brand: string | null };
+  } catch (error: any) {
+    if (error?.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Enseña al catálogo un código que no conocía, con el nombre que ha escrito la persona. */
+export async function teachBarcode(code: string, name: string, kind: 'food' | 'litter', species?: string) {
+  const { data } = await client.post(`/api/catalog/pet-products/barcode/${encodeURIComponent(code)}`, { name, kind, species });
+  return data as { name: string; kind: 'food' | 'litter' };
 }

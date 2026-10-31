@@ -1,0 +1,174 @@
+import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import { User } from '../models/user.model';
+import { getJwtSecret } from '../config/jwt';
+import { AppError, badRequest, isAppError } from '../utils/errors';
+import getRequestLogger from '../utils/requestLogger';
+import { APPLE_OIDC, GOOGLE_OIDC, verifyIdToken, OidcClaims } from '../utils/oidc';
+import { getLatestLegalDoc, recordLegalAcceptance } from '../utils/legalDocs';
+
+const JWT_SECRET = getJwtSecret();
+
+export type SocialProvider = 'google' | 'apple';
+
+// Lista separada por comas: cada plataforma tiene su client id y el token
+// lleva el de quien lo pidió. Google: el de web y el de iOS. Apple: el bundle
+// id de la app (es.mypetlive.app) y, si algún día se monta en la web, su
+// Services ID.
+function audiences(raw: string | undefined): [string, ...string[]] | null {
+  const list = (raw || '').split(',').map(s => s.trim()).filter(Boolean);
+  return list.length ? (list as [string, ...string[]]) : null;
+}
+
+function providerConfig(provider: SocialProvider) {
+  if (provider === 'google') {
+    const audience = audiences(process.env.GOOGLE_CLIENT_ID);
+    if (!audience) return null;
+    return { ...GOOGLE_OIDC, audience };
+  }
+  const audience = audiences(process.env.APPLE_CLIENT_ID);
+  if (!audience) return null;
+  return { ...APPLE_OIDC, audience };
+}
+
+function displayNameFrom(claims: OidcClaims, bodyName: unknown, email: string) {
+  const fromBody = typeof bodyName === 'string' ? bodyName.trim() : '';
+  // Apple solo manda el nombre en la PRIMERA autorización y fuera del token,
+  // así que el front nos lo pasa por el body cuando lo tiene.
+  if (fromBody) return fromBody.slice(0, 80);
+  const fromToken = typeof claims.name === 'string' ? claims.name.trim() : '';
+  if (fromToken) return fromToken.slice(0, 80);
+  return email.split('@')[0];
+}
+
+// Google trae la foto de la cuenta en el token (`picture`); Apple no manda
+// ninguna. Solo se acepta una URL https, que es lo que pinta el perfil.
+function avatarFrom(claims: OidcClaims): string | undefined {
+  const raw = typeof claims.picture === 'string' ? claims.picture.trim() : '';
+  return /^https:\/\//i.test(raw) && raw.length <= 1000 ? raw : undefined;
+}
+
+function isEmailVerified(claims: OidcClaims) {
+  const raw = claims.email_verified;
+  return raw === true || raw === 'true';
+}
+
+/**
+ * Alta o entrada con Google / Apple.
+ *
+ * Recibe el ID token que el proveedor le ha dado al navegador, lo verifica
+ * contra el JWKS del emisor y devuelve exactamente la misma respuesta que
+ * `login` para que el front no tenga que distinguir el origen de la sesión.
+ *
+ * Como el registro público, siempre crea adoptantes (`tenant`): los roles
+ * profesionales se activan a mano.
+ */
+export const socialLogin = async (req: Request, res: Response) => {
+  const log = getRequestLogger(req);
+  const provider = String(req.params.provider || '').toLowerCase() as SocialProvider;
+  if (provider !== 'google' && provider !== 'apple') {
+    throw badRequest('unsupported_provider');
+  }
+
+  const config = providerConfig(provider);
+  if (!config) {
+    // Sin credenciales configuradas el botón no debería ni aparecer en el
+    // front; si llega una petición igualmente, se dice claramente por qué no.
+    throw new AppError('El acceso con este proveedor no está configurado', {
+      status: 503,
+      code: 'provider_not_configured',
+    });
+  }
+
+  const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken : '';
+  if (!idToken) throw badRequest('missing_id_token');
+
+  let claims: OidcClaims;
+  try {
+    claims = await verifyIdToken(idToken, config);
+  } catch (error: any) {
+    log.warn({ err: error, provider }, 'ID token social rechazado');
+    throw new AppError('No hemos podido validar tu identidad', {
+      status: 401,
+      code: 'invalid_id_token',
+    });
+  }
+
+  const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
+  if (!email) throw badRequest('email_not_shared');
+  if (!isEmailVerified(claims)) {
+    throw new AppError('El proveedor no confirma tu correo', {
+      status: 403,
+      code: 'email_not_verified_by_provider',
+    });
+  }
+
+  try {
+    let user = await User.findOne({ email });
+    // El front pide el permiso de notificaciones justo después de un alta.
+    const created = !user;
+    if (user) {
+      // Cuenta existente (con contraseña o no): se vincula el proveedor. Es
+      // seguro porque el emisor ya ha verificado que ese correo es suyo.
+      const already = (user.authProviders || []).some(
+        (p: any) => p.provider === provider && p.sub === claims.sub,
+      );
+      if (!already) {
+        const firstProvider = (user.authProviders || []).length === 0;
+        user.authProviders = [
+          ...(user.authProviders || []).filter((p: any) => p.provider !== provider),
+          { provider, sub: claims.sub },
+        ] as any;
+        // Preapropiación de cuentas: el alta con contraseña no verifica el correo,
+        // así que alguien pudo registrarse antes con el correo de esta persona.
+        // Al demostrar el correo con Google/Apple por primera vez, esa contraseña
+        // y sus sesiones dejan de valer; si era suya, la recupera por correo.
+        // Mismo arreglo que RentalApp (9c06e29).
+        if (firstProvider && user.passwordHash) {
+          user.passwordHash = undefined;
+          user.tokenVersion = (user.tokenVersion || 0) + 1;
+        }
+        // Al vincular, la foto de Google entra solo si la cuenta no tenía.
+        const picture = avatarFrom(claims);
+        if (picture && !(user as any).profile?.avatarUrl) user.set('profile.avatarUrl', picture);
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name: displayNameFrom(claims, req.body?.name, email),
+        email,
+        role: 'tenant',
+        authProviders: [{ provider, sub: claims.sub }],
+        // Lo que ya sabemos no se vuelve a preguntar en el perfil.
+        ...(avatarFrom(claims) ? { profile: { avatarUrl: avatarFrom(claims) } } : {}),
+      });
+    }
+
+    // Junto a los botones va «Al continuar aceptas los términos y la política
+    // de privacidad»: el front manda acceptLegal y se graba como la casilla
+    // del registro. Solo si falta esa versión, para no apuntar una fila por
+    // cada vez que alguien entra.
+    if (req.body?.acceptLegal === true) {
+      for (const slug of ['terms', 'privacy'] as const) {
+        const latest = await getLatestLegalDoc(slug);
+        const accepted = slug === 'terms' ? (user as any).termsVersionAccepted : (user as any).privacyVersionAccepted;
+        if (latest && accepted !== latest.version) await recordLegalAcceptance(user._id, slug, latest.version, req);
+      }
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({
+      token,
+      user: { _id: user._id, email: user.email, role: user.role },
+      created,
+    });
+  } catch (error: any) {
+    if (isAppError(error)) throw error;
+    if (error?.code === 11000 || /duplicate key/i.test(error?.message || '')) {
+      // Carrera entre dos altas simultáneas con el mismo correo.
+      throw new AppError('email_in_use', { status: 409, code: 'email_in_use' });
+    }
+    log.error({ err: error, provider }, 'Error en login social');
+    throw new AppError('Error del servidor', { status: 500, code: 'social_login_failed' });
+  }
+};

@@ -23,7 +23,7 @@ export default function Brand({ size = 20, withIcon = true }: Props) {
         </svg>
       )}
       <span style={{ color: '#1F6F6F' }}>MyPet</span>
-      <span style={{ color: '#E8654A', marginLeft: -2 }}>Live</span>
+      <span style={{ color: '#C0512F', marginLeft: -2 }}>Live</span>
     </span>
   );
 }

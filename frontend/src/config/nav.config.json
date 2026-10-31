@@ -1,31 +1,39 @@
 {
   "general": [
     { "label": "Compañeros", "path": "/animals" },
+    { "label": "Tienda", "path": "/tienda" },
     { "label": "Cupones", "path": "/coupons" },
     { "label": "Donar", "path": "/donate" }
   ],
   "tenantGeneral": [
     { "label": "Inicio", "path": "/home", "to": "/home" },
+    { "label": "Mensajes", "path": "/mensajes", "to": "/mensajes" },
     { "label": "Compañeros", "path": "/animals", "to": "/animals" },
     { "label": "Mis adopciones", "path": "/adoptions/mine", "to": "/adoptions/mine" },
     { "label": "Mi Mascota", "path": "/pet", "to": "/pet" },
-    { "label": "Citas vet", "path": "/citas", "to": "/citas" },
-    { "label": "Cupones", "path": "/coupons", "to": "/coupons" }
+    { "label": "Tienda", "path": "/tienda", "to": "/tienda" },
+    { "label": "Mis pedidos", "path": "/mis-pedidos", "to": "/mis-pedidos" },
+    { "label": "Citas", "path": "/citas", "to": "/citas" },
+    { "label": "Cupones", "path": "/coupons", "to": "/coupons" },
+    { "label": "Ajustes", "path": "/ajustes", "to": "/ajustes" }
   ],
   "tenant": [
 
   ],
   "landlord": [
     { "label": "Inicio", "path": "/landlord" },
+    { "label": "Mensajes", "path": "/mensajes" },
     { "label": "Mis animales", "path": "/landlord/animals" },
     { "label": "Solicitudes de adopción", "path": "/landlord/adoptions" },
     { "label": "Cuestionario de adopción", "path": "/landlord/questionnaire" },
-    { "label": "Citas veterinarias", "path": "/citas" },
+    { "label": "Citas", "path": "/citas" },
     { "label": "Verificación", "path": "/landlord/verificacion" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "pro": [
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "admin": [
     { "label": "Inicio", "path": "/admin" },
@@ -34,22 +42,31 @@
     { "label": "Adopciones", "path": "/admin/adoptions" },
     { "label": "Verificaciones", "path": "/admin/verifications" },
     { "label": "Cupones", "path": "/admin/coupons" },
+    { "label": "Productos", "path": "/admin/productos" },
+    { "label": "Pedidos", "path": "/admin/pedidos" },
     { "label": "Reportes", "path": "/admin/reports" },
-    { "label": "Ajustes", "path": "/admin/settings" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Ajustes de la plataforma", "path": "/admin/settings" },
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "store": [
     { "label": "Inicio", "path": "/partner" },
     { "label": "Caja", "path": "/caja" },
-    { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" }
+    { "label": "Mis productos", "path": "/partner/productos" },
+    { "label": "Pedidos por preparar", "path": "/partner/pedidos" },
+    { "label": "Mis cupones", "path": "/partner/cupones" },
+    { "label": "Patitas pendientes", "path": "/partner/patitas" },
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ],
   "vet": [
     { "label": "Inicio", "path": "/partner" },
+    { "label": "Mensajes", "path": "/mensajes" },
     { "label": "Caja", "path": "/caja" },
     { "label": "Agenda de citas", "path": "/citas" },
-    { "label": "Validar cupones", "path": "/coupons" },
-    { "label": "Patitas pendientes", "path": "/partner" },
-    { "label": "Perfil y cuenta", "path": "/profile" }
+    { "label": "Mis cupones", "path": "/partner/cupones" },
+    { "label": "Patitas pendientes", "path": "/partner/patitas" },
+    { "label": "Perfil y cuenta", "path": "/profile" },
+    { "label": "Ajustes", "path": "/ajustes" }
   ]
 }

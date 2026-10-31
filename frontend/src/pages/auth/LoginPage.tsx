@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import PasswordField from '../../components/auth/PasswordField';
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import SocialAuthButtons from "../../components/auth/SocialAuthButtons";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -10,23 +12,33 @@ export default function LoginPage() {
   const nav = useNavigate();
   const loc = useLocation();
   const sp = new URLSearchParams(loc.search);
-  const next = sp.get('redirect') || (loc.state as any)?.from || "/home";
+  // Un `redirect` explícito manda para todos los roles: es lo que trae a la
+  // gente desde el botón "Quiero adoptar" de la portada.
+  const explicitNext = sp.get('redirect') || (loc.state as any)?.from || null;
+  const next = explicitNext || "/home";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const user = await login(email, password);
-      const destination = user?.role === 'tenant' ? '/home' : next;
+      const destination = explicitNext || (user?.role === 'tenant' ? '/home' : next);
       nav(destination, { replace: true });
     } catch (e: any) {
-      setErr(e?.response?.data?.error || "Error de login");
+      // La API responde {code, message}: leyendo solo `error` se perdía el
+      // motivo real y siempre salía "Error de login".
+      setErr(e?.response?.data?.message || e?.response?.data?.error || "Error de login");
     }
   };
 
   return (
     <>
       <h1 className="auth-title">Inicia sesión</h1>
-      <p className="auth-subtitle">Ingresa para cuidar de tus mascotas y seguir su día a día.</p>
+      <p className="auth-subtitle">Entra para cuidar de tus mascotas y seguir su día a día.</p>
+      {(loc.state as any)?.message && (
+        <p style={{ margin: '0 0 18px', padding: '12px 14px', borderRadius: 12, background: '#E2EEEC', color: '#176363', fontSize: 14, fontWeight: 600 }}>
+          {(loc.state as any).message}
+        </p>
+      )}
       <form className="auth-form" onSubmit={submit} noValidate>
         <label className="auth-label" htmlFor="email">
           Correo electrónico
@@ -43,9 +55,8 @@ export default function LoginPage() {
         </label>
         <label className="auth-label" htmlFor="password">
           Contraseña
-          <input
+          <PasswordField
             id="password"
-            type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -64,20 +75,26 @@ export default function LoginPage() {
           Entrar
         </button>
       </form>
-      <div className="auth-footer">
-        ¿No tienes cuenta? <Link to="/register" className="auth-link">Regístrate</Link>
+
+      <SocialAuthButtons redirectTo={explicitNext || undefined} />
+
+      {/* Los primeros usuarios pedían que se viera el alta: mucha gente llegaba
+          al login sin cuenta e intentaba entrar igualmente. */}
+      <div className="auth-footer" style={{ marginTop: 20, textAlign: 'center', fontSize: '1rem' }}>
+        ¿No tienes cuenta?{' '}
+        <Link to={`/register${loc.search}`} state={loc.state} className="auth-link" style={{ fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 4 }}>
+          Regístrate gratis
+        </Link>
       </div>
-      <div className="auth-cta" style={{ marginTop: 24, textAlign: 'center', color: '#3F4A3C' }}>
+      <div className="auth-cta auth-pro" style={{ marginTop: 24, textAlign: 'center', color: '#3F4A3C' }}>
         <p style={{ fontWeight: 600 }}>¿Eres protectora, veterinario o tienda?</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>Hablemos y te activamos como profesional.</p>
         <a
-          href="https://wa.me/XXXXXXXXXX"
-          target="_blank"
-          rel="noreferrer"
+          href="mailto:soporte@mypetlive.es?subject=Alta%20profesional%20MyPetLive"
           className="text-sm"
           style={{ textDecoration: 'underline', textUnderlineOffset: 4 }}
         >
-          Escríbenos por WhatsApp
+          Solicita el alta profesional
         </a>
       </div>
     </>

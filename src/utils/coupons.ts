@@ -1,15 +1,18 @@
 import { Animal } from '../models/animal.model';
 import { Coupon } from '../models/coupon.model';
+import { purchasedItemNames, itemsMatch } from './purchases';
 
 // Cupones de un partner aplicables a un cliente: activos, sin usar, no caducados
-// y sin targeting de animal o dirigidos a una mascota del cliente. Lo comparten
-// el TPV (pos.controller) y el panel/caja del partner (patitas.controller).
+// y sin targeting de animal o dirigidos a una mascota del cliente. Si el cupón
+// segmenta por items comprados (targetItems), se exige que el cliente los haya
+// comprado en ESTE partner (su historial en otras tiendas no se expone aquí).
+// Lo comparten el TPV (pos.controller) y el panel/caja del partner (patitas.controller).
 export async function eligibleCoupons(partnerId: string, userId: string) {
   const codes = (await Animal.find({ ownerId: userId }).select('code').lean())
     .map((a: any) => a.code)
     .filter(Boolean);
   const now = new Date();
-  return Coupon.find({
+  const candidates = await Coupon.find({
     partnerId,
     active: true,
     usedAt: { $exists: false },
@@ -26,6 +29,10 @@ export async function eligibleCoupons(partnerId: string, userId: string) {
   })
     .sort({ createdAt: -1 })
     .lean();
+
+  if (!candidates.some((c: any) => c.targetItems?.length)) return candidates;
+  const purchased = await purchasedItemNames(userId, { partnerId });
+  return candidates.filter((c: any) => itemsMatch(c.targetItems, purchased));
 }
 
 export const serializeCoupon = (c: any) => ({

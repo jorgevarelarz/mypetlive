@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { toast } from 'react-hot-toast';
+import { adminSetRehome } from '../../api/rehome';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
 
 const ROLE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -19,15 +21,21 @@ const ctrl: React.CSSProperties = { border: `1px solid ${MPL.border}`, borderRad
 
 export default function AdminUsersPage() {
   const [q, setQ] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin/users', { q, role, page, limit: pageSize }],
+
+  // La query iba directa contra `q`, así que cada tecla lanzaba una petición.
+  const [debouncedQ, setDebouncedQ] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedQ(q); setPage(1); }, 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['admin/users', { q: debouncedQ, role, page, limit: pageSize }],
     queryFn: async () => {
-      setError(null);
-      const { data } = await api.get('/api/users', { params: { q, role, page, limit: pageSize } });
+      const { data } = await api.get('/api/users', { params: { q: debouncedQ, role, page, limit: pageSize } });
       return data as { items: any[]; total: number; page: number; limit: number };
     },
   });
@@ -56,14 +64,26 @@ export default function AdminUsersPage() {
         </header>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input placeholder="Buscar por email o rol…" value={q} onChange={e => { setQ(e.target.value); setPage(1); }} style={{ ...ctrl, width: 320, maxWidth: '100%' }} />
+          <input placeholder="Buscar por email o rol…" value={q} onChange={e => setQ(e.target.value)} style={{ ...ctrl, width: 320, maxWidth: '100%' }} />
           <select value={role} onChange={e => { setRole(e.target.value); setPage(1); }} style={ctrl}>
             {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <button onClick={exportCsv} style={{ ...ctrl, cursor: 'pointer', fontWeight: 700, color: MPL.tealDark, background: MPL.teal100, borderColor: MPL.teal100 }}>Exportar CSV</button>
+          {/* Solo baja la página cargada, no los `total` usuarios: decirlo. */}
+          <button onClick={exportCsv} disabled={pageItems.length === 0} style={{ ...ctrl, cursor: pageItems.length ? 'pointer' : 'default', opacity: pageItems.length ? 1 : .5, fontWeight: 700, color: MPL.tealDark, background: MPL.teal100, borderColor: MPL.teal100 }}>
+            Exportar esta página
+          </button>
         </div>
 
-        {error && <div style={{ color: MPL.coralDark }}>{error}</div>}
+        {/* Antes había un estado de error que nadie rellenaba nunca (setError solo
+            se llamaba con null), así que un fallo de red se pintaba abajo como
+            "No hay usuarios para esos filtros". */}
+        {isError && (
+          <div style={{ background: MPL.card, border: `1px solid ${MPL.border}`, borderRadius: 12, padding: 14, display: 'grid', gap: 8, justifyItems: 'start' }}>
+            <div style={{ fontWeight: 800 }}>No hemos podido cargar los usuarios.</div>
+            <div style={{ color: MPL.muted, fontSize: 14 }}>Puede ser un problema de conexión. No des por hecho que no hay resultados.</div>
+            <button onClick={() => refetch()} style={{ ...ctrl, cursor: 'pointer', fontWeight: 800, color: MPL.tealDark }}>Reintentar</button>
+          </div>
+        )}
 
         <div style={{ background: MPL.card, border: `1px solid ${MPL.border}`, borderRadius: 16, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -72,13 +92,16 @@ export default function AdminUsersPage() {
                 <th style={th}>Email</th>
                 <th style={th}>Rol</th>
                 <th style={th}>Creado</th>
+                <th style={th} title="Puede publicar animales suyos para cederlos (cesión entre particulares)">Busca casa a animales</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={3} style={{ ...td, color: MPL.muted }}>Cargando…</td></tr>
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>Cargando…</td></tr>
+              ) : isError ? (
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>—</td></tr>
               ) : pageItems.length === 0 ? (
-                <tr><td colSpan={3} style={{ ...td, color: MPL.muted }}>No hay usuarios para esos filtros.</td></tr>
+                <tr><td colSpan={4} style={{ ...td, color: MPL.muted }}>No hay usuarios para esos filtros.</td></tr>
               ) : pageItems.map((u: any) => (
                 <tr key={u._id}>
                   <td style={td}>{u.email}</td>
@@ -88,6 +111,23 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td style={{ ...td, color: MPL.muted, fontSize: 13 }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''}</td>
+                  <td style={td}>
+                    {u.role === 'tenant' ? (
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(u.rehome?.enabled)}
+                          onChange={async e => {
+                            const on = e.target.checked;
+                            if (!window.confirm(on ? `¿Dejar que ${u.email} publique animales suyos para cederlos?` : `¿Quitarle la opción a ${u.email}? Sus anuncios abiertos se ocultan.`)) return;
+                            try { await adminSetRehome(u._id, on); toast.success(on ? 'Activado' : 'Desactivado'); refetch(); } catch { toast.error('No se pudo cambiar'); }
+                          }}
+                          style={{ width: 18, height: 18, accentColor: MPL.teal }}
+                        />
+                        {u.rehome?.enabled ? 'Sí' : 'No'}
+                      </label>
+                    ) : <span style={{ color: MPL.muted, fontSize: 13 }}>—</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>

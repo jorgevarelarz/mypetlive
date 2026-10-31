@@ -10,12 +10,12 @@ export const MPL = {
   card: '#FFFFFF',
   ink: '#3F4A3C',
   muted: '#6B7464',
-  faint: '#98A088',
+  faint: '#6B7464',
   border: '#E5E1D6',
   teal: '#1F6F6F',
   tealDark: '#176363',
   teal100: '#E2EEEC',
-  coral: '#E8654A',
+  coral: '#C0512F',
   coralDark: '#C0512F',
   coral100: '#FBE7E0',
   olive: '#6A7B4F',
@@ -57,6 +57,16 @@ export const speciesLabel = (value?: string) => {
     perro: 'Perro',
     cat: 'Gato',
     gato: 'Gato',
+    // `normalizeSpecies` solo canoniza perro/gato: el resto llega tal cual desde
+    // el alta de mascota personal (rabbit, bird, other).
+    rabbit: 'Conejo',
+    conejo: 'Conejo',
+    bird: 'Ave',
+    ave: 'Ave',
+    reptile: 'Reptil',
+    reptil: 'Reptil',
+    other: 'Otro',
+    otro: 'Otro',
   };
   return value ? labels[String(value).toLowerCase()] || value : '';
 };
@@ -70,12 +80,84 @@ export const sizeLabel = (value?: string) => {
   return value ? labels[value] || value : '';
 };
 
+// `ageGroup` del modelo (puppy/young/adult/senior): otro vocabulario en inglés
+// que no puede pintarse crudo en la ficha.
+export const ageGroupLabel = (value?: string) => {
+  const labels: Record<string, string> = {
+    puppy: 'Cachorro',
+    young: 'Joven',
+    adult: 'Adulto',
+    senior: 'Senior',
+  };
+  return value ? labels[value] || value : '';
+};
+
 export const sexLabel = (value?: string) => {
   const labels: Record<string, string> = {
     female: 'Hembra',
     male: 'Macho',
   };
   return value ? labels[value] || value : '';
+};
+
+export const moodLabel = (value?: string | null) => {
+  const labels: Record<string, string> = {
+    relajado: 'Tranquilo',
+    timido: 'Tímido',
+    energico: 'Enérgico',
+    en_adaptacion: 'En adaptación',
+    carinoso: 'Cariñoso',
+    independiente: 'Independiente',
+  };
+  return value ? labels[String(value).toLowerCase()] || value : '';
+};
+
+// Quién usa arenero: gatos y conejos. Los conejos estaban fuera por descuido —el
+// backend sí los contempla (`markLitter` solo rechaza a los perros), así que la
+// interfaz le negaba a una familia con conejo algo que el servidor le permitía.
+// Los perros no, y las aves y "otros" tampoco: para eso está la comida, que es
+// lo único común a todas las especies.
+export const usesLitter = (species?: string) => {
+  const canonical: Record<string, string> = {
+    cat: 'cat', gato: 'cat',
+    rabbit: 'rabbit', conejo: 'rabbit', conejillo: 'rabbit',
+  };
+  return Boolean(canonical[String(species || '').trim().toLowerCase()]);
+};
+
+// El simétrico del arenero: a un perro se le ofrece "marcar paseo" en el mismo
+// hueco en el que un gato tiene "cambiar arena". El resto de especies se quedan
+// solo con la comida, que es lo único común a todas.
+export const usesWalks = (species?: string) => {
+  const canonical: Record<string, string> = { dog: 'dog', perro: 'dog' };
+  return canonical[String(species || '').trim().toLowerCase()] === 'dog';
+};
+
+// Intensidad del paseo (`WALK_KINDS` del backend). El valor viaja en clave; el
+// icono y la etiqueta viven aquí porque son decisión de la interfaz.
+export const WALK_KIND_OPTIONS: Array<{ value: string; label: string; icon: string; hint: string }> = [
+  { value: 'suave', label: 'Paseo suave', icon: '🌿', hint: 'Tranquilo, para hacer sus cosas' },
+  { value: 'largo', label: 'Paseo largo', icon: '🚶', hint: 'Vuelta larga, sin prisa' },
+  { value: 'corriendo', label: 'Corriendo', icon: '💨', hint: 'A ritmo, para quemar energía' },
+  { value: 'senderismo', label: 'Senderismo', icon: '⛰️', hint: 'Ruta o monte' },
+];
+
+export const walkKindLabel = (value?: string) =>
+  WALK_KIND_OPTIONS.find(o => o.value === value)?.label || value || 'Paseo';
+
+// Categorías de `healthHistory[].type` (HEALTH_CATEGORIES del backend), que se
+// guardan en inglés y no pueden pintarse crudas en el historial de salud.
+export const healthCategoryLabel = (value?: string) => {
+  const labels: Record<string, string> = {
+    visit: 'Visita / consulta',
+    vaccine: 'Vacuna',
+    deworming: 'Desparasitación',
+    checkup: 'Revisión',
+    surgery: 'Cirugía',
+    test: 'Prueba / analítica',
+    other: 'Otro',
+  };
+  return value ? labels[String(value).toLowerCase()] || value : 'Hito de salud';
 };
 
 export const statusLabel = (value?: string) => {

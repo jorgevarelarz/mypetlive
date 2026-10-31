@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bell, ChevronLeft, ChevronRight, Heart, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Bell, Cat, ChevronLeft, ChevronRight, Dog, Heart, Rabbit, Search, SlidersHorizontal, Turtle, X } from 'lucide-react';
 import { createAnimalAlert, searchAnimals, type AnimalAlertFilters } from '../../api/animals';
 import SkeletonGrid from '../../components/ui/SkeletonGrid';
 import ErrorCard from '../../components/ui/ErrorCard';
@@ -14,10 +14,13 @@ import PublicHeader from '../../components/PublicHeader';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+// Las mismas cuatro del filtro de arriba. Valores canónicos (el servidor casa
+// también las variantes en español, ver utils/species.ts).
 const speciesOptions = [
-  { label: 'Perro', value: 'perro' },
-  { label: 'Gato', value: 'gato' },
-  { label: 'Otros', value: 'other' },
+  { label: 'Gatos', value: 'cat', icon: Cat, tint: MPL.coral100, color: MPL.coral },
+  { label: 'Perros', value: 'dog', icon: Dog, tint: MPL.teal100, color: MPL.teal },
+  { label: 'Reptiles', value: 'reptile', icon: Turtle, tint: MPL.olive100, color: MPL.oliveDark },
+  { label: 'Otros', value: 'other', icon: Rabbit, tint: MPL.gold100, color: MPL.goldDark },
 ];
 
 const sizeOptions = [
@@ -77,6 +80,8 @@ export default function AnimalsPublicList() {
   const limit = Number(sp.get('limit') || '12');
   const q = sp.get('q') || undefined;
   const species = sp.get('species') || undefined;
+  // Enlaces viejos con «perro»/«gato»: la tarjeta activa se reconoce igual.
+  const normalizedSpecies = species === 'perro' ? 'dog' : species === 'gato' ? 'cat' : species === 'reptil' ? 'reptile' : species;
   const size = (sp.get('size') as 'small' | 'medium' | 'large' | null) || undefined;
   const sex = (sp.get('sex') as 'male' | 'female' | null) || undefined;
   const city = sp.get('city') || undefined;
@@ -95,6 +100,25 @@ export default function AnimalsPublicList() {
     setSp(next, { replace: false });
   };
 
+  // El buscador era un input NO controlado que solo aplicaba al pulsar Enter.
+  // Ahora escribe en la URL con retardo, así se busca al teclear y borrar el
+  // texto limpia el filtro sin tener que acordarse de "Limpiar".
+  const [queryDraft, setQueryDraft] = useState(q || '');
+
+  React.useEffect(() => {
+    setQueryDraft(q || '');
+  }, [q]);
+
+  React.useEffect(() => {
+    const draft = queryDraft.trim();
+    if (draft === (q || '')) return;
+    const timer = setTimeout(() => setFilter('q', draft), 350);
+    return () => clearTimeout(timer);
+    // setFilter se reconstruye en cada render; depender de él relanzaría el
+    // temporizador en bucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryDraft, q]);
+
   const clearFilters = () => {
     setSp({ page: '1', limit: String(limit) }, { replace: false });
   };
@@ -105,7 +129,7 @@ export default function AnimalsPublicList() {
     setSp(next, { replace: false });
   };
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['animals-public', { q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }],
     queryFn: () => searchAnimals({ q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }),
     placeholderData: keepPreviousData,
@@ -159,7 +183,7 @@ export default function AnimalsPublicList() {
   };
 
   return (
-    <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh', overflowX: 'hidden' }}>
+    <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh', overflowX: 'clip' }}>
       <style>{`
         .catalog-link{color:inherit;text-decoration:none;}
         .catalog-link:hover{color:${MPL.teal};}
@@ -187,15 +211,56 @@ export default function AnimalsPublicList() {
 
       <main style={{ width: '100%', maxWidth: 1180, margin: '0 auto', boxSizing: 'border-box' }}>
         <header className="catalog-hero" style={{ width: '100%', boxSizing: 'border-box', padding: '42px 32px 28px' }}>
-          <div style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 8 }}>
+          <div className="mpl-crumbs" style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 8 }}>
             <Link to="/" className="catalog-link">Inicio</Link> / Compañeros
           </div>
           <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 40, fontWeight: 800, margin: '0 0 6px' }}>
             Compañeros en adopción
           </h1>
-          <p style={{ fontSize: 16, color: MPL.muted, margin: 0 }}>
-            <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar en protectoras verificadas.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: 16, color: MPL.muted, margin: 0, flex: '1 1 260px' }}>
+              <strong style={{ color: MPL.ink }}>{total}</strong> compañeros buscando hogar.
+            </p>
+            {/* Favoritos ya no está en la barra de abajo (la ocupa Mensajes): se llega desde aquí. */}
+            <Link to="/me/favorites" className="catalog-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 12, border: `1.5px solid ${MPL.border}`, background: '#fff', fontWeight: 800, fontSize: 14, color: MPL.ink, textDecoration: 'none' }}>
+              <Heart size={16} fill={favorites.ids.length ? MPL.coral : 'none'} color={favorites.ids.length ? MPL.coral : 'currentColor'} />
+              Favoritos{favorites.ids.length ? ` · ${favorites.ids.length}` : ''}
+            </Link>
+            {/* Animales que alguien ha encontrado y que buscan a su familia. */}
+            <Link to="/encontrados" className="catalog-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 12, border: `1.5px solid ${MPL.border}`, background: '#fff', fontWeight: 800, fontSize: 14, color: MPL.ink, textDecoration: 'none' }}>
+              🔎 Encontrados
+            </Link>
+          </div>
+
+          {/* Lo primero que se elige: qué animal. Tarjetas con su dibujo; al
+              pulsar la activa se quita el filtro. */}
+          <div className="catalog-species" role="group" aria-label="Filtrar por especie" style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, maxWidth: 560 }}>
+            {speciesOptions.map(option => {
+              const Icon = option.icon;
+              const active = normalizedSpecies === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilter('species', active ? '' : option.value)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '12px 4px 10px', minWidth: 0, borderRadius: 16, cursor: 'pointer', font: 'inherit',
+                    background: active ? option.tint : '#fff',
+                    border: `1.5px solid ${active ? option.color : MPL.border}`,
+                    boxShadow: active ? 'none' : '0 1px 3px rgba(31,55,40,.05)',
+                    color: MPL.ink,
+                  }}
+                >
+                  <span style={{ width: 46, height: 46, borderRadius: 14, background: option.tint, color: option.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={28} strokeWidth={1.9} />
+                  </span>
+                  <span style={{ fontSize: 13.5, fontWeight: 800 }}>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
           <div className="catalog-search" style={{ marginTop: 26, display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 14, padding: '0 18px' }}>
@@ -203,12 +268,24 @@ export default function AnimalsPublicList() {
               <input
                 aria-label="Buscar animales"
                 placeholder="Busca por nombre, raza o ciudad"
-                defaultValue={q || ''}
+                value={queryDraft}
+                onChange={e => setQueryDraft(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') setFilter('q', (e.target as HTMLInputElement).value.trim());
+                  if (e.key === 'Enter') setFilter('q', queryDraft.trim());
+                  if (e.key === 'Escape') setQueryDraft('');
                 }}
                 style={{ flex: 1, minWidth: 0, height: 46, border: 0, outline: 0, font: 'inherit', color: MPL.ink, background: 'transparent' }}
               />
+              {queryDraft && (
+                <button
+                  type="button"
+                  onClick={() => setQueryDraft('')}
+                  aria-label="Borrar búsqueda"
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', color: MPL.faint, display: 'flex', padding: 4 }}
+                >
+                  <X size={16} />
+                </button>
+              )}
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 14, padding: '0 14px', fontSize: 14.5, fontWeight: 700 }}>
               <span className="sr-only">Ordenar</span>
@@ -249,7 +326,7 @@ export default function AnimalsPublicList() {
                     Limpiar
                   </button>
                 )}
-                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ width: 36, height: 36, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 11, color: MPL.muted }}>
+                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ padding: 0, width: 36, height: 36, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 11, color: MPL.muted }}>
                   <X size={17} />
                 </button>
               </div>
@@ -259,7 +336,7 @@ export default function AnimalsPublicList() {
               <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Especie</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {speciesOptions.map(option => (
-                  <Chip key={option.value} active={species === option.value} onClick={() => setFilter('species', species === option.value ? '' : option.value)}>
+                  <Chip key={option.value} active={normalizedSpecies === option.value} onClick={() => setFilter('species', normalizedSpecies === option.value ? '' : option.value)}>
                     {option.label}
                   </Chip>
                 ))}
@@ -367,8 +444,8 @@ export default function AnimalsPublicList() {
 
             {isLoading ? (
               <SkeletonGrid />
-            ) : (data as any)?.error ? (
-              <ErrorCard message={(data as any)?.error || 'No se pudo cargar el listado'} />
+            ) : isError ? (
+              <ErrorCard message="No pudimos cargar los animales. Comprueba tu conexión e inténtalo de nuevo." onRetry={() => { void refetch(); }} />
             ) : items.length === 0 ? (
               <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 32, textAlign: 'center' }}>
                 <div style={{ fontSize: 38, marginBottom: 8 }}>🐾</div>
@@ -410,7 +487,7 @@ export default function AnimalsPublicList() {
                               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.faint, fontSize: 13 }}>Sin imagen</div>
                             )}
                             <span style={{ position: 'absolute', top: 12, left: 12, background: a.status === 'publicado' ? MPL.teal100 : MPL.gold100, color: a.status === 'publicado' ? MPL.tealDark : MPL.goldDark, fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 8 }}>
-                              {a.status === 'publicado' ? 'Disponible' : statusLabel(a.status)}
+                              {a.status === 'publicado' ? (a.createdByRole === 'particular' ? 'Lo cede un particular' : 'Disponible') : statusLabel(a.status)}
                             </span>
                           </div>
                           <div style={{ padding: '16px 18px 20px' }}>
@@ -434,7 +511,7 @@ export default function AnimalsPublicList() {
                           title={favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
                           onClick={() => favorites.toggle(id)}
                           disabled={favorites.isPending(id)}
-                          style={{ position: 'absolute', top: 12, right: 12, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: favorite ? MPL.coral : MPL.muted, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
+                          style={{ padding: 0, position: 'absolute', top: 12, right: 12, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 13, border: 0, background: 'rgba(255,255,255,.94)', color: favorite ? MPL.coral : MPL.muted, boxShadow: '0 6px 18px -8px rgba(31,55,40,.4)', cursor: 'pointer' }}
                         >
                           <Heart size={20} fill={favorite ? 'currentColor' : 'none'} />
                         </button>
@@ -449,14 +526,14 @@ export default function AnimalsPublicList() {
                   </button>
                   {/* Ventana alrededor de la página actual (antes solo se veían la 1-3). */}
                   {Array.from({ length: Math.min(3, pages) }, (_, i) => Math.max(1, Math.min(page - 1, pages - 2)) + i).map(n => (
-                    <button key={n} type="button" onClick={() => setFilterPage(n)} aria-current={page === n ? 'page' : undefined} style={{ width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
+                    <button key={n} type="button" onClick={() => setFilterPage(n)} aria-current={page === n ? 'page' : undefined} style={{ padding: 0, width: 40, height: 40, borderRadius: 12, background: page === n ? MPL.teal : '#fff', color: page === n ? '#fff' : MPL.muted, border: page === n ? `1px solid ${MPL.teal}` : `1px solid ${MPL.border}`, fontWeight: 800, cursor: 'pointer' }}>
                       {n}
                     </button>
                   ))}
                   {pages > 3 && (
                     <span style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, padding: '0 4px' }}>de {pages}</span>
                   )}
-                  <button type="button" onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages} aria-label="Página siguiente" style={{ width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? .5 : 1 }}>
+                  <button type="button" onClick={() => setFilterPage(Math.min(pages, page + 1))} disabled={page >= pages} aria-label="Página siguiente" style={{ padding: 0, width: 40, height: 40, borderRadius: 12, background: '#fff', border: `1px solid ${MPL.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MPL.muted, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? .5 : 1 }}>
                     <ChevronRight size={17} />
                   </button>
                 </nav>

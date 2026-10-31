@@ -1,13 +1,15 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getAdoption, setAdoptionStatus, cancelAdoption, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
+import { getAdoption, setAdoptionStatus, adoptionStatusErrorMessage, cancelAdoption, undoAdoptionApproval, undoApprovalErrorMessage, ADOPTION_STATUS_LABEL, AdoptionShelterStatus, type AdoptionStatus } from '../../api/adoptions';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { toAbsoluteUrl } from '../../utils/media';
-import ChatPanel from '../../components/chat/ChatPanel';
-
-const MANAGE_ACTIONS: AdoptionShelterStatus[] = ['en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada', 'aprobada', 'rechazada'];
+import OpenChatButton from '../../components/chat/OpenChatButton';
+import ProposeVisitDialog from '../../components/chat/ProposeVisitDialog';
+import { whenLong } from '../../components/chat/chatFormat';
+import { speciesLabel } from '../../styles/mypetlive';
+import { nextAdoptionStatuses, isTerminalAdoptionStatus, ADOPTION_ACTION_LABEL } from '../../utils/adoptionTransitions';
 
 const STATUS_TONE: Record<string, { bg: string; border: string; text: string }> = {
   recibida: { bg: '#F6F3EC', border: '#D7D0C2', text: '#3F4A3C' },
@@ -38,11 +40,15 @@ function formatDate(value?: string) {
   }).format(date);
 }
 
-function nextStep(status: AdoptionStatus, canManage: boolean) {
+function nextStep(status: AdoptionStatus, canManage: boolean, visit?: { status: string }) {
   if (canManage) {
     if (status === 'recibida') return 'Revisa la solicitud y pásala a revisión si encaja.';
-    if (status === 'en_revision') return 'Valora el cuestionario y propone una cita o solicita más información.';
-    if (status === 'cita_propuesta') return 'Confirma la visita y avanza a preaprobada cuando esté lista.';
+    if (status === 'en_revision') return 'Valora el cuestionario y propón una visita o pide más información.';
+    if (status === 'cita_propuesta') {
+      return visit?.status === 'aceptada'
+        ? 'La visita está confirmada. Después, pasa la solicitud a preaprobada si encaja.'
+        : 'Visita propuesta: falta que la persona adoptante la acepte.';
+    }
     if (status === 'preaprobada') return 'Cierra la decisión final de adopción.';
     return 'Solicitud cerrada o pendiente de gestión específica.';
   }
@@ -53,13 +59,15 @@ function nextStep(status: AdoptionStatus, canManage: boolean) {
     case 'en_revision':
       return 'La protectora está revisando tu perfil y respuestas.';
     case 'info_adicional':
-      return 'La protectora puede necesitar más información antes de avanzar.';
+      return 'La protectora necesita más información: respóndele por Mensajes.';
     case 'cita_propuesta':
-      return 'La siguiente fase es coordinar una cita con la protectora.';
+      return visit?.status === 'aceptada'
+        ? 'Visita confirmada: la tienes en Citas.'
+        : 'La protectora te propone una visita para conocer al animal: acéptala o propón otra hora desde Mensajes.';
     case 'preaprobada':
       return 'Tu solicitud está en fase final.';
     case 'aprobada':
-      return 'La protectora ha aprobado la adopción.';
+      return 'La protectora ha aprobado la adopción: tu nueva mascota ya está en Mi Mascota.';
     case 'rechazada':
       return 'Esta solicitud no ha continuado.';
     case 'cancelada':
@@ -69,28 +77,99 @@ function nextStep(status: AdoptionStatus, canManage: boolean) {
   }
 }
 
+// Al cambiar de estado, la protectora puede adjuntar una nota (qué información
+// necesita, motivo del rechazo). Se guardaba en `history` y no se pintaba en
+// ningún sitio: el adoptante veía "Información adicional" sin saber qué le piden.
+function findLastShelterNote(history: any): { text: string; ts?: string } | null {
+  if (!Array.isArray(history)) return null;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const payload = history[i]?.payload || {};
+    // `by: 'adopter'` marca la retirada del propio adoptante: esa nota no es de la protectora.
+    if (payload.note && payload.by !== 'adopter') {
+      return { text: String(payload.note), ts: history[i]?.ts };
+    }
+  }
+  return null;
+}
+
 export default function AdoptionDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { data, isLoading, refetch } = useQuery({ queryKey: ['adoption', id], queryFn: () => getAdoption(id || ''), enabled: !!id });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['adoption', id], queryFn: () => getAdoption(id || ''), enabled: !!id });
 
-  if (isLoading || !data) return <div className="p-4">Cargando solicitud...</div>;
+  const canManage = user?.role === 'landlord' || user?.role === 'admin';
+  const backTo = canManage ? '/landlord/adoptions' : '/adoptions/mine';
+
+  const [undoOpen, setUndoOpen] = React.useState(false);
+  const [undoReason, setUndoReason] = React.useState('');
+  const [undoBusy, setUndoBusy] = React.useState(false);
+  const [visitOpen, setVisitOpen] = React.useState(false);
+
+  if (isLoading) return <div className="p-4">Cargando solicitud...</div>;
+
+  // Antes `isLoading || !data` dejaba "Cargando solicitud..." para siempre cuando la
+  // petición fallaba (red caída, 403 de otra persona o solicitud inexistente).
+  if (isError || !data) {
+    return (
+      <div className="grid gap-3 p-4" style={{ color: '#3F4A3C' }}>
+        <h1 className="text-2xl font-semibold">No hemos podido cargar la solicitud</h1>
+        <p className="max-w-xl text-sm" style={{ color: '#7A8273' }}>
+          Puede ser un problema de conexión, o que esta solicitud ya no exista.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: '#D7D0C2', borderRadius: 8, color: '#3F4A3C', background: '#fff' }}
+          >
+            Reintentar
+          </button>
+          <Link to={backTo} className="px-4 py-2 text-sm font-medium text-white" style={{ background: '#1F6F6F', borderRadius: 8 }}>
+            Volver a solicitudes
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const adoption: any = data;
   const status = adoption.status as AdoptionStatus;
   const animal = adoption.animal || {};
   const tone = STATUS_TONE[status] || STATUS_TONE.recibida;
-  const canManage = user?.role === 'landlord' || user?.role === 'admin';
-  const isTerminal = ['aprobada', 'rechazada', 'cancelada'].includes(status);
+  const isTerminal = isTerminalAdoptionStatus(status);
+  // Cesión de un particular: se cierra firmando el contrato, no aprobando.
+  const isCession = animal.createdByRole === 'particular' || Boolean(animal.cession);
   const image = Array.isArray(animal.images) ? animal.images[0] : undefined;
+  const lastShelterNote = findLastShelterNote(adoption.history);
 
   const decide = async (newStatus: AdoptionShelterStatus) => {
     try {
       await setAdoptionStatus(String(id), newStatus);
       toast.success('Estado actualizado');
       refetch();
-    } catch {
-      toast.error('Error actualizando');
+    } catch (e: any) {
+      toast.error(adoptionStatusErrorMessage(e));
+    }
+  };
+
+  const confirmUndo = async () => {
+    if (undoReason.trim().length < 3 || undoBusy) return;
+    setUndoBusy(true);
+    try {
+      const res = await undoAdoptionApproval(String(id), undoReason.trim());
+      toast.success(
+        res.reopenedApplications
+          ? `Aprobación deshecha. Se han reabierto ${res.reopenedApplications} solicitud${res.reopenedApplications === 1 ? '' : 'es'}.`
+          : 'Aprobación deshecha.',
+      );
+      setUndoOpen(false);
+      setUndoReason('');
+      refetch();
+    } catch (e: any) {
+      toast.error(undoApprovalErrorMessage(e));
+    } finally {
+      setUndoBusy(false);
     }
   };
 
@@ -109,7 +188,7 @@ export default function AdoptionDetail() {
     <div className="grid gap-5 p-4" style={{ color: '#3F4A3C' }}>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link to={canManage ? '/landlord/adoptions' : '/adoptions/mine'} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
+          <Link to={backTo} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
             Volver a solicitudes
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">Solicitud de adopción</h1>
@@ -137,7 +216,7 @@ export default function AdoptionDetail() {
           <div>
             <h2 className="text-xl font-semibold">{animal.name || 'Animal'}</h2>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {animal.species || 'Mascota'}
+              {speciesLabel(animal.species) || 'Mascota'}
               {animal.breed ? ` · ${animal.breed}` : ''}
               {animal.age ? ` · ${animal.age}` : ''}
               {animal.code ? ` · ${animal.code}` : ''}
@@ -146,14 +225,38 @@ export default function AdoptionDetail() {
           <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
             <div className="text-sm font-medium">Siguiente paso</div>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {nextStep(status, canManage)}
+              {isCession && status === 'preaprobada'
+                ? 'Te han elegido: firmad los dos el contrato de cesión y pasará a tu «Mi mascota».'
+                : isCession && status === 'aprobada'
+                  ? 'Cesión completada. Falta el cambio de titular del microchip en el veterinario.'
+                  : nextStep(status, canManage, adoption.visit)}
             </p>
           </div>
-          {animal._id && (
+          {lastShelterNote && (
+            <div className="border-t pt-3" style={{ borderColor: '#F0ECE2' }}>
+              <div className="text-sm font-medium">
+                {canManage ? 'Última nota que enviaste' : 'Mensaje de la protectora'}
+              </div>
+              <p className="mt-1 whitespace-pre-line break-words text-sm" style={{ color: '#3F4A3C' }}>
+                {lastShelterNote.text}
+              </p>
+              {lastShelterNote.ts && (
+                <div className="mt-1 text-xs" style={{ color: '#9AA08F' }}>{formatDate(lastShelterNote.ts)}</div>
+              )}
+            </div>
+          )}
+          {/* Al aprobarse la adopción el animal pasa a mascota personal y la ficha
+              pública devuelve 404. Solo su nuevo dueño tiene dónde ir (Mi Mascota);
+              si es personal y no es tu adopción aprobada, no hay enlace válido. */}
+          {!animal.isPersonalPet && animal._id ? (
             <Link to={`/animals/${animal._id}`} className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
               Ver ficha del animal
             </Link>
-          )}
+          ) : status === 'aprobada' && !canManage ? (
+            <Link to="/pet" className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
+              Ver mi mascota
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -195,7 +298,7 @@ export default function AdoptionDetail() {
                     <div style={{ width: 28, height: 28, borderRadius: 999, overflow: 'hidden', background: '#F6F3EC', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {pet.image ? <img src={toAbsoluteUrl(pet.image)} alt={pet.name} className="h-full w-full object-cover" /> : <span style={{ fontSize: 11, color: '#7A8273' }}>🐾</span>}
                     </div>
-                    <span className="text-sm">{pet.name}{pet.species ? ` · ${pet.species}` : ''}</span>
+                    <span className="text-sm">{pet.name}{pet.species ? ` · ${speciesLabel(pet.species)}` : ''}</span>
                   </div>
                 ))}
               </div>
@@ -220,35 +323,98 @@ export default function AdoptionDetail() {
         </section>
       )}
 
-      <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-        <div>
-          <h2 className="text-lg font-semibold">
-            {canManage ? 'Chat con la persona adoptante' : 'Chat con la protectora'}
-          </h2>
-          <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-            Resuelve dudas sobre esta solicitud sin salir de MyPetLive.
-          </p>
-        </div>
-        <ChatPanel kind="adoption" refId={String(id)} title="" />
-      </section>
+      {/* La conversación vive en Mensajes; aquí solo el acceso. El admin no es
+          parte de la conversación, así que no la ve. */}
+      {user?.role !== 'admin' && (
+        <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+          <div>
+            <h2 className="text-lg font-semibold">Mensajes y visita</h2>
+            <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
+              {canManage
+                ? 'Habla con la persona adoptante y propón una visita para que conozca al animal.'
+                : isCession
+                  ? 'Habla con la persona que lo cede. Si te elige, el contrato se firma desde aquí.'
+                  : 'Habla con la protectora. Si te proponen una visita, la aceptas desde el chat.'}
+            </p>
+          </div>
+          {adoption.visit && (
+            <Link to={`/citas?visita=${adoption._id || id}`} className="text-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#F6F3EC', color: '#3F4A3C', textDecoration: 'none' }}>
+              <span>📅</span>
+              <span style={{ flex: 1 }}>
+                <strong>{adoption.visit.status === 'aceptada' ? 'Visita confirmada' : 'Visita propuesta'}:</strong> {whenLong(adoption.visit.at)}
+                {adoption.visit.place ? ` · ${adoption.visit.place}` : ''}
+              </span>
+              <span style={{ fontWeight: 800, color: '#176363' }}>Ver visita ›</span>
+            </Link>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {isCession && ['preaprobada', 'aprobada'].includes(status) && (
+              <Link to={`/contratos/${adoption._id || id}`} style={{ display: 'inline-flex', alignItems: 'center', background: '#C0512F', color: '#fff', borderRadius: 12, padding: '9px 15px', fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>
+                {status === 'preaprobada' ? 'Firmar el contrato' : 'Ver contrato'}
+              </Link>
+            )}
+            <OpenChatButton kind="adoption" refId={String(id)} primary label={canManage ? 'Escribir a la persona adoptante' : isCession ? 'Escribir a quien lo cede' : 'Escribir a la protectora'} />
+            {canManage && !isTerminal && (
+              <button type="button" onClick={() => setVisitOpen(true)}
+                style={{ border: '1.5px solid #E5E1D6', background: '#fff', borderRadius: 12, padding: '9px 15px', font: 'inherit', fontWeight: 800, fontSize: 14, cursor: 'pointer', color: '#3F4A3C' }}>
+                {adoption.visit ? 'Cambiar visita' : 'Proponer visita'}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+      {visitOpen && (
+        <ProposeVisitDialog
+          adoptionId={String(id)}
+          animalName={animal.name}
+          initial={{ place: adoption.visit?.place }}
+          onClose={() => setVisitOpen(false)}
+          onDone={() => { setVisitOpen(false); refetch(); }}
+        />
+      )}
 
       {canManage && (
         <section className="grid gap-3 border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
           <h2 className="text-lg font-semibold">Gestionar estado</h2>
-          <div className="flex flex-wrap gap-2">
-            {MANAGE_ACTIONS.map((newStatus) => (
-              <button
-                key={newStatus}
-                type="button"
-                className="border px-3 py-2 text-sm font-medium disabled:opacity-50"
-                style={{ borderColor: '#D7D0C2', borderRadius: 8 }}
-                onClick={() => decide(newStatus)}
-                disabled={newStatus === status}
-              >
-                {statusLabel(newStatus)}
-              </button>
-            ))}
-          </div>
+          {/* Solo las transiciones legales desde el estado actual, igual que el panel
+              de la protectora. Esta pantalla ofrecía las seis siempre, así que las dos
+              pantallas de la misma protectora no decían lo mismo. */}
+          {isTerminal ? (
+            <>
+              <p className="text-sm" style={{ color: '#7A8273' }}>
+                Este proceso está cerrado ({statusLabel(status)}) y ya no admite cambios de estado.
+              </p>
+              {/* Deshacer vive solo aquí, en la ficha, y no en los paneles de lista:
+                  ahí los botones se apilan por filas y un clic de más revertiría la
+                  propiedad de un animal. Entrar en la solicitud es la fricción. */}
+              {status === 'aprobada' && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setUndoOpen(true)}
+                    className="border px-3 py-2 text-sm font-medium"
+                    style={{ borderColor: '#C05656', borderRadius: 8, color: '#8F2F2F', background: '#fff' }}
+                  >
+                    Deshacer la aprobación
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {nextAdoptionStatuses(status).map((newStatus) => (
+                <button
+                  key={newStatus}
+                  type="button"
+                  className="border px-3 py-2 text-sm font-medium disabled:opacity-50"
+                  style={{ borderColor: '#D7D0C2', borderRadius: 8 }}
+                  onClick={() => decide(newStatus)}
+                >
+                  {ADOPTION_ACTION_LABEL[newStatus]}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -269,6 +435,81 @@ export default function AdoptionDetail() {
             </button>
           </div>
         </section>
+      )}
+
+      {undoOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+          onClick={() => !undoBusy && setUndoOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="undo-title"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 12, padding: 20, width: 'min(520px, 96vw)',
+              maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(15,23,42,0.25)',
+            }}
+          >
+            <h2 id="undo-title" className="text-lg font-semibold" style={{ marginBottom: 8 }}>
+              Deshacer la aprobación
+            </h2>
+            <p className="text-sm" style={{ color: '#3F4A3C' }}>
+              Esto devuelve a {animal.name || 'el animal'} a tu protectora. En concreto:
+            </p>
+            <ul className="text-sm" style={{ color: '#7A8273', margin: '8px 0 0 18px', listStyle: 'disc', display: 'grid', gap: 4 }}>
+              <li>
+                deja de ser mascota personal de {adoption.adopter?.name || 'la persona adoptante'} y vuelve a estar a tu
+                nombre, en estado <strong>reservado</strong>
+              </li>
+              <li>se retira su plan de bienvenida y las tareas ya marcadas</li>
+              {!!adoption.closedSiblings && (
+                <li>
+                  se reabren las {adoption.closedSiblings} solicitud{adoption.closedSiblings === 1 ? '' : 'es'} que se
+                  cerraron al adjudicarla, y esas personas recibirán un aviso de que sigue disponible
+                </li>
+              )}
+              <li>{adoption.adopter?.name || 'La persona adoptante'} recibirá un correo explicando que se ha revertido</li>
+            </ul>
+            <p className="text-sm" style={{ color: '#7A8273', marginTop: 8 }}>
+              El historial conserva las dos cosas: la adopción y su reversión.
+            </p>
+            <label className="text-sm font-medium" style={{ display: 'block', marginTop: 14 }}>
+              Motivo (obligatorio, lo verá el equipo)
+              <textarea
+                rows={3}
+                value={undoReason}
+                onChange={e => setUndoReason(e.target.value)}
+                className="w-full border p-2 text-sm"
+                style={{ borderColor: '#D7D0C2', borderRadius: 8, marginTop: 4, fontFamily: 'inherit', fontWeight: 400 }}
+              />
+            </label>
+            <div className="flex flex-wrap justify-end gap-2" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setUndoOpen(false)}
+                disabled={undoBusy}
+                className="border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ borderColor: '#D7D0C2', borderRadius: 8, background: '#fff' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmUndo}
+                disabled={undoBusy || undoReason.trim().length < 3}
+                className="px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: '#8F2F2F', borderRadius: 8 }}
+              >
+                {undoBusy ? 'Deshaciendo…' : 'Sí, deshacer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

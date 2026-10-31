@@ -12,6 +12,7 @@ export type AdminCoupon = {
   targetAgeGroup?: string[];
   targetSize?: string[];
   targetCity?: string | null;
+  targetItems?: string[];
   sponsored?: boolean;
   active: boolean;
   expiresAt?: string | null;
@@ -24,6 +25,7 @@ export type CouponTargeting = {
   targetAgeGroup?: string[];
   targetSize?: string[];
   targetCity?: string | null;
+  targetItems?: string[];
   sponsored?: boolean;
 };
 

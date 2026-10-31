@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { VetAppointment } from '../../api/vetAppointments';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
-import { STATUS_META, AppointmentCard } from './appointmentShared';
+import { STATUS_META, AppointmentCard, LoadError } from './appointmentShared';
 
 const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -22,12 +22,18 @@ export default function AppointmentsCalendar({
   title = 'Calendario',
   counterpartName,
   renderActions,
+  isLoading = false,
+  isError = false,
+  onRetry,
 }: {
   appointments: VetAppointment[];
   title?: string;
   // Cómo titular cada cita (nombre de la contraparte): para el vet, el cliente; para el usuario, el vet.
   counterpartName: (a: VetAppointment) => string;
   renderActions?: (a: VetAppointment) => Array<{ label: string; tone?: 'primary' | 'danger' | 'neutral'; onClick: () => void }>;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }) {
   const today = new Date();
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -62,20 +68,31 @@ export default function AppointmentsCalendar({
       .sort((x, y) => apptDate(x).getTime() - apptDate(y).getTime());
   }, [appointments, selected]);
 
-  const move = (delta: number) => setCursor(c => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  // Al cambiar de mes hay que mover también el día seleccionado: si no, la
+  // cabecera dice "agosto" y el detalle de abajo sigue listando el 29 de julio.
+  // Si el mes de destino es el actual se vuelve a hoy; si no, al día 1.
+  const move = (delta: number) => setCursor(c => {
+    const next = new Date(c.getFullYear(), c.getMonth() + delta, 1);
+    setSelected(
+      next.getFullYear() === today.getFullYear() && next.getMonth() === today.getMonth()
+        ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        : next,
+    );
+    return next;
+  });
 
   return (
     <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, margin: 0 }}>{title}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button type="button" onClick={() => move(-1)} aria-label="Mes anterior" style={navBtn}><ChevronLeft size={18} /></button>
-          <span style={{ fontWeight: 800, minWidth: 150, textAlign: 'center', textTransform: 'capitalize' }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</span>
+          <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</span>
           <button type="button" onClick={() => move(1)} aria-label="Mes siguiente" style={navBtn}><ChevronRight size={18} /></button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
         {WEEKDAYS.map(w => (
           <div key={w} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: MPL.faint, padding: '4px 0' }}>{w}</div>
         ))}
@@ -110,7 +127,15 @@ export default function AppointmentsCalendar({
         <div style={{ fontWeight: 800, fontSize: 13, color: MPL.muted, marginBottom: 8 }}>
           {selected.getDate()} de {MONTHS[selected.getMonth()]}
         </div>
-        {selectedAppts.length === 0 ? (
+        {isError ? (
+          <LoadError
+            title="No hemos podido cargar el calendario."
+            note="Puede ser un problema de conexión. No des por hecho que no tienes citas."
+            onRetry={onRetry || (() => {})}
+          />
+        ) : isLoading ? (
+          <div style={{ color: MPL.faint, fontSize: 14 }}>Cargando…</div>
+        ) : selectedAppts.length === 0 ? (
           <div style={{ color: MPL.faint, fontSize: 14 }}>Sin citas este día.</div>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
@@ -124,4 +149,4 @@ export default function AppointmentsCalendar({
   );
 }
 
-const navBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, border: `1px solid ${MPL.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MPL.ink };
+const navBtn: React.CSSProperties = { width: 34, height: 34, padding: 0, flexShrink: 0, borderRadius: 9, border: `1px solid ${MPL.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MPL.ink };

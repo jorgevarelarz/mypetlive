@@ -5,6 +5,8 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
+/* Un botón-icono con el padding por defecto aplastaba el SVG (flex-shrink) hasta dejarlo en 6 px. */
+button svg, a svg { flex-shrink: 0; }
 
 :root {
   --bg: #f6f3ec;
@@ -15,7 +17,7 @@
   --accent: #efeADF;
   --focus: rgba(31, 111, 111, 0.42);
   --brand-teal: #1f6f6f;
-  --brand-coral: #e8654a;
+  --brand-coral: #c0512f;
   --brand-olive: #6a7b4f;
   --brand-gold: #e9a93c;
 }
@@ -70,13 +72,27 @@ select:focus {
 
 /* Auth (blue gradient background) */
 .auth-shell {
+  /* dvh: en el iPhone 100vh es más alto que lo visible y la pantalla rebotaba. */
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   background: linear-gradient(135deg, #f6f3ec 0%, #ebe3d4 55%, #e2d8c6 100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 16px;
+  gap: 12px;
+  padding: 16px 16px 40px;
+  position: relative;
+}
+.auth-back {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 2px;
+  background: none; border: none; padding: 8px 4px; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--fg);
+}
+@media (min-width: 720px) {
+  .auth-back { position: absolute; top: 20px; left: 24px; }
 }
 .auth-card {
   width: min(100%, 520px);
@@ -91,11 +107,13 @@ select:focus {
 .auth-form { display: grid; gap: 18px; }
 .auth-label { font-size: .9rem; color: var(--fg); font-weight: 500; display: flex; flex-direction: column; gap: 8px; }
 .auth-input {
-  width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; font-size: .95rem; background: rgba(255,255,255,.9);
+  /* 16px: con menos, el iPhone hace zoom al tocar el campo y la pantalla se mueve. */
+  width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; font-size: 16px; background: rgba(255,255,255,.9);
 }
 .auth-input:focus { border-color: var(--focus); box-shadow: 0 0 0 4px rgba(63,74,60,.15); outline: none; background: #fff; }
-.auth-button { height: 48px; border-radius: 14px; border: 1px solid var(--border); background: #fff; color: var(--fg); font-size: 1rem; font-weight: 500; cursor: pointer; box-shadow: none; }
-.auth-button:hover { background: var(--accent); }
+.auth-button { height: 48px; border-radius: 14px; border: 0; background: var(--brand-coral); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 10px 22px -14px rgba(192, 81, 47, .7); }
+.auth-button:hover { background: #a8442a; }
+.auth-button:disabled { opacity: .6; cursor: not-allowed; }
 .auth-footer { margin-top: 20px; text-align: center; font-size: .9rem; color: rgba(15,23,42,.7); }
 
 code {
@@ -205,6 +223,7 @@ a:hover {
 .profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .field-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vet-svc-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 150px 36px; gap: 8px; align-items: center; }
+.item-catalog-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 36px; gap: 8px; align-items: center; }
 @media (max-width: 900px) {
   .profile-grid { grid-template-columns: 1fr; }
 }
@@ -212,6 +231,7 @@ a:hover {
   .field-duo { grid-template-columns: 1fr; }
   .vet-svc-row { grid-template-columns: minmax(0, 1fr) 130px 36px; }
   .vet-svc-row > :first-child { grid-column: 1 / -1; }
+  .item-catalog-row { grid-template-columns: minmax(0, 1fr) 130px 36px; }
 }
 
 /* Estilos de style.css adaptados */
@@ -342,3 +362,59 @@ form p[style] {
   font-weight: 600;
   font-size: 0.95rem;
 }
+
+/* En el iPhone, un campo con letra de menos de 16px hace zoom al tocarlo. */
+@media (max-width: 720px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+/* Migas de pan: en la app no aportan (hay barra inferior y botón Volver). */
+.native-app .mpl-crumbs { display: none !important; }
+
+/* Acceso en el móvil: todo en una pantalla sin deslizar. Sin marco de tarjeta
+   (ocupa y no aporta), sin el logo repetido ni la frase bajo el título. */
+@media (max-width: 720px) {
+  .auth-shell { justify-content: flex-start; gap: 0; padding: 4px 16px 20px; }
+  .auth-card { background: transparent; box-shadow: none; backdrop-filter: none; padding: 4px 4px 0; border-radius: 0; }
+  .auth-logo, .auth-subtitle, .auth-hint { display: none !important; }
+  .auth-title { font-size: 1.7rem; margin: 2px 0 14px; }
+  .auth-form { gap: 10px; }
+  .auth-label { gap: 5px; }
+  .auth-input { padding: 10px 14px; }
+}
+/* En la app las cuentas profesionales no se piden desde el móvil. */
+.native-app .auth-pro { display: none !important; }
+
+/* En la app el pie de enlaces legales alarga pantallas que deberían caber
+   enteras; los textos siguen en el registro y en el perfil. */
+.native-app .app-legal-footer { display: none !important; }
+
+/* Sin rebote al estirar en la app: una pantalla que cabe se queda fija. */
+html.native-app, .native-app body { overscroll-behavior: none; }
+
+/* En la app la página no se desplaza: lo hace #root por dentro, como ya pasaba
+   en Cupones (scroll interior del AppShell). Si se desplaza el documento, el
+   rebote de iOS arrastra la barra inferior fija y la cabecera. Quitar el
+   rebote en nativo (scrollView.bounces) no vale: iOS deja de respetar el
+   hueco de la barra de estado y la cabecera se mete debajo. */
+html.native-app, html.native-app body { height: 100%; overflow: hidden; }
+html.native-app #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+/* Formulario de mascota: en el iPhone los desplegables y sobre todo el campo de
+   fecha tienen un ancho mínimo propio y se salían del diálogo. */
+.pet-form label, .pet-form .grid > * { min-width: 0; }
+.pet-form input:not([type='file']):not([type='checkbox']), .pet-form select {
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; background: #fff;
+}
+.pet-form input[type='date'] { -webkit-appearance: none; appearance: none; display: block; min-height: 42px; text-align: left; }
+.pet-form input[type='file'] { max-width: 100%; }
+
+/* Franjas de la barra de estado y de la barra de inicio en el iPhone: la app
+   ocupa toda la pantalla (contentInset 'never' + viewport-fit=cover) y cada
+   cabecera se alarga por arriba con su propio color (.safe-top). Abajo, el menú
+   ya se alarga con env(safe-area-inset-bottom). Sin esto iOS dejaba esas dos
+   zonas fuera de la web, en negro. */
+html.native-app, .native-app body { background: #F6F3EC; }
+.native-app .safe-top { padding-top: env(safe-area-inset-top, 0px) !important; }
+.native-app #mobile-menu { padding-top: env(safe-area-inset-top, 0px); }
+.native-app .app-shell-body { height: calc(100vh - 56px - env(safe-area-inset-top, 0px)) !important; }

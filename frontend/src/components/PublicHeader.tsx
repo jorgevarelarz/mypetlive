@@ -1,13 +1,20 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { LogOut, UserRound } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { LogOut, UserRound, Menu, X } from 'lucide-react';
 import { useAuthModal } from '../context/AuthModalContext';
 import { useAuth } from '../context/AuthContext';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
+import { isNativeApp } from '../utils/native';
 
 export default function PublicHeader() {
   const { openAuth } = useAuthModal();
   const { user, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // En la app el menú solo llevaba a secciones de la portada web (cómo
+  // funciona, impacto) y la navegación ya está en la barra inferior.
+  const native = isNativeApp();
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.key]);
   const panelPath = user?.role === 'tenant'
     ? '/home'
     : user?.role === 'landlord'
@@ -20,11 +27,13 @@ export default function PublicHeader() {
 
   return (
     <div
+      className="safe-top"
+      onKeyDown={event => { if (event.key === 'Escape') setMenuOpen(false); }}
       style={{
         position: 'sticky',
         top: 0,
         zIndex: 30,
-        background: 'rgba(246,243,236,.86)',
+        background: 'rgba(246,243,236,.97)',
         backdropFilter: 'blur(10px)',
         borderBottom: `1px solid ${MPL.border}`,
       }}
@@ -33,14 +42,18 @@ export default function PublicHeader() {
         .public-header a{color:inherit;text-decoration:none;}
         .public-header-link:hover{color:${MPL.teal}!important;}
         .public-header-cta:hover{filter:brightness(1.05);}
+        .public-header-menu-button{display:none!important;}
+        .public-header-mobile-menu{display:none;}
         @media (max-width: 900px){
           .public-header-nav{display:none!important;}
-          .public-header-topbar{width:100vw!important;max-width:100vw!important;padding:14px 20px!important;overflow:hidden;}
+          .public-header-menu-button{display:inline-flex!important;}
+          .public-header-mobile-menu{display:flex;flex-wrap:wrap;gap:16px;padding:16px 20px;font-family:${MPL_FONT_BODY};background:${MPL.bg};border-top:1px solid ${MPL.border};}
+          .public-header-mobile-menu a{color:${MPL.tealDark};font-weight:700;text-decoration:none;padding:8px;}
+          .public-header-topbar{width:100%!important;height:56px;padding:0 16px!important;gap:8px;}
+          .public-header-cta{display:none!important;}
         }
         @media (max-width: 520px){
-          .public-header-login{display:none!important;}
-          .public-header-topbar{position:relative;}
-          .public-header-cta{position:absolute;right:20px;display:inline-flex!important;padding:10px 16px!important;}
+          .public-header-account-name{display:none;}
         }
       `}</style>
       <div
@@ -75,7 +88,10 @@ export default function PublicHeader() {
           <Link className="public-header-link" to="/#impacto">Impacto</Link>
           <button
             className="public-header-link"
-            onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })}
+            // Prometía "Crea tu cuenta de protectora" y abría un registro que
+            // solo da de alta adoptantes. Las cuentas profesionales las
+            // activamos a mano, así que se ofrece entrar o solicitar el alta.
+            onClick={() => openAuth({ mode: 'login', message: 'Las cuentas de protectora las activamos nosotros. Si ya la tienes, entra aquí; si no, escríbenos a soporte@mypetlive.es y verificamos la entidad.' })}
             style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: MPL.muted }}
           >
             Protectoras
@@ -84,13 +100,13 @@ export default function PublicHeader() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {user ? (
             <>
-              <Link className="public-header-login" to={panelPath} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14.5, fontWeight: 700 }}>
+              <Link className="public-header-login" to={panelPath} aria-label="Mi panel" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14.5, fontWeight: 700 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center', background: MPL.teal100, color: MPL.teal }}>
                   <UserRound size={17} />
                 </span>
-                <span>{user.name || 'Mi panel'}</span>
+                <span className="public-header-account-name">{user.name || 'Mi panel'}</span>
               </Link>
-              <button type="button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}>
+              <button type="button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión" style={{ padding: 0, width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 12, border: `1px solid ${MPL.border}`, background: '#fff', color: MPL.muted, cursor: 'pointer' }}>
                 <LogOut size={17} />
               </button>
             </>
@@ -120,8 +136,18 @@ export default function PublicHeader() {
               </Link>
             </>
           )}
+          {!native && <button type="button" className="public-header-menu-button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="public-mobile-menu" onClick={() => setMenuOpen(open => !open)} style={{ width: 40, height: 40, padding: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}>
+            {menuOpen ? <X size={22} style={{ flexShrink: 0 }} /> : <Menu size={22} style={{ flexShrink: 0 }} />}
+          </button>}
         </div>
       </div>
+      {menuOpen && <nav id="public-mobile-menu" className="public-header-mobile-menu" aria-label="Menú principal">
+        <Link to="/animals">Adoptar</Link>
+        <Link to="/#como">Cómo funciona</Link>
+        <Link to="/#impacto">Impacto</Link>
+        <a href="mailto:soporte@mypetlive.es?subject=Alta%20profesional">Alta profesional</a>
+        <Link to="/legal/privacy">Privacidad</Link>
+      </nav>}
     </div>
   );
 }

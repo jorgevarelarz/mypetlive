@@ -15,7 +15,7 @@ const animalEventSchema = new Schema(
     code: { type: String, uppercase: true, index: true },
     type: {
       type: String,
-      enum: ['created', 'published', 'reserved', 'adopted', 'transferred', 'returned', 'vet', 'health', 'status'],
+      enum: ['created', 'published', 'reserved', 'adopted', 'transferred', 'returned', 'vet', 'health', 'status', 'lost', 'found', 'sighting'],
       required: true,
     },
     actorId: { type: Schema.Types.ObjectId, ref: 'User' },

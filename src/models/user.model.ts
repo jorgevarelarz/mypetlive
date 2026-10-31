@@ -75,7 +75,29 @@ const userSchema = new Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     // Passwords are stored hashed; see controllers/auth.controller.ts
-    passwordHash: { type: String, required: true },
+    // Obligatoria salvo que la cuenta venga de Google/Apple: en ese caso no hay
+    // contraseña que guardar (puede ponerse una después con "recuperar acceso").
+    passwordHash: {
+      type: String,
+      required(this: { authProviders?: unknown[] }) {
+        return !(this.authProviders && this.authProviders.length > 0);
+      },
+    },
+    /**
+     * Proveedores de identidad externos vinculados a esta cuenta. `sub` es el
+     * identificador estable del usuario en el proveedor (nunca el correo, que
+     * puede cambiar). Un mismo correo puede tener contraseña y proveedores.
+     */
+    authProviders: {
+      type: [
+        {
+          _id: false,
+          provider: { type: String, enum: ['google', 'apple'], required: true },
+          sub: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
     /**
      * Role assigned to the user. Supported values include:
      *  - tenant: standard renter of properties.
@@ -103,11 +125,44 @@ const userSchema = new Schema(
     termsVersionAccepted: { type: String },
     privacyVersionAccepted: { type: String },
     patitas: { type: Number, default: 0 },
+    // Patitas comprometidas y aún no gastadas (hoy: citas veterinarias que la
+    // protectora ha decidido pagar con Patitas). Se bloquean al pedir la cita y
+    // salen del saldo real al completarla, o se liberan si se cancela. El saldo
+    // disponible para gastar en cualquier otra cosa es `patitas - patitasLocked`.
+    patitasLocked: { type: Number, default: 0, min: 0 },
     // Password reset support. select:false: el token de reseteo es una
     // credencial temporal de toma de control de cuenta y nunca debe viajar
     // en respuestas por defecto (p. ej. el listado de usuarios).
     resetToken: { type: String, select: false },
     resetTokenExp: { type: Date, select: false },
+    // Versión de sesión: viaja embebida en el JWT que se firma al hacer login,
+    // y `authenticate`/`optionalAuthenticate` la comparan contra la de aquí en
+    // cada petición. Incrementarla (`resetPassword`) invalida de golpe
+    // cualquier token emitido antes, aunque su firma siga siendo válida y le
+    // queden días de vida. Sin `select:false`: hace falta leerla en cada
+    // petición autenticada, así que ocultarla obligaría a un `.select()` extra
+    // en cada sitio que autentica.
+    tokenVersion: { type: Number, default: 0 },
+    // Cuenta borrada por su titular (utils/accountDeletion): el documento se
+    // conserva anonimizado porque pedidos, donaciones y adopciones lo referencian.
+    // Los listados públicos filtran `deletedAt: null`.
+    deletedAt: { type: Date, default: null },
+    // Correo cuando un mensaje del chat lleva 10 minutos sin leer (jobs/chatEmails).
+    // Se guarda el «no», así las cuentas de antes quedan con el aviso puesto.
+    chatEmailOff: { type: Boolean, default: false },
+    // Particular autorizado por el admin para buscar casa a animales (cesión).
+    // Solo usuarios seleccionados: el resto no ve la opción.
+    rehome: {
+      type: new Schema({ enabled: { type: Boolean, default: false }, by: String, at: Date }, { _id: false }),
+    },
+    // Cambio de email pendiente de confirmar en la dirección nueva. El email es
+    // la llave de la cuenta —desde él se recupera la contraseña—, así que no se
+    // cambia por el hecho de tener una sesión abierta: hasta que no se confirma,
+    // `email` sigue siendo el de siempre y esto es solo una intención.
+    // select:false porque el token confirma un cambio de credencial.
+    pendingEmail: { type: String, select: false },
+    pendingEmailToken: { type: String, select: false, index: true },
+    pendingEmailExp: { type: Date, select: false },
     // Feed iCal de la agenda del vet: token-capability de la URL de suscripción (.ics).
     // select:false para que nunca viaje en respuestas por defecto (el directorio
     // público /api/vets hace select de profile.vet, no de este campo).
@@ -181,6 +236,18 @@ const profileSchema = new Schema(
     // Partner (tienda/vet): % de comisión de plataforma sobre sus ventas.
     // Si falta, aplica el default global (PLATFORM_SALE_COMMISSION_PCT).
     commissionPct: { type: Number, min: 0, max: 100 },
+    // Marketplace: portes que cobra esta tienda y umbral de envío gratis. Sin
+    // esto no se puede vender con envío, así que el panel lo pide al listar el
+    // primer producto.
+    marketplace: {
+      type: new Schema(
+        {
+          shippingEur: { type: Number, min: 0, max: 100 },
+          freeFromEur: { type: Number, min: 0, max: 1000 },
+        },
+        { _id: false },
+      ),
+    },
     // Veterinario: datos de la clínica/profesional.
     vet: {
       type: new Schema(
@@ -209,6 +276,20 @@ const profileSchema = new Schema(
         { _id: false },
       ),
       default: () => ({}),
+    },
+    // Catálogo de productos del partner (tienda/vet): para añadirlos con un toque
+    // al registrar una venta en caja, sin teclear nombre y precio cada vez.
+    itemCatalog: {
+      type: [
+        new Schema(
+          {
+            name: { type: String, trim: true, required: true, maxlength: 100 },
+            priceEur: { type: Number, min: 0 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
     },
     // Común
     address: { type: addressSchema, default: () => ({}) },

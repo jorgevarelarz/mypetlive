@@ -17,6 +17,10 @@ export type PatitaTxn = {
 
 export type MyPatitas = {
   balance: number;
+  /** Comprometidas en citas del vet aún sin completar: cuentan en balance pero no se pueden gastar. */
+  locked: number;
+  /** balance - locked. Es lo que de verdad se puede gastar. */
+  available: number;
   valueEur: number;
   patitaValueEur: number;
   totalGenerated: number;
@@ -115,11 +119,48 @@ export async function addPatitas(protectoraId: string, amount: number) {
 }
 
 // Venta del partner: importe del ticket + líneas opcionales → comisión + Patitas proporcionales.
+// couponIds (o applyCoupons:true) consume esos cupones como parte de la misma venta,
+// sin un paso aparte de "aplicar cupón" — igual que hace el TPV (POST /api/pos/sales).
 export type SaleItemInput = { name: string; qty?: number; priceEur?: number };
+export type AppliedSaleCoupon = { _id: string; title?: string; discount?: string; bonusPatitas: number; targetAnimalCode?: string | null };
 
-export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[] }) {
-  const { data } = await client.post('/api/patitas/sales', payload);
-  return data as { ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number; balance?: number; autoDonated?: boolean };
+export async function registerSale(payload: { userId: string; amountEur: number; items?: SaleItemInput[]; couponIds?: string[]; applyCoupons?: boolean }) {
+  // La caja traduce sus códigos (amount_too_large, invalid_amount): sin esto
+  // el partner veía el código crudo además del mensaje bueno.
+  const { data } = await client.post('/api/patitas/sales', payload, { skipErrorToast: true } as any);
+  return data as {
+    ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number;
+    appliedCoupons: AppliedSaleCoupon[]; balance?: number; autoDonated?: boolean;
+  };
+}
+
+// Extracto mensual de liquidación de comisiones del partner.
+export type PartnerStatement = {
+  period: string; // YYYY-MM
+  sales: number;
+  amountEur: number;
+  commissionEur: number;
+  status: 'pending' | 'invoiced' | 'paid';
+  breakdown: { pending: number; invoiced: number; paid: number };
+  invoiceRef: string | null;
+};
+
+export async function listMyStatements() {
+  const { data } = await client.get('/api/patitas/sales/statements');
+  return (data.items || []) as PartnerStatement[];
+}
+
+// Descarga el CSV con la sesión autenticada y dispara el guardado en el navegador.
+export async function downloadMyStatementsCsv() {
+  const { data } = await client.get('/api/patitas/sales/statements?format=csv', { responseType: 'blob' });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'extracto-liquidacion.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Clave API del TPV del partner (integración de caja).
@@ -156,4 +197,19 @@ export async function createPosKey(payload: { label?: string; mode?: 'live' | 't
 export async function revokePosKey(keyId: string) {
   const { data } = await client.delete(`/api/partners/me/pos-keys/${keyId}`);
   return data as { ok: boolean };
+}
+
+/** «Qué se ha hecho con tus Patitas» (pantalla de Patitas). Ver getMyPatitasImpact del servidor. */
+export type PatitasImpact = {
+  patitaValueEur: number;
+  earned: Array<{ source: string; amount: number; count: number }>;
+  shelters: Array<{
+    id: string; name: string; donated: number; donatedEur: number; auto: number; last: string;
+    uses: Array<{ concept: string; amount: number; valueEur: number }>;
+  }>;
+};
+
+export async function getMyPatitasImpact() {
+  const { data } = await client.get('/api/patitas/me/impact');
+  return data as PatitasImpact;
 }

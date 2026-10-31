@@ -61,4 +61,32 @@ describe('fetchFeaturedAnimal', () => {
 
     expect(result).toBeNull();
   });
+
+  // Regresión: se filtraba por 'accepted'/'active' (vocabulario del legado de
+  // alquiler), estados que AdoptionStatus no tiene, así que la mascota adoptada
+  // nunca llegaba a la home del adoptante.
+  it('devuelve el animal de una adopción aprobada', async () => {
+    mockListMyPets.mockResolvedValue({ items: [] });
+    mockListMyAdoptions.mockResolvedValue({
+      items: [{ id: 'ad1', status: 'aprobada', animal: { _id: 'an1', name: 'Nala', images: ['/uploads/nala.jpg'] } }],
+    });
+
+    const result = await fetchFeaturedAnimal(null);
+
+    expect(result?.name).toBe('Nala');
+  });
+
+  it('ignora las adopciones que aún no están aprobadas', async () => {
+    mockListMyPets.mockResolvedValue({ items: [] });
+    mockListMyAdoptions.mockResolvedValue({
+      items: [
+        { id: 'ad2', status: 'en_revision', animal: { _id: 'an2', name: 'Toby', images: ['/uploads/toby.jpg'] } },
+        { id: 'ad3', status: 'rechazada', animal: { _id: 'an3', name: 'Kira', images: [] } },
+      ],
+    });
+
+    const result = await fetchFeaturedAnimal(null);
+
+    expect(result).toBeNull();
+  });
 });

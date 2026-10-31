@@ -7,6 +7,27 @@ import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
 import { logAnimalEvent } from '../utils/animalEvents';
 import { activateWelcomePlan } from '../utils/welcomePlan';
+import { WelcomePlan } from '../models/welcomePlan.model';
+import { canTransitionAdoption, isTerminalAdoptionStatus, nextAdoptionStatuses, TERMINAL_ADOPTION_STATUSES } from '../utils/adoptionTransitions';
+import {
+  UNDO_APPROVAL_WINDOW_HOURS,
+  STATUS_BEFORE_APPROVAL,
+  findApprovalTimestamp,
+  hoursSince,
+  statusBeforeAutoClose,
+} from '../utils/adoptionUndo';
+import logger from '../utils/logger';
+import { sendPushToUser, type PushPayload } from '../utils/push';
+import { formatWhen, postSystemMessage } from '../utils/chat';
+import { isAdoptableRole } from '../utils/adoptable';
+
+// Aviso al móvil junto al correo. Sin esperar: la respuesta no depende de Apple.
+function pushTo(userId: unknown, payload: PushPayload) {
+  if (!userId) return;
+  void sendPushToUser(String(userId), payload).catch(err =>
+    logger.error({ err, userId: String(userId) }, '[adopciones] fallo al enviar push'),
+  );
+}
 
 export async function create(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
@@ -20,7 +41,7 @@ export async function create(req: Request, res: Response) {
 
   const animal = await Animal.findById(animalId).lean();
   if (!animal) return res.status(404).json({ error: 'animal_not_found' });
-  if (animal.isPersonalPet === true || animal.createdByRole !== 'protectora') {
+  if (animal.isPersonalPet === true || !isAdoptableRole(animal.createdByRole)) {
     return res.status(400).json({ error: 'animal_not_available' });
   }
   if (animal.status !== 'publicado') return res.status(400).json({ error: 'animal_not_available' });
@@ -53,6 +74,7 @@ export async function create(req: Request, res: Response) {
     normalizedAnswers = requiredQuestions.map(question => ({ question, answer: answerMap.get(question) || '' }));
   }
 
+  if (String(animal.shelter) === String(userId)) return res.status(400).json({ error: 'own_animal' });
   const exists = await Adoption.findOne({ animalId: String(animal._id), adopterId: String(userId) });
   if (exists) return res.json({ ok: true, id: exists._id, status: exists.status });
 
@@ -67,6 +89,16 @@ export async function create(req: Request, res: Response) {
     ],
   });
 
+  // Abre la conversación con la protectora desde el primer momento: así la
+  // solicitud aparece en Mensajes de los dos sin que nadie tenga que escribir.
+  await postSystemMessage({
+    kind: 'adoption', refId: String(created._id), code: 'adoption.created', actorId: String(userId),
+    body: (animal as any).cession?.microchip
+      ? `Solicitud de traspaso enviada para ${animal.name}.`
+      : `Solicitud enviada para adoptar a ${animal.name}.`,
+    payload: { animalName: animal.name },
+  });
+
   // Aviso a la protectora de la nueva candidatura. Best-effort: nunca rompe el alta.
   try {
     if (animal.shelter) {
@@ -74,15 +106,26 @@ export async function create(req: Request, res: Response) {
         User.findById(animal.shelter).select('email').lean(),
         User.findById(userId).select('name').lean(),
       ]);
+      // En una cesión quien recibe el aviso es un particular: su sitio es
+      // «Buscar casa a un animal», no el panel de protectoras.
+      const cession = Boolean((animal as any).cession?.microchip);
+      const panel = cession ? '/buscar-casa' : '/landlord/adoptions';
+      const who = (adopter as any)?.name || (cession ? 'Alguien' : 'Un adoptante');
       if ((shelter as any)?.email) {
         const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
         await sendEmail(
           (shelter as any).email,
-          `Nueva solicitud de adopción para ${animal.name}`,
-          `${(adopter as any)?.name || 'Un adoptante'} ha enviado una solicitud de adopción para ${animal.name}.\n` +
-            `Revísala en tu panel: ${baseUrl}/landlord/adoptions`,
+          cession ? `${who} ha pedido el traspaso de ${animal.name}` : `Nueva solicitud de adopción para ${animal.name}`,
+          (cession
+            ? `${who} ha pedido el traspaso de ${animal.name}. Puedes hablar con esa persona y elegir familia aquí: `
+            : `${who} ha enviado una solicitud de adopción para ${animal.name}.\nRevísala en tu panel: `) + `${baseUrl}${panel}`,
         );
       }
+      pushTo(animal.shelter, {
+        title: cession ? `Alguien quiere a ${animal.name}` : `Nueva solicitud para ${animal.name}`,
+        body: cession ? `${who} ha pedido el traspaso.` : `${who} quiere adoptarle.`,
+        url: panel,
+      });
     }
   } catch {}
 
@@ -207,6 +250,176 @@ async function findSimilarAnimals(animal: any, limit = 3) {
   return found;
 }
 
+/**
+ * Cierra el resto de candidaturas abiertas del mismo animal cuando una se
+ * aprueba. Sin esto quedaban vivas para siempre: contaban como "en proceso" en
+ * el panel de la protectora y esas personas nunca recibían una respuesta, aunque
+ * el animal ya tuviera hogar.
+ *
+ * Es best-effort a propósito: la adopción aprobada ya está guardada y el traspaso
+ * hecho, así que un fallo aquí no puede tumbar la respuesta.
+ */
+async function closeSiblingApplications(approved: any, animal: any, actorId: string) {
+  try {
+    const siblings = await Adoption.find({
+      animalId: String(animal._id),
+      _id: { $ne: approved._id },
+      status: { $nin: TERMINAL_ADOPTION_STATUSES },
+    });
+    if (!siblings.length) return;
+
+    const similars = await findSimilarAnimals(animal);
+    const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+    const suggestions = similars.length
+      ? `\n\nEstos compañeros parecidos siguen buscando hogar:\n` +
+        similars.map(s => `- ${s.name}${s.city ? ` (${s.city})` : ''}: ${baseUrl}/animals/${s._id}`).join('\n')
+      : '';
+
+    for (const sibling of siblings) {
+      // `previousStatus` no es decorativo: si luego se deshace la aprobación,
+      // es lo que devuelve a cada candidatura al punto donde estaba.
+      const previousStatus = sibling.status;
+      sibling.status = 'rechazada';
+      sibling.history = sibling.history || [];
+      sibling.history.push({
+        ts: new Date(),
+        actorId,
+        action: 'status_change',
+        payload: { status: 'rechazada', reason: 'animal_adopted', adoptionId: String(approved._id), previousStatus },
+      });
+      await sibling.save();
+      await postSystemMessage({
+        kind: 'adoption', refId: String(sibling._id), code: 'adoption.status', actorId,
+        body: `${animal.name} ya ha encontrado hogar: la solicitud se ha cerrado.`,
+        payload: { status: 'rechazada', reason: 'animal_adopted' },
+      });
+
+      pushTo(sibling.adopterId, {
+        title: 'Tu solicitud de adopción se ha cerrado',
+        body: `${animal.name} ya ha encontrado hogar. Gracias por querer adoptar.`,
+        url: '/adoptions/mine',
+      });
+      const adopter = await User.findById(sibling.adopterId).select('email').lean();
+      if (!adopter?.email) continue;
+      await sendEmail(
+        adopter.email,
+        'Tu solicitud de adopción se ha cerrado',
+        `${animal.name} ya ha encontrado hogar, así que cerramos tu solicitud. Gracias por querer adoptar.${suggestions}`,
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error, animalId: String(animal._id) }, '[adopciones] no se pudieron cerrar las candidaturas hermanas');
+  }
+}
+
+/**
+ * Cambia el estado de una solicitud con todos sus efectos: el animal (reservado,
+ * adoptado o liberado), el linaje, las candidaturas hermanas, los avisos y la
+ * tarjeta en el chat. La legalidad de la transición la comprueba quien llama.
+ *
+ * `quiet` se salta avisos y tarjeta: lo usa proponer visita, que manda los
+ * suyos con la fecha (un «ahora está: cita propuesta» sin fecha no sirve).
+ */
+export async function applyStatusChange(
+  app: any,
+  animal: any,
+  status: import('../models/adoption.model').AdoptionStatus,
+  userId: string,
+  opts: { note?: string; quiet?: boolean } = {},
+) {
+  const { note } = opts;
+  app.status = status;
+  app.history = app.history || [];
+  app.history.push({
+    ts: new Date(),
+    actorId: userId,
+    action: 'status_change',
+    payload: { status, ...(note ? { note: note.slice(0, 1000) } : {}) },
+  });
+  await app.save();
+
+  if (status === 'aprobada') {
+    // Cierre de adopción: la mascota pasa a ser del adoptante (conserva su código).
+    const previousShelter = animal.shelter ? String(animal.shelter) : undefined;
+    if (app.adopterId) {
+      animal.ownerId = new Types.ObjectId(String(app.adopterId));
+    }
+    animal.createdByRole = 'tenant';
+    animal.isPersonalPet = true;
+    animal.status = 'adoptado';
+    await animal.save();
+    await logAnimalEvent({
+      animalId: String(animal._id), code: animal.code, type: 'adopted',
+      actorId: userId,
+      // En una cesión el anterior dueño es una persona, no una protectora.
+      fromOwnerId: previousShelter, fromOwnerType: animal.cession?.microchip ? 'tenant' : 'protectora',
+      toOwnerId: app.adopterId ? String(app.adopterId) : undefined, toOwnerType: 'tenant',
+      shelterId: previousShelter, data: { adoptionId: String(app._id) },
+    });
+  } else if (['preaprobada', 'cita_propuesta'].includes(status) && animal.status === 'publicado') {
+    // Proceso avanzado: el animal deja de estar libremente disponible.
+    animal.status = 'reservado';
+    await animal.save();
+    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'reserved', shelterId: animal.shelter ? String(animal.shelter) : undefined });
+  } else if ((status === 'rechazada' || status === 'cancelada') && animal.status === 'reservado') {
+    // Se libera de nuevo si el proceso se detiene.
+    animal.status = 'publicado';
+    await animal.save();
+    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
+  }
+
+  // Al adjudicar el animal, el resto de candidaturas dejan de tener sentido:
+  // quedaban abiertas para siempre, contando como "en proceso" en el panel de la
+  // protectora y dejando a esas personas esperando una respuesta que no llegaba.
+  if (status === 'aprobada') {
+    await closeSiblingApplications(app, animal, userId);
+  }
+
+  if (opts.quiet) return;
+
+  await postSystemMessage({
+    kind: 'adoption', refId: String(app._id), code: 'adoption.status', actorId: userId,
+    body: status === 'aprobada'
+      ? animal.cession?.microchip
+        ? `¡Cesión completada! ${animal.name} se va a casa.`
+        : `¡Adopción aprobada! ${animal.name} se va a casa.`
+      : `La solicitud ha pasado a «${STATUS_LABEL_ES[status] || status}».`,
+    payload: { status, ...(note ? { note: note.slice(0, 1000) } : {}) },
+  });
+
+  pushTo(app.adopterId, status === 'aprobada'
+    ? { title: animal.cession?.microchip ? '¡Cesión completada! 🎉' : '¡Adopción aprobada! 🎉', body: `${animal.name} se viene a casa contigo.`, url: `/adoptions/${app._id}` }
+    : { title: `Tu solicitud para ${animal.name}`, body: `Ahora está: ${STATUS_LABEL_ES[status] || status}.`, url: `/adoptions/${app._id}` });
+
+  try {
+    const adopter = await User.findById(app.adopterId);
+    if (status === 'aprobada') {
+      // Plan de bienvenida post-adopción: checklist + email con guía y ofertas.
+      await activateWelcomePlan({
+        animal,
+        adopterId: String(app.adopterId),
+        adoptionId: String(app._id),
+        adopterEmail: adopter?.email,
+      });
+    } else if (adopter?.email) {
+      const subject = 'Estado de tu solicitud de adopción';
+      const who = animal.cession?.microchip ? 'La persona que lo cede' : 'La protectora';
+      let msg = `${who} ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
+      // Al rechazar, sugerimos animales parecidos para que el adoptante siga buscando.
+      if (status === 'rechazada') {
+        const similars = await findSimilarAnimals(animal);
+        if (similars.length) {
+          const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+          msg +=
+            `\n\nNo te desanimes: estos compañeros parecidos siguen buscando hogar:\n` +
+            similars.map(s => `- ${s.name}${s.city ? ` (${s.city})` : ''}: ${baseUrl}/animals/${s._id}`).join('\n');
+        }
+      }
+      await sendEmail(adopter.email, subject, msg);
+    }
+  } catch {}
+}
+
 export async function setStatus(req: Request, res: Response) {
   const userId = (req as any).user?._id || (req as any).user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
@@ -225,72 +438,387 @@ export async function setStatus(req: Request, res: Response) {
     return res.status(403).json({ error: 'forbidden' });
   }
 
-  app.status = status;
+  // La transición tiene que ser legal. Antes se aceptaba cualquier estado del
+  // enum viniera de donde viniera, así que una adopción ya aprobada se podía
+  // pasar a 'rechazada' sin deshacer el traspaso del animal. El admin no está
+  // exento: el destrozo en los datos es el mismo desde su panel.
+  if (!canTransitionAdoption(app.status, status)) {
+    return res.status(409).json({
+      error: isTerminalAdoptionStatus(app.status) ? 'adoption_already_closed' : 'invalid_transition',
+      from: app.status,
+      to: status,
+      allowed: nextAdoptionStatuses(app.status),
+    });
+  }
+
+  await applyStatusChange(app, animal, status, String(userId), { note });
+  res.json({ ok: true, id: app._id, status: app.status });
+}
+
+/**
+ * Reabre las candidaturas que se cerraron solas al adjudicar el animal.
+ *
+ * Las cerró un automatismo nuestro, no una decisión de la protectora, así que al
+ * revertir vuelven a donde estaban y se avisa: esas personas recibieron un "ya
+ * encontró hogar" que ha dejado de ser verdad.
+ *
+ * Best-effort, como el cierre: la reversión ya está guardada y un fallo de correo
+ * no puede tumbar la respuesta.
+ */
+async function reopenSiblingApplications(approved: any, animal: any, actorId: string) {
+  try {
+    const siblings = await Adoption.find({
+      animalId: String(animal._id),
+      _id: { $ne: approved._id },
+      status: 'rechazada',
+      'history.payload.adoptionId': String(approved._id),
+    });
+
+    const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+    let reopened = 0;
+
+    for (const sibling of siblings) {
+      const closedByUs = (sibling.history || []).some(
+        entry =>
+          entry?.action === 'status_change' &&
+          (entry.payload as any)?.reason === 'animal_adopted' &&
+          String((entry.payload as any)?.adoptionId) === String(approved._id),
+      );
+      if (!closedByUs) continue;
+
+      sibling.status = statusBeforeAutoClose(sibling.history, String(approved._id));
+      sibling.history = sibling.history || [];
+      sibling.history.push({
+        ts: new Date(),
+        actorId,
+        action: 'status_change',
+        payload: { status: sibling.status, reason: 'adoption_reverted', adoptionId: String(approved._id) },
+      });
+      await sibling.save();
+      reopened += 1;
+      await postSystemMessage({
+        kind: 'adoption', refId: String(sibling._id), code: 'adoption.status', actorId,
+        body: `La adopción de ${animal.name} no ha seguido adelante: la solicitud vuelve a estar abierta.`,
+        payload: { status: sibling.status, reason: 'adoption_reverted' },
+      });
+
+      pushTo(sibling.adopterId, {
+        title: 'Tu solicitud de adopción vuelve a estar abierta',
+        body: `La adopción de ${animal.name} no ha seguido adelante: tu solicitud sigue en marcha.`,
+        url: `/adoptions/${sibling._id}`,
+      });
+      const adopter = await User.findById(sibling.adopterId).select('email').lean();
+      if (!adopter?.email) continue;
+      await sendEmail(
+        adopter.email,
+        'Tu solicitud de adopción vuelve a estar abierta',
+        `Te escribimos para corregir el aviso anterior: la adopción de ${animal.name} no ha seguido adelante, ` +
+          `así que tu solicitud vuelve a estar en marcha.\n\n${baseUrl}/animals/${animal._id}`,
+      );
+    }
+    return reopened;
+  } catch (error) {
+    logger.error({ err: error, animalId: String(animal._id) }, '[adopciones] no se pudieron reabrir las candidaturas hermanas');
+    return 0;
+  }
+}
+
+/**
+ * Deshace una aprobación: devuelve el animal a la protectora y la solicitud a
+ * `preaprobada`.
+ *
+ * No es un cambio de estado más y por eso no pasa por `setStatus`: aprobar tiene
+ * cinco efectos (traspaso del animal, evento de linaje, cierre de las
+ * candidaturas hermanas, plan de bienvenida y correo) y deshacer tiene que
+ * deshacer los cinco. Pasarlo por la máquina de estados habría exigido abrir
+ * `aprobada`, y entonces cualquier otro camino de salida —a `rechazada`, por
+ * ejemplo— volvería a dejar al animal traspasado con la solicitud rechazada.
+ *
+ * El evento `adopted` del linaje NO se borra: se compensa con uno de vuelta. Un
+ * pasaporte que se reescribe deja de ser un pasaporte.
+ */
+export async function undoApproval(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = user?._id || user?.id;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  const { id } = req.params;
+  const { reason } = (req.body || {}) as { reason?: string };
+
+  const app = await Adoption.findById(id);
+  if (!app) return res.status(404).json({ error: 'not_found' });
+
+  const animal = await Animal.findById(app.animalId);
+  if (!animal) return res.status(404).json({ error: 'animal_not_found' });
+
+  const isAdmin = user?.role === 'admin';
+  if (!isAdmin && String(animal.shelter) !== String(userId)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  if (app.status !== 'aprobada') {
+    return res.status(409).json({ error: 'not_approved', status: app.status });
+  }
+
+  // El motivo es obligatorio y queda en el historial: esta operación mueve la
+  // propiedad de un ser vivo y tiene que poder explicarse meses después.
+  const trimmedReason = String(reason || '').trim();
+  if (trimmedReason.length < 3) return res.status(400).json({ error: 'reason_required' });
+
+  // Si el animal ya no está a nombre del adoptante, alguien lo ha movido después
+  // (transferencia, otra adopción). Revertir aquí pisaría esa historia.
+  if (app.adopterId && animal.ownerId && String(animal.ownerId) !== String(app.adopterId)) {
+    return res.status(409).json({ error: 'animal_moved_on' });
+  }
+
+  const approvedAt = findApprovalTimestamp(app.history) || app.updatedAt;
+  const elapsedHours = approvedAt ? hoursSince(new Date(approvedAt)) : 0;
+  if (!isAdmin && elapsedHours > UNDO_APPROVAL_WINDOW_HOURS) {
+    return res.status(403).json({
+      error: 'undo_window_expired',
+      windowHours: UNDO_APPROVAL_WINDOW_HOURS,
+      approvedAt,
+    });
+  }
+
+  const adopterId = app.adopterId ? String(app.adopterId) : undefined;
+  const shelterId = animal.shelter ? String(animal.shelter) : undefined;
+
+  // 1. El animal vuelve a la protectora. `reservado` y no `publicado`: que
+  //    regrese al escaparate lo decide ella, no nosotros.
+  if (shelterId) animal.ownerId = new Types.ObjectId(shelterId);
+  // Una cesión vuelve a ser del particular que la publicó, no de una protectora.
+  animal.createdByRole = animal.cession?.microchip ? 'particular' : 'protectora';
+  animal.isPersonalPet = false;
+  animal.status = 'reservado';
+  await animal.save();
+
+  // 2. Linaje: evento de vuelta, sin tocar el 'adopted' anterior.
+  await logAnimalEvent({
+    animalId: String(animal._id), code: animal.code, type: 'returned',
+    actorId: String(userId),
+    fromOwnerId: adopterId, fromOwnerType: 'tenant',
+    toOwnerId: shelterId, toOwnerType: 'protectora',
+    shelterId,
+    data: { adoptionId: String(app._id), reason: trimmedReason, undo: true },
+  });
+
+  // 3. La solicitud vuelve al único estado desde el que se pudo aprobar.
+  app.status = STATUS_BEFORE_APPROVAL;
   app.history = app.history || [];
   app.history.push({
     ts: new Date(),
     actorId: String(userId),
-    action: 'status_change',
-    payload: { status, ...(note ? { note: note.slice(0, 1000) } : {}) },
+    action: 'undo_approval',
+    payload: {
+      status: STATUS_BEFORE_APPROVAL,
+      from: 'aprobada',
+      reason: trimmedReason.slice(0, 1000),
+      by: isAdmin ? 'admin' : 'shelter',
+      hoursSinceApproval: Math.round(elapsedHours * 10) / 10,
+    },
   });
   await app.save();
 
-  if (status === 'aprobada') {
-    // Cierre de adopción: la mascota pasa a ser del adoptante (conserva su código).
-    const previousShelter = animal.shelter ? String(animal.shelter) : undefined;
-    if (app.adopterId) {
-      animal.ownerId = new Types.ObjectId(String(app.adopterId));
+  // 4. El plan de bienvenida se retira entero: sus tareas hablaban de una
+  //    convivencia que no ha empezado.
+  if (adopterId) {
+    try {
+      await WelcomePlan.deleteOne({ animalId: animal._id, ownerId: new Types.ObjectId(adopterId) });
+    } catch (err) {
+      logger.error({ err, animalId: String(animal._id) }, '[adopciones] no se pudo retirar el plan de bienvenida');
     }
-    animal.createdByRole = 'tenant';
-    animal.isPersonalPet = true;
-    animal.status = 'adoptado';
-    await animal.save();
-    await logAnimalEvent({
-      animalId: String(animal._id), code: animal.code, type: 'adopted',
-      actorId: String((req as any).user?._id || (req as any).user?.id || ''),
-      fromOwnerId: previousShelter, fromOwnerType: 'protectora',
-      toOwnerId: app.adopterId ? String(app.adopterId) : undefined, toOwnerType: 'tenant',
-      shelterId: previousShelter, data: { adoptionId: String(app._id) },
-    });
-  } else if (['preaprobada', 'cita_propuesta'].includes(status) && animal.status === 'publicado') {
-    // Proceso avanzado: el animal deja de estar libremente disponible.
-    animal.status = 'reservado';
-    await animal.save();
-    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'reserved', shelterId: animal.shelter ? String(animal.shelter) : undefined });
-  } else if ((status === 'rechazada' || status === 'cancelada') && animal.status === 'reservado') {
-    // Se libera de nuevo si el proceso se detiene.
-    animal.status = 'publicado';
-    await animal.save();
-    await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
   }
 
+  // 5. Las candidaturas hermanas vuelven a la vida.
+  const reopened = await reopenSiblingApplications(app, animal, String(userId));
+
+  await postSystemMessage({
+    kind: 'adoption', refId: String(app._id), code: 'adoption.status', actorId: String(userId),
+    body: `Se ha deshecho la aprobación: ${animal.name} vuelve con la protectora y la solicitud queda preaprobada. Motivo: ${trimmedReason.slice(0, 300)}`,
+    payload: { status: STATUS_BEFORE_APPROVAL, undo: true },
+  });
+
+  // 6. El adoptante se entera por nosotros, no por encontrarse la ficha cambiada.
+  pushTo(adopterId, {
+    title: `Se ha revertido la adopción de ${animal.name}`,
+    body: `Tu solicitud vuelve a estar preaprobada. Motivo: ${trimmedReason.slice(0, 120)}`,
+    url: `/adoptions/${app._id}`,
+  });
   try {
-    const adopter = await User.findById(app.adopterId);
-    if (status === 'aprobada') {
-      // Plan de bienvenida post-adopción: checklist + email con guía y ofertas.
-      await activateWelcomePlan({
-        animal,
-        adopterId: String(app.adopterId),
-        adoptionId: String(app._id),
-        adopterEmail: adopter?.email,
-      });
-    } else if (adopter?.email) {
-      const subject = 'Estado de tu solicitud de adopción';
-      let msg = `La protectora ha actualizado el estado de tu solicitud para ${animal.name} a: ${STATUS_LABEL_ES[status] || status}.`;
-      // Al rechazar, sugerimos animales parecidos para que el adoptante siga buscando.
-      if (status === 'rechazada') {
-        const similars = await findSimilarAnimals(animal);
-        if (similars.length) {
-          const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
-          msg +=
-            `\n\nNo te desanimes: estos compañeros parecidos siguen buscando hogar:\n` +
-            similars.map(s => `- ${s.name}${s.city ? ` (${s.city})` : ''}: ${baseUrl}/animals/${s._id}`).join('\n');
-        }
-      }
-      await sendEmail(adopter.email, subject, msg);
+    const adopter = adopterId ? await User.findById(adopterId).select('email').lean() : null;
+    if (adopter?.email) {
+      await sendEmail(
+        adopter.email,
+        `Se ha revertido la adopción de ${animal.name}`,
+        `La protectora ha deshecho la aprobación de tu adopción de ${animal.name}, así que vuelve a estar a su cargo ` +
+          `y tu solicitud queda de nuevo como preaprobada.\n\nMotivo indicado: ${trimmedReason}\n\n` +
+          `Si crees que se trata de un error, respóndeles desde el chat de la solicitud.`,
+      );
     }
   } catch {}
-  res.json({ ok: true, id: app._id, status: app.status });
+
+  res.json({ ok: true, id: app._id, status: app.status, reopenedApplications: reopened });
+}
+
+// Desde qué estados puede la protectora proponer (o cambiar) la visita. Desde
+// los primeros pasa a «cita propuesta»; en los dos últimos solo cambia la fecha.
+const VISIT_FROM_STATUSES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional'];
+const VISIT_UPDATE_STATUSES = ['cita_propuesta', 'preaprobada'];
+
+/**
+ * La protectora propone una visita para conocer al animal (día, hora y lugar).
+ * Sale como tarjeta en el chat y en la página de Citas de los dos; el
+ * adoptante la acepta desde ahí. Volver a proponer sustituye a la anterior.
+ */
+export async function proposeVisit(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = String(user?._id || user?.id || '');
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+  const { at, place, note } = (req.body || {}) as { at?: string; place?: string; note?: string };
+  const when = at ? new Date(at) : null;
+  if (!when || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
+  if (when.getTime() < Date.now() - 60_000) return res.status(400).json({ error: 'date_in_past' });
+  if (when.getTime() > Date.now() + 365 * 24 * 3_600_000) return res.status(400).json({ error: 'date_too_far' });
+
+  const app = await Adoption.findById(req.params.id);
+  if (!app) return res.status(404).json({ error: 'not_found' });
+  const animal = await Animal.findById(app.animalId);
+  if (!animal) return res.status(404).json({ error: 'animal_not_found' });
+  if (user?.role !== 'admin' && String(animal.shelter) !== userId) return res.status(403).json({ error: 'forbidden' });
+
+  const changesStatus = VISIT_FROM_STATUSES.includes(app.status);
+  if (!changesStatus && !VISIT_UPDATE_STATUSES.includes(app.status)) {
+    return res.status(409).json({ error: isTerminalAdoptionStatus(app.status) ? 'adoption_already_closed' : 'invalid_transition', from: app.status });
+  }
+
+  const isNew = !app.visit;
+  app.visit = {
+    at: when,
+    place: typeof place === 'string' && place.trim() ? place.trim().slice(0, 200) : undefined,
+    note: typeof note === 'string' && note.trim() ? note.trim().slice(0, 500) : undefined,
+    status: 'propuesta',
+    proposedBy: userId,
+  };
+  app.markModified('visit');
+  if (changesStatus) {
+    // Mismos efectos que pasarla a mano a «cita propuesta» (reserva del animal),
+    // pero con los avisos de abajo, que llevan la fecha.
+    await applyStatusChange(app, animal, 'cita_propuesta', userId, { quiet: true });
+  } else {
+    app.history = app.history || [];
+    app.history.push({ ts: new Date(), actorId: userId, action: 'visit_proposed', payload: { at: when } });
+    await app.save();
+  }
+
+  const whenText = formatWhen(when);
+  const where = app.visit.place ? ` en ${app.visit.place}` : '';
+  await postSystemMessage({
+    kind: 'adoption', refId: String(app._id), code: 'adoption.visit', actorId: userId,
+    body: `${isNew ? 'Visita propuesta' : 'Nueva fecha de visita'} para conocer a ${animal.name}: ${whenText}${where}.`,
+    payload: { at: when, place: app.visit.place, note: app.visit.note, animalName: animal.name, isNew },
+  });
+
+  pushTo(app.adopterId, {
+    title: `Visita para conocer a ${animal.name}`,
+    body: `${whenText}${where}. Acéptala desde Mensajes.`,
+    url: `/citas?visita=${app._id}`,
+  });
+  try {
+    const adopter = await User.findById(app.adopterId).select('email').lean();
+    if (adopter?.email) {
+      const baseUrl = process.env.FRONTEND_URL || 'https://mypetlive.es';
+      await sendEmail(
+        adopter.email,
+        `Visita para conocer a ${animal.name}`,
+        `La protectora te propone una visita para conocer a ${animal.name}: ${whenText}${where}.` +
+          `${app.visit.note ? `\n\n${app.visit.note}` : ''}\n\nAcéptala o propón otra hora: ${baseUrl}/citas?visita=${app._id}`,
+      );
+    }
+  } catch {}
+
+  res.json({ ok: true, id: app._id, status: app.status, visit: app.visit });
+}
+
+/** El adoptante acepta la visita propuesta. */
+export async function acceptVisit(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = String(user?._id || user?.id || '');
+  const app = await Adoption.findById(req.params.id);
+  if (!app) return res.status(404).json({ error: 'not_found' });
+  if (String(app.adopterId) !== userId) return res.status(403).json({ error: 'forbidden' });
+  if (!app.visit) return res.status(409).json({ error: 'no_visit' });
+  if (isTerminalAdoptionStatus(app.status)) return res.status(409).json({ error: 'adoption_already_closed' });
+  if (app.visit.status === 'aceptada') return res.json({ ok: true, visit: app.visit });
+  if (new Date(app.visit.at).getTime() < Date.now()) return res.status(409).json({ error: 'visit_in_past' });
+
+  app.visit.status = 'aceptada';
+  app.visit.respondedAt = new Date();
+  app.markModified('visit');
+  app.history = app.history || [];
+  app.history.push({ ts: new Date(), actorId: userId, action: 'visit_accepted', payload: { at: app.visit.at } });
+  await app.save();
+
+  const animal = await Animal.findById(app.animalId).select('name shelter').lean();
+  const whenText = formatWhen(app.visit.at);
+  const where = app.visit.place ? ` en ${app.visit.place}` : '';
+  await postSystemMessage({
+    kind: 'adoption', refId: String(app._id), code: 'adoption.visit_accepted', actorId: userId,
+    body: `Visita confirmada: ${whenText}${where}.`,
+    payload: { at: app.visit.at, place: app.visit.place, animalName: animal?.name },
+  });
+  if (animal?.shelter) {
+    const adopter = await User.findById(userId).select('name').lean();
+    pushTo(animal.shelter, {
+      title: 'Visita confirmada ✅',
+      body: `${(adopter as any)?.name || 'La persona adoptante'} irá a conocer a ${animal.name}: ${whenText}.`,
+      url: `/citas?visita=${app._id}`,
+    });
+  }
+  res.json({ ok: true, visit: app.visit });
+}
+
+/**
+ * Visitas de adopción para la página de Citas: las del adoptante, o las de los
+ * animales de la protectora. Solo solicitudes abiertas o aprobadas (una visita
+ * de una solicitud rechazada ya no va a pasar).
+ */
+export async function listMyVisits(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const userId = String(user?._id || user?.id || '');
+  const role = user?.role;
+  let filter: any;
+  if (role === 'landlord') {
+    const animals = await Animal.find({ shelter: userId }).select('_id').lean();
+    filter = { animalId: { $in: animals.map(a => String(a._id)) } };
+  } else {
+    filter = { adopterId: userId };
+  }
+  const items = await Adoption.find({ ...filter, visit: { $exists: true }, status: { $nin: ['rechazada', 'cancelada'] } })
+    .select('animalId adopterId status visit').sort({ 'visit.at': 1 }).limit(100).lean();
+  const [animals, adopters] = await Promise.all([
+    Animal.find({ _id: { $in: items.map((i: any) => i.animalId) } }).select('name images shelter').lean(),
+    User.find({ _id: { $in: items.map((i: any) => i.adopterId) } }).select('name').lean(),
+  ]);
+  const shelterIds = Array.from(new Set(animals.map((a: any) => String(a.shelter || '')).filter(Boolean)));
+  const shelters = await User.find({ _id: { $in: shelterIds } }).select('name profile.orgName').lean();
+  const animalMap = new Map(animals.map((a: any) => [String(a._id), a]));
+  const adopterMap = new Map(adopters.map((u: any) => [String(u._id), u]));
+  const shelterMap = new Map(shelters.map((u: any) => [String(u._id), u]));
+  res.json({
+    items: items.map((i: any) => {
+      const animal: any = animalMap.get(String(i.animalId));
+      const shelter: any = animal ? shelterMap.get(String(animal.shelter)) : null;
+      return {
+        adoptionId: String(i._id),
+        status: i.status,
+        visit: i.visit,
+        animal: animal ? { id: String(animal._id), name: animal.name, photo: animal.images?.[0] } : null,
+        shelterName: shelter?.profile?.orgName || shelter?.name || 'Protectora',
+        adopterName: (adopterMap.get(String(i.adopterId)) as any)?.name || 'Adoptante',
+      };
+    }),
+  });
 }
 
 // El adoptante retira su propia solicitud (o el admin). Solo desde estados no
@@ -331,7 +859,20 @@ export async function cancelByAdopter(req: Request, res: Response) {
     await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'returned', shelterId: animal.shelter ? String(animal.shelter) : undefined });
   }
 
+  await postSystemMessage({
+    kind: 'adoption', refId: String(app._id), code: 'adoption.status', actorId: String(userId),
+    body: 'La persona adoptante ha retirado la solicitud.',
+    payload: { status: 'cancelada', by: 'adopter' },
+  });
+
   // Aviso a la protectora de que el adoptante retiró la solicitud.
+  if (animal?.shelter) {
+    pushTo(animal.shelter, {
+      title: 'Solicitud de adopción cancelada',
+      body: `El adoptante ha retirado su solicitud para ${animal.name}.`,
+      url: '/landlord/adoptions',
+    });
+  }
   try {
     if (animal?.shelter) {
       const shelter = await User.findById(animal.shelter);
@@ -354,7 +895,28 @@ export async function listAll(_req: Request, res: Response) {
     Adoption.find(filter).sort({ createdAt: -1 }).skip((pg - 1) * lim).limit(lim).lean(),
     Adoption.countDocuments(filter),
   ]);
-  res.json({ items, page: pg, limit: lim, total });
+
+  // El panel de admin pintaba `animalId` y `adopterId` crudos: dos columnas de
+  // ObjectIds con las que no se puede trabajar. En el modelo son String sin
+  // `ref`, así que populate no sirve y el join se hace aquí (dos consultas por
+  // página, no una por fila).
+  const ids = (key: 'animalId' | 'adopterId') =>
+    Array.from(new Set(items.map((i: any) => String(i[key] || '')).filter(v => Types.ObjectId.isValid(v))));
+
+  const [animals, adopters] = await Promise.all([
+    Animal.find({ _id: { $in: ids('animalId') } }).select('name code species').lean(),
+    User.find({ _id: { $in: ids('adopterId') } }).select('name email').lean(),
+  ]);
+  const animalById = new Map(animals.map((a: any) => [String(a._id), a]));
+  const adopterById = new Map(adopters.map((u: any) => [String(u._id), u]));
+
+  const enriched = items.map((it: any) => ({
+    ...it,
+    animal: animalById.get(String(it.animalId)) || null,
+    adopter: adopterById.get(String(it.adopterId)) || null,
+  }));
+
+  res.json({ items: enriched, page: pg, limit: lim, total });
 }
 
 export async function getById(req: Request, res: Response) {
@@ -405,5 +967,19 @@ export async function getById(req: Request, res: Response) {
     }
   }
 
-  res.json({ ...app, animal, adopter });
+  // Cuántas candidaturas cerró esta aprobación. Lo pide el aviso de "deshacer la
+  // aprobación", que promete reabrirlas: si va a decir un número, que sea el real.
+  let closedSiblings: number | undefined;
+  if ((isShelter || isAdmin) && app.status === 'aprobada' && animal) {
+    closedSiblings = await Adoption.countDocuments({
+      animalId: String(animal._id),
+      _id: { $ne: app._id },
+      status: 'rechazada',
+      history: {
+        $elemMatch: { 'payload.reason': 'animal_adopted', 'payload.adoptionId': String(app._id) },
+      },
+    });
+  }
+
+  res.json({ ...app, animal, adopter, closedSiblings });
 }

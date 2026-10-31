@@ -7,6 +7,7 @@ import { Donation } from '../models/donation.model';
 import { Animal } from '../models/animal.model';
 import { User } from '../models/user.model';
 import { canReceiveDonations } from '../utils/shelterVerification';
+import { DONATION_MIN_EUR, DONATION_MAX_EUR, eurAmountError } from '../utils/limits';
 
 const r = Router();
 
@@ -19,8 +20,12 @@ r.post(
   asyncHandler(async (req: any, res) => {
     const userId = req.user?.id || req.user?._id;
     const { amountEUR, animalId, shelterId: bodyShelterId } = req.body as { amountEUR: number; animalId?: string; shelterId?: string };
-    const amount = Math.round(Number(amountEUR || 0) * 100);
-    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
+    // El tope se comprueba en euros, que es lo que escribe la persona, para que
+    // el mensaje de error hable en sus mismas unidades.
+    const amountEur = Number(amountEUR || 0);
+    const amountError = eurAmountError(amountEur, { min: DONATION_MIN_EUR, max: DONATION_MAX_EUR });
+    if (amountError) return res.status(400).json(amountError);
+    const amount = Math.round(amountEur * 100);
     if (!isStripeConfigured()) return res.status(503).json({ error: 'payments_unavailable' });
 
     // Resolver la protectora destinataria (modelo fiscal: el dinero va directo a su cuenta).

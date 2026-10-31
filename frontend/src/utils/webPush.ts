@@ -1,4 +1,5 @@
 import api from '../api/client';
+import { nativePushAvailable, getNativePushEnabled, enableNativePush, disableNativePush } from './nativePush';
 
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = () =>
@@ -6,8 +7,23 @@ const isStandalone = () =>
 
 export type PushSupport = 'ok' | 'needs-install' | 'unsupported';
 
+// Marca de «esta cuenta se acaba de crear en este dispositivo»: con ella el
+// aviso de notificaciones sale nada más registrarse (ver NotificationsPrompt).
+const NEW_ACCOUNT_KEY = 'mpl.newAccount';
+export function markNewAccount() {
+  try { sessionStorage.setItem(NEW_ACCOUNT_KEY, '1'); } catch { /* sin marca sale como siempre */ }
+}
+export function isNewAccount(): boolean {
+  try { return sessionStorage.getItem(NEW_ACCOUNT_KEY) === '1'; } catch { return false; }
+}
+export function clearNewAccount() {
+  try { sessionStorage.removeItem(NEW_ACCOUNT_KEY); } catch { /* nada */ }
+}
+
 /** En iOS el push web solo funciona con la app instalada en pantalla de inicio. */
 export function pushSupport(): PushSupport {
+  // Dentro de la app de iPhone van por APNs (utils/nativePush), no por Web Push.
+  if (nativePushAvailable()) return 'ok';
   if (isIOS() && !isStandalone()) return 'needs-install';
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     return 'unsupported';
@@ -22,6 +38,7 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 }
 
 export async function getPushEnabled(): Promise<boolean> {
+  if (nativePushAvailable()) return getNativePushEnabled();
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return false;
   const reg = await navigator.serviceWorker.getRegistration('/push-sw.js');
   const sub = await reg?.pushManager.getSubscription();
@@ -29,6 +46,7 @@ export async function getPushEnabled(): Promise<boolean> {
 }
 
 export async function enablePush(): Promise<void> {
+  if (nativePushAvailable()) return enableNativePush();
   const reg = await navigator.serviceWorker.register('/push-sw.js');
   await navigator.serviceWorker.ready;
   const permission = await Notification.requestPermission();
@@ -42,6 +60,7 @@ export async function enablePush(): Promise<void> {
 }
 
 export async function disablePush(): Promise<void> {
+  if (nativePushAvailable()) return disableNativePush();
   const reg = await navigator.serviceWorker.getRegistration('/push-sw.js');
   const sub = await reg?.pushManager.getSubscription();
   if (sub) {

@@ -68,9 +68,11 @@ describe('Chat de adopción (adoptante ↔ protectora)', () => {
       .set(adopterH)
       .send({ kind: 'adoption', refId: adoptionId })
       .expect(200);
-    expect(mine.body.participants.sort()).toEqual([adopterId, shelterId].sort());
-    expect(mine.body.meta.animalId).toBe(animalId);
-    expect(mine.body.meta.shelterId).toBe(shelterId);
+    // Devuelve con quién se habla y sobre qué, no los ids crudos.
+    expect(mine.body.other.id).toBe(shelterId);
+    expect(mine.body.other.name).toBe('Protectora Norte ONG');
+    expect(mine.body.animal.id).toBe(animalId);
+    expect(mine.body.context).toMatchObject({ type: 'adoption', adoptionId, role: 'adopter' });
 
     // La protectora entra a la MISMA conversación (única por solicitud).
     const theirs = await request(app)
@@ -118,6 +120,23 @@ describe('Chat de adopción (adoptante ↔ protectora)', () => {
     // El ajeno tampoco puede leer ni escribir.
     await request(app).get(`/api/chat/${convId}/messages`).set(strangerH).expect(403);
     await request(app).post(`/api/chat/${convId}/messages`).set(strangerH).send({ body: 'hola' }).expect(403);
+  });
+
+  it('los adjuntos solo pueden ser ficheros subidos a MyPetLive', async () => {
+    const conv = await request(app)
+      .post('/api/chat/conversations/ensure')
+      .set(adopterH)
+      .send({ kind: 'adoption', refId: adoptionId })
+      .expect(200);
+    const send = (attachmentUrl: string) =>
+      request(app).post(`/api/chat/${conv.body._id}/messages`).set(adopterH).send({ body: 'mira', attachmentUrl });
+
+    await send('/uploads/3f2c9a1e-1b2c-4d5e-8f90-1234567890ab.webp').expect(201);
+    // Phishing, rutas raras y otros dominios: fuera.
+    await send('https://phishing.example/login').expect(400);
+    await send('https://mypetlive.es.evil.example/uploads/a.webp').expect(400);
+    await send('/uploads/../.env').expect(400);
+    await send('javascript:alert(1)').expect(400);
   });
 });
 

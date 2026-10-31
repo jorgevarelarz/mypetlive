@@ -8,6 +8,18 @@ function prettyId(id: string) {
   return short.toUpperCase();
 }
 
+// Rutas que no están en el menú pero salen en las migas.
+const SEGMENT_LABEL: Record<string, string> = {
+  '/buscar-casa': 'Buscar casa a un animal',
+  '/buscar-casa/nuevo': 'Publicar',
+  '/buscar-casa/elegir': 'Publicar otro',
+  '/adoptions': 'Solicitudes',
+  '/buscar-casa/encontrado': 'Encontrado',
+  '/buscar-casa/encontrado/nuevo': 'Publicar',
+  '/encontrados': 'Animales encontrados',
+  '/acogida': 'Acogida',
+};
+
 function labelFor(path: string): string {
   const cfg: any = nav;
   const all = (Object.values(cfg) as any[]).flat();
@@ -17,7 +29,11 @@ function labelFor(path: string): string {
   if (/^\/contracts\/[a-z0-9]+/i.test(path)) return `Contrato #${prettyId(path.split('/').pop() || '')}`;
   if (/^\/tickets\/[a-z0-9]+/i.test(path)) return `Ticket #${prettyId(path.split('/').pop() || '')}`;
   if (/^\/properties\/[a-z0-9]+/i.test(path)) return `Propiedad #${prettyId(path.split('/').pop() || '')}`;
-  return path.split('/').pop() || '';
+  const last = path.split('/').pop() || '';
+  if (SEGMENT_LABEL[path]) return SEGMENT_LABEL[path];
+  // Un id de Mongo no le dice nada a nadie: «Detalle».
+  if (/^[a-f0-9]{24}$/i.test(last)) return 'Detalle';
+  return last;
 }
 
 const Breadcrumbs: React.FC = () => {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Verification } from '../models/verification.model';
 import { getUserId } from '../utils/getUserId';
+import { isProduction } from '../utils/env';
 
 /**
  * Middleware that ensures the requesting user has a verified status.
@@ -24,8 +25,9 @@ export const requireVerified = async (
   if (user.role === 'admin') return next();
   if (user.isVerified) return next();
 
-  // Only allow bypass in non-production when explicitly enabled (e.g. local/test)
-  if (process.env.ALLOW_UNVERIFIED === 'true' && process.env.NODE_ENV !== 'production') {
+  // Only allow bypass outside production when explicitly enabled (e.g. local/test).
+  // isProduction() y no NODE_ENV: el VPS corre NODE_ENV=development con APP_ENV=production.
+  if (process.env.ALLOW_UNVERIFIED === 'true' && !isProduction()) {
     return next();
   }
 

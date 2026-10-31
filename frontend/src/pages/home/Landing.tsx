@@ -6,14 +6,18 @@ import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
 import PublicHeader from '../../components/PublicHeader';
+import CountUp from '../../components/CountUp';
+import { getPublicStats } from '../../api/publicStats';
+import ErrorCard from '../../components/ui/ErrorCard';
+import { speciesLabel, statusLabel } from '../../styles/mypetlive';
 
 const FONT_DISPLAY = "'Bricolage Grotesque', sans-serif";
 const FONT_BODY = "'Hanken Grotesk', sans-serif";
 const FONT_MONO = "'JetBrains Mono', monospace";
 
 const C = {
-  bg: '#F6F3EC', ink: '#3F4A3C', teal: '#1F6F6F', coral: '#E8654A', olive: '#6A7B4F',
-  gold: '#E9A93C', muted: '#6B7464', faint: '#98A088', border: '#E5E1D6', panel: '#EFEADF', teal100: '#E2EEEC',
+  bg: '#F6F3EC', ink: '#3F4A3C', teal: '#1F6F6F', coral: '#C0512F', olive: '#6A7B4F',
+  gold: '#E9A93C', muted: '#6B7464', faint: '#6B7464', border: '#E5E1D6', panel: '#EFEADF', teal100: '#E2EEEC',
 };
 
 function Paw({ size = 24, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -40,13 +44,29 @@ const SIZE_LABEL: Record<string, string> = { small: 'Pequeño', medium: 'Mediano
 
 export default function Landing() {
   const { openAuth } = useAuthModal();
-  const { data } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['landing-featured'],
     queryFn: () => searchAnimals({ limit: 4, page: 1, sort: 'createdAt', dir: 'desc' }),
     staleTime: 60_000,
   });
+  // Cifras reales. Antes estaban cableadas (85 protectoras, 1.247 adopciones,
+  // 38.200 € donados, 126k Patitas) con la base de datos casi a cero.
+  const { data: stats } = useQuery({
+    queryKey: ['public-stats'],
+    queryFn: getPublicStats,
+    staleTime: 300_000,
+  });
   const pets = (data?.items || []).slice(0, 4);
   const heroImg = pets.find((p: any) => Array.isArray(p.images) && p.images[0]);
+
+  // Solo se enseña lo que existe de verdad: una tarjeta a cero no aporta y
+  // enseñar un número inventado es peor.
+  const impactCards = [
+    { key: 'protectoras', value: stats?.protectoras ?? 0, label: 'protectoras', highlight: 'teal' as const },
+    { key: 'adopciones', value: stats?.adopciones ?? 0, label: 'adopciones completadas' },
+    { key: 'donado', value: stats?.donadoEur ?? 0, label: 'donados a protectoras', prefix: '€' },
+    { key: 'patitas', value: stats?.patitas ?? 0, label: 'Patitas generadas', highlight: 'gold' as const },
+  ].filter(c => c.value > 0);
 
   return (
     <div style={{ fontFamily: FONT_BODY, color: C.ink, background: C.bg, minHeight: '100vh' }}>
@@ -83,7 +103,9 @@ export default function Landing() {
           .lp-cta-section{padding:0 20px 88px!important;margin-bottom:0!important;}
           .lp-cta-band{display:grid!important;padding:28px!important;border-radius:22px!important;}
           .lp-cta-band h2{font-size:28px!important;letter-spacing:0!important;}
-          .lp-footer{display:none!important;}
+          .lp-footer{padding-bottom:88px;}
+          .lp-footer > div{padding:28px 20px!important;}
+          .lp-footer > div > div{grid-template-columns:1fr 1fr!important;flex-wrap:wrap;gap:24px!important;}
         }
       `}</style>
 
@@ -101,13 +123,22 @@ export default function Landing() {
               <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 62, lineHeight: .98, fontWeight: 800, letterSpacing: '-.03em', margin: '0 0 22px' }}>Encuentra a tu <span style={{ color: C.teal }}>nuevo mejor</span> <span style={{ color: C.coral }}>amigo</span></h1>
               <p style={{ fontSize: 19, lineHeight: 1.55, color: C.muted, margin: '0 0 32px', maxWidth: 480 }}>Adopción responsable, simple y transparente. Conectamos protectoras y familias, y acompañamos cada paso después de adoptar.</p>
               <div className="lp-actions" style={{ display: 'flex', gap: 14, marginBottom: 34, flexWrap: 'wrap' }}>
-                <Link className="lp-cta" to="/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
-                <button className="lp-cta" onClick={() => openAuth({ mode: 'register', message: 'Crea tu cuenta de protectora.' })} style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14, cursor: 'pointer' }}>Soy protectora</button>
+                {/* La portada solo la ven usuarios anónimos (AppRoutes manda a
+                    /home al que tiene sesión), así que el CTA principal lleva
+                    al alta y de ahí al catálogo. */}
+                <Link className="lp-cta" to="/register?redirect=/animals" style={{ background: C.coral, color: '#fff', fontSize: 16, fontWeight: 700, padding: '16px 30px', borderRadius: 14, boxShadow: '0 8px 20px -8px rgba(232,101,74,.7)' }}>Quiero adoptar</Link>
+                {/* No promete "crear cuenta": las cuentas profesionales las
+                    activamos a mano, y el botón solo abre el correo. */}
+                <a className="lp-cta" href="mailto:soporte@mypetlive.es?subject=Alta%20de%20protectora%20en%20MyPetLive" title="Te contactamos para verificar la entidad y activarte la cuenta" style={{ background: '#fff', color: C.teal, border: `1.5px solid ${C.teal}`, fontSize: 16, fontWeight: 700, padding: '15px 28px', borderRadius: 14 }}>Solicitar alta de protectora</a>
               </div>
               <div className="lp-stats" style={{ display: 'flex', gap: 32 }}>
                 <div><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{data?.total ?? '—'}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>animales</div></div>
-                <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>+85</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>protectoras</div></div>
-                <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.gold }}>126k</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Patitas generadas</div></div>
+                {(stats?.protectoras ?? 0) > 0 && (
+                  <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.ink }}>{stats!.protectoras}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>protectoras</div></div>
+                )}
+                {(stats?.patitas ?? 0) > 0 && (
+                  <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 32 }}><div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: C.gold }}>{stats!.patitas.toLocaleString('es-ES')}</div><div style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Patitas generadas</div></div>
+                )}
               </div>
             </div>
             {/* hero visual */}
@@ -139,19 +170,23 @@ export default function Landing() {
             </div>
             <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Ver compañeros →</Link>
           </div>
-          {pets.length === 0 ? (
+          {isPending ? (
+            <p role="status" style={{ color: C.muted }}>Buscando compañeros…</p>
+          ) : isError ? (
+            <ErrorCard message="No pudimos cargar los compañeros. Inténtalo de nuevo." onRetry={() => { void refetch(); }} />
+          ) : pets.length === 0 ? (
             <div style={{ color: C.muted, padding: '24px 0' }}>Pronto verás aquí los animales destacados.</div>
           ) : (
             <div className="lp-pets-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
               {pets.map((p: any) => {
                 const img = Array.isArray(p.images) ? p.images[0] : null;
-                const meta = [p.species, SIZE_LABEL[p.size] || p.size].filter(Boolean).join(' · ');
+                const meta = [speciesLabel(p.species), SIZE_LABEL[p.size] || p.size, p.city].filter(Boolean).join(' · ');
                 const tags = Array.isArray(p.personality) ? p.personality.slice(0, 2) : [];
                 return (
                   <Link key={p._id || p.id} className="lp-card" to={`/animals/${p._id || p.id}`} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, overflow: 'hidden', boxShadow: '0 1px 3px rgba(31,55,40,.06),0 8px 24px -16px rgba(31,55,40,.18)', display: 'block' }}>
                     <div className={img ? '' : 'lp-ph'} style={{ height: 190, backgroundColor: '#E6E0D2', position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: 12, overflow: 'hidden' }}>
                       {img && <img src={toAbsoluteUrl(img)} alt={p.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-                      <span style={{ position: 'relative', background: C.teal100, color: '#176363', fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8 }}>● Publicado</span>
+                      <span style={{ position: 'relative', background: C.teal100, color: '#176363', fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 8 }}>{statusLabel(p.status)}</span>
                     </div>
                     <div style={{ padding: '16px 18px 20px' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -204,24 +239,39 @@ export default function Landing() {
               <p style={{ fontSize: 17, lineHeight: 1.6, color: C.muted, margin: '0 0 24px' }}>Las <strong style={{ color: '#A77B1C' }}>Patitas</strong> son nuestra moneda de impacto: cada compra con cupón, donación o campaña genera valor que financia directamente a las protectoras.</p>
               <Link className="lp-navlink" to="/animals" style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>Empieza a sumar Patitas →</Link>
             </div>
-            <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-              <div style={{ background: C.teal, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}>85</div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,.85)', marginTop: 8 }}>protectoras activas</div>
+            {impactCards.length > 0 ? (
+              <div className="lp-impact-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                {impactCards.map(card => {
+                  const dark = card.highlight === 'teal' || card.highlight === 'gold';
+                  return (
+                    <div
+                      key={card.key}
+                      style={{
+                        background: card.highlight === 'teal' ? C.teal : card.highlight === 'gold' ? C.gold : '#fff',
+                        color: dark ? '#fff' : undefined,
+                        border: dark ? undefined : `1px solid ${C.border}`,
+                        borderRadius: 20,
+                        padding: 28,
+                      }}
+                    >
+                      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: dark ? '#fff' : C.ink }}>
+                        <CountUp to={card.value} prefix={card.prefix} />
+                      </div>
+                      <div style={{ fontSize: 14, color: dark ? 'rgba(255,255,255,.85)' : C.muted, marginTop: 8 }}>{card.label}</div>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}>1.247</div>
-                <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>adopciones completadas</div>
+            ) : (
+              // Al principio no hay nada que presumir. Mejor decir qué se está
+              // construyendo que enseñar cuatro ceros o cifras inventadas.
+              <div style={{ background: C.teal100, borderRadius: 20, padding: 32 }}>
+                <p style={{ fontSize: 17, lineHeight: 1.6, color: C.ink, margin: 0 }}>
+                  Estamos empezando. Las cifras de impacto aparecerán aquí en cuanto se completen las
+                  primeras adopciones y donaciones: preferimos enseñarte números reales a inventarlos.
+                </p>
               </div>
-              <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, color: C.ink }}>€38.200</div>
-                <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>donados a protectoras</div>
-              </div>
-              <div style={{ background: C.gold, color: '#fff', borderRadius: 20, padding: 28 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1 }}>126k</div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,.9)', marginTop: 8 }}>Patitas generadas</div>
-              </div>
-            </div>
+            )}
           </div>
         </section>
 
@@ -257,7 +307,7 @@ export default function Landing() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 14 }}>Protectoras</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'rgba(230,224,210,.7)' }}>
-                  <button onClick={() => openAuth({ mode: 'register' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: 'rgba(230,224,210,.7)', textAlign: 'left', padding: 0 }}>Panel</button>
+                  <button onClick={() => openAuth({ mode: 'login', message: 'Accede con la cuenta profesional activada por MyPetLive.' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: 'rgba(230,224,210,.7)', textAlign: 'left', padding: 0 }}>Panel</button>
                   <Link to="/donate">Donaciones</Link>
                 </div>
               </div>
@@ -268,9 +318,14 @@ export default function Landing() {
                 </div>
               </div>
             </div>
-            <div style={{ paddingTop: 24, fontSize: 13, color: 'rgba(230,224,210,.5)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>© 2026 MyPetLive</span>
-              <span>Hecho para protectoras y familias</span>
+            <div style={{ paddingTop: 24, fontSize: 13, color: 'rgba(230,224,210,.5)', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>© 2026 MyPetLive · Un proyecto de <a href="https://valerisstudio.es/" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'underline' }}>Valeris Studio</a></span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                <Link to="/legal/legal-notice">Aviso legal</Link>
+                <Link to="/legal/privacy">Privacidad</Link>
+                <Link to="/legal/terms">Términos</Link>
+                <Link to="/legal/cookies">Cookies</Link>
+              </div>
             </div>
           </div>
         </footer>

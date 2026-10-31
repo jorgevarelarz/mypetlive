@@ -10,11 +10,18 @@ const r = Router();
 // Adoptante
 r.post('/', ...assertRole('tenant', 'adoptante', 'admin'), validate(adoptionCreateSchema), asyncHandler(ctrl.create));
 r.get('/mine', ...assertRole('tenant', 'adoptante', 'admin'), asyncHandler(ctrl.listMine));
+r.get('/visits/mine', ...assertRole('tenant', 'adoptante', 'landlord', 'protectora'), asyncHandler(ctrl.listMyVisits));
+r.post('/:id/visit/accept', ...assertRole('tenant', 'adoptante'), asyncHandler(ctrl.acceptVisit));
 r.post('/:id/cancel', ...assertRole('tenant', 'adoptante', 'admin'), asyncHandler(ctrl.cancelByAdopter));
 
 // Protectora
 r.get('/for-my-animals', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.listForMyAnimals));
 r.patch('/:id/status', ...assertRole('landlord', 'protectora', 'admin'), validate(adoptionStatusSchema), asyncHandler(ctrl.setStatus));
+// Proponer visita: fecha y lugar, además de pasar a «cita propuesta».
+r.post('/:id/visit', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.proposeVisit));
+// Deshacer la aprobación no es un cambio de estado (ver el controlador): tiene
+// ruta propia porque revierte el traspaso del animal, no solo un campo.
+r.post('/:id/undo-approval', ...assertRole('landlord', 'protectora', 'admin'), asyncHandler(ctrl.undoApproval));
 
 // Admin
 r.get('/', ...assertRole('admin'), asyncHandler(ctrl.listAll));

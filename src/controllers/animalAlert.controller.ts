@@ -1,8 +1,9 @@
+import { ADOPTABLE_ROLES } from '../utils/adoptable';
 import { Request, Response } from 'express';
 import { Animal } from '../models/animal.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { getUserId } from '../utils/getUserId';
-import { speciesVariants } from '../utils/species';
+import { speciesFilter } from '../utils/species';
 
 const PUBLIC_STATUSES = ['publicado', 'reservado', 'preadoptado'];
 const allowedKeys = [
@@ -29,12 +30,12 @@ function cleanFilters(input: any) {
 
 function buildFilter(filters: Record<string, any>) {
   const query: any = {
-    createdByRole: 'protectora',
+    createdByRole: { $in: ADOPTABLE_ROLES as unknown as string[] },
     isPersonalPet: { $ne: true },
     status: { $in: PUBLIC_STATUSES },
   };
   // La especie se guarda canonizada (gato→cat): casar por variantes es/en.
-  if (filters.species !== undefined) query.species = { $in: speciesVariants(filters.species) };
+  if (filters.species !== undefined) query.species = speciesFilter(filters.species);
   for (const key of ['size', 'sex', 'ageGroup', 'goodWithChildren', 'goodWithDogs', 'goodWithCats']) {
     if (filters[key] !== undefined) query[key] = filters[key];
   }

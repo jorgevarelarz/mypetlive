@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { listMyAdoptions, cancelAdoption, ADOPTION_STATUS_LABEL, type AdoptionStatus } from '../../api/adoptions';
 import { toAbsoluteUrl } from '../../utils/media';
+import { speciesLabel } from '../../styles/mypetlive';
 
 const STATUS_STEPS: AdoptionStatus[] = [
   'recibida',
@@ -46,13 +47,15 @@ function nextStep(status: AdoptionStatus) {
     case 'en_revision':
       return 'Tu solicitud está siendo revisada. Te avisarán si necesitan algo más.';
     case 'info_adicional':
-      return 'La protectora necesita información adicional. Revisa el detalle de la solicitud.';
+      // La nota con lo que piden y el chat para responder están en el detalle.
+      return 'La protectora necesita información adicional: ábrela para ver qué te piden y responder.';
     case 'cita_propuesta':
-      return 'Hay una cita propuesta. Revisa el detalle para preparar la visita.';
+      return 'La protectora ha propuesto una cita: ábrela para concretar día y hora por el chat.';
     case 'preaprobada':
       return 'Estás en la fase final. La protectora cerrará la decisión contigo.';
     case 'aprobada':
-      return 'Adopción aprobada. Tu mascota aparecerá en Mi Mascota cuando se complete el cierre.';
+      // Aprobar ya traspasa el animal al adoptante en el mismo paso: no hay cierre pendiente.
+      return 'Adopción aprobada. Tu nueva mascota ya está en Mi Mascota.';
     case 'rechazada':
       return 'Esta solicitud no ha continuado. Puedes seguir explorando otros animales.';
     case 'cancelada':
@@ -103,7 +106,7 @@ function AdoptionCard({ item, onCancel, canceling }: { item: any; onCancel: (id:
               {animal.name || 'Animal'}
             </h2>
             <p className="mt-1 text-sm" style={{ color: '#7A8273' }}>
-              {animal.species || 'Mascota'}
+              {speciesLabel(animal.species) || 'Mascota'}
               {animal.breed ? ` · ${animal.breed}` : ''}
               {animal.code ? ` · ${animal.code}` : ''}
             </p>
@@ -144,7 +147,17 @@ function AdoptionCard({ item, onCancel, canceling }: { item: any; onCancel: (id:
             Solicitud enviada el {formatDate(item.createdAt)}
           </span>
           <div className="flex flex-wrap gap-2">
-            {animalId && (
+            {/* Al aprobar la adopción el animal pasa a mascota personal y la ficha
+                pública responde 404: el enlace correcto pasa a ser Mi Mascota. */}
+            {status === 'aprobada' ? (
+              <Link
+                to="/pet"
+                className="border px-3 py-2 text-sm font-medium"
+                style={{ borderColor: '#D7D0C2', borderRadius: 8, color: '#3F4A3C' }}
+              >
+                Ver mi mascota
+              </Link>
+            ) : animalId ? (
               <Link
                 to={`/animals/${animalId}`}
                 className="border px-3 py-2 text-sm font-medium"
@@ -152,7 +165,7 @@ function AdoptionCard({ item, onCancel, canceling }: { item: any; onCancel: (id:
               >
                 Ver animal
               </Link>
-            )}
+            ) : null}
             <Link
               to={`/adoptions/${item.id}`}
               className="px-3 py-2 text-sm font-medium text-white"
@@ -180,7 +193,7 @@ function AdoptionCard({ item, onCancel, canceling }: { item: any; onCancel: (id:
 
 export default function MyAdoptions() {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['my-adoptions'], queryFn: listMyAdoptions });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['my-adoptions'], queryFn: listMyAdoptions });
   const items = useMemo(() => data?.items || [], [data?.items]);
 
   const cancelMutation = useMutation({
@@ -223,22 +236,44 @@ export default function MyAdoptions() {
         </Link>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-          <div className="text-sm" style={{ color: '#7A8273' }}>Total</div>
-          <div className="mt-1 text-2xl font-semibold">{items.length}</div>
-        </div>
-        <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-          <div className="text-sm" style={{ color: '#7A8273' }}>En proceso</div>
-          <div className="mt-1 text-2xl font-semibold">{activeCount}</div>
-        </div>
-        <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-          <div className="text-sm" style={{ color: '#7A8273' }}>Aprobadas</div>
-          <div className="mt-1 text-2xl font-semibold">{approvedCount}</div>
-        </div>
-      </section>
+      {/* Contadores solo cuando hay datos reales que contar: en error o vacío
+          eran tres ceros que parecían un dato. */}
+      {!isError && items.length > 0 && (
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+            <div className="text-sm" style={{ color: '#7A8273' }}>Total</div>
+            <div className="mt-1 text-2xl font-semibold">{items.length}</div>
+          </div>
+          <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+            <div className="text-sm" style={{ color: '#7A8273' }}>En proceso</div>
+            <div className="mt-1 text-2xl font-semibold">{activeCount}</div>
+          </div>
+          <div className="border bg-white p-4" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+            <div className="text-sm" style={{ color: '#7A8273' }}>Aprobadas</div>
+            <div className="mt-1 text-2xl font-semibold">{approvedCount}</div>
+          </div>
+        </section>
+      )}
 
-      {items.length === 0 ? (
+      {isError ? (
+        // Un fallo de red se pintaba como "Aún no tienes solicitudes", que es mentira.
+        <section className="grid gap-3 border bg-white p-6" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
+          <h2 className="text-xl font-semibold">No hemos podido cargar tus solicitudes</h2>
+          <p className="max-w-xl text-sm" style={{ color: '#7A8273' }}>
+            Puede ser un problema de conexión. Vuelve a intentarlo en un momento.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="border px-4 py-2 text-sm font-medium"
+              style={{ borderColor: '#D7D0C2', borderRadius: 8, color: '#3F4A3C', background: '#fff' }}
+            >
+              Reintentar
+            </button>
+          </div>
+        </section>
+      ) : items.length === 0 ? (
         <section className="grid gap-3 border bg-white p-6" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
           <h2 className="text-xl font-semibold">Aún no tienes solicitudes</h2>
           <p className="max-w-xl text-sm" style={{ color: '#7A8273' }}>

@@ -1,15 +1,39 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/jwt';
+import { User } from '../models/user.model';
 
 const JWT_SECRET = getJwtSecret();
+
+/**
+ * Un JWT sigue siendo válido (firma y caducidad) después de restablecer la
+ * contraseña: la firma no sabe nada de lo que ha pasado en la cuenta desde que
+ * se emitió. `tokenVersion` es lo que sí lo sabe — viaja en el token y
+ * `resetPassword` la sube en BD — así que un token emitido antes dejar de
+ * servir en cuanto se compara aquí, sin esperar a que caduquen sus 7 días.
+ */
+async function loadLiveSession(resolvedId: string, decoded: any): Promise<{ role?: string } | null> {
+  const dbUser: any = await User.findById(resolvedId).select('tokenVersion role').lean();
+  if (!dbUser) return null;
+  if ((dbUser.tokenVersion || 0) !== (decoded.tokenVersion || 0)) return null;
+  return dbUser;
+}
+
+/**
+ * El rol manda desde la base, no desde el token: si el admin cambia el rol de
+ * una cuenta (o la degrada), se aplica en la siguiente petición y no al
+ * caducar el JWT, que dura 7 días. Mismo arreglo que RentalApp (1231d5c).
+ */
+function withDbRole(decoded: any, session: { role?: string }) {
+  return session.role ? { ...decoded, role: session.role } : decoded;
+}
 
 /**
  * Authentication middleware. Verifies a JWT from the Authorization header
  * (expected as a Bearer token) and attaches the decoded user payload to
  * the request object as req.user.
  */
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     if (process.env.NODE_ENV === 'test') {
@@ -52,8 +76,13 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
       }
     }
 
+    const session = await loadLiveSession(resolvedId, decoded);
+    if (!session) {
+      return res.status(401).json({ error: 'Sesión invalidada' });
+    }
+
     (req as any).user = {
-      ...decoded,
+      ...withDbRole(decoded, session),
       id: resolvedId,
       _id: resolvedId,
       isVerified: typeof tokenVerified === 'boolean' ? tokenVerified : false,
@@ -70,7 +99,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
  * Useful for public endpoints whose response varies for the owner (e.g. catálogo
  * de animales que para la protectora dueña muestra también borradores).
  */
-export const optionalAuthenticate = (req: Request, _res: Response, next: NextFunction) => {
+export const optionalAuthenticate = async (req: Request, _res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     if (process.env.NODE_ENV === 'test' && req.headers['x-user-id']) {
@@ -86,7 +115,12 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const resolvedId = decoded._id || decoded.id;
-    (req as any).user = { ...decoded, id: resolvedId, _id: resolvedId };
+    // Igual que en `authenticate`: una sesión cerrada por un reset de
+    // contraseña no debe verse aquí como el dueño, sino como anónimo.
+    const session = await loadLiveSession(resolvedId, decoded);
+    if (session) {
+      (req as any).user = { ...withDbRole(decoded, session), id: resolvedId, _id: resolvedId };
+    }
   } catch {
     // Token inválido en endpoint público: continuar como anónimo.
   }

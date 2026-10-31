@@ -1,4 +1,21 @@
 import mongoose, { ClientSession } from 'mongoose';
+import { AppError } from './errors';
+
+// Dinero y existencias requieren atomicidad: nunca ejecutar parcialmente en standalone.
+export async function withRequiredTxn<T>(fn: (session: ClientSession) => Promise<T>): Promise<T> {
+  try {
+    let result!: T;
+    await mongoose.connection.transaction(async session => {
+      result = await fn(session);
+    }, { writeConcern: { w: 'majority' } });
+    return result;
+  } catch (err) {
+    if (isTxnUnsupported(err)) {
+      throw new AppError('Operación temporalmente no disponible. Inténtalo de nuevo más tarde.', { status: 503, code: 'transactions_unavailable' });
+    }
+    throw err;
+  }
+}
 
 // null = aún no sabemos si el despliegue soporta transacciones (se detecta en la
 // primera llamada y se cachea para no pagar el intento fallido en cada request).

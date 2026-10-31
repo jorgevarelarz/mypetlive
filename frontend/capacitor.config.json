@@ -3,9 +3,20 @@
   "appName": "MyPetLive",
   "webDir": "build",
   "ios": {
-    "contentInset": "automatic"
+    "contentInset": "never",
+    "backgroundColor": "#F6F3EC"
   },
   "android": {
     "allowMixedContent": false
+  },
+  "plugins": {
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "apple": true,
+        "facebook": false,
+        "twitter": false
+      }
+    }
   }
 }

@@ -6,7 +6,11 @@ import { PawPrint, MapPin, ShieldCheck, Stethoscope, Heart, Tag } from 'lucide-r
 import { getAnimalPassport } from '../../api/animals';
 import { offersForAnimal } from '../../api/offers';
 import { usePageMeta } from '../../utils/usePageMeta';
+import BackButton from '../../components/BackButton';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, speciesLabel, sizeLabel, sexLabel } from '../../styles/mypetlive';
+import { webUrl } from '../../utils/native';
+import MemorialMural from '../../components/memorial/MemorialMural';
+import SightingForm from '../../components/passport/SightingForm';
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 };
 
@@ -15,22 +19,27 @@ export default function AnimalPassport() {
   const normalized = code.trim().toUpperCase();
 
   const passQ = useQuery({ queryKey: ['passport', normalized], queryFn: () => getAnimalPassport(normalized), enabled: !!normalized, retry: false });
-  const offersQ = useQuery({ queryKey: ['offers-animal', normalized], queryFn: () => offersForAnimal(normalized), enabled: !!normalized, retry: false });
-
   const p = passQ.data;
+  const memorial = p?.memorial?.active ? p.memorial : null;
+  // Nada de ofertas en el mural de una mascota que ha fallecido.
+  const offersQ = useQuery({ queryKey: ['offers-animal', normalized], queryFn: () => offersForAnimal(normalized), enabled: !!normalized && !!p && !memorial, retry: false });
+
   usePageMeta({
-    title: p ? `${p.name} · Pasaporte MyPetLive (${p.code})` : 'Pasaporte · MyPetLive',
-    description: p ? `${speciesLabel(p.species)} · ${p.age || ''} · pasaporte digital en MyPetLive` : 'Pasaporte digital de mascota',
+    title: memorial && p ? `En memoria de ${p.name} · MyPetLive` : p ? `${p.name} · Pasaporte MyPetLive (${p.code})` : 'Pasaporte · MyPetLive',
+    description: memorial && p ? (memorial.epitaph || `El mural de ${p.name}`) : p ? `${speciesLabel(p.species)} · ${p.age || ''} · pasaporte digital en MyPetLive` : 'Pasaporte digital de mascota',
     image: p?.images?.[0],
   });
 
-  const passportUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Siempre la dirección pública: en la app window.location es capacitor://localhost
+  // y un QR con eso no abre nada al escanearlo.
+  const passportUrl = webUrl(`/p/${encodeURIComponent(normalized)}`);
   const offers = offersQ.data?.items || [];
 
   return (
     <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
-      <header style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
-        <div style={{ maxWidth: 920, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 9 }}>
+      <header className="safe-top" style={{ borderBottom: `1px solid ${MPL.border}`, background: '#fff' }}>
+        <div style={{ maxWidth: 920, margin: '0 auto', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}>
+          <BackButton style={{ color: MPL.ink, marginLeft: -6 }} />
           <Link to="/" style={{ textDecoration: 'none', color: MPL.ink, display: 'flex', alignItems: 'center', gap: 9 }}>
             <PawPrint size={22} color={MPL.teal} />
             <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800 }}>MyPet<span style={{ color: MPL.coral }}>Live</span></span>
@@ -47,8 +56,39 @@ export default function AnimalPassport() {
             <p style={{ color: MPL.muted }}>No existe ningún animal con el código <strong>{normalized}</strong>.</p>
             <Link to="/animals" style={{ color: MPL.teal, fontWeight: 800 }}>Ver animales en adopción →</Link>
           </div>
+        ) : memorial ? (
+          <MemorialMural code={p.code} name={p.name} image={p.images?.[0]} memorial={memorial} />
         ) : (
           <>
+            {/* Se ha perdido. Va lo primero y en rojo porque esta página, cuando
+                de verdad se usa, la abre alguien que tiene al animal delante y
+                el móvil en la mano: lo demás puede esperar a después del aviso. */}
+            {p.lost?.isLost && (
+              <div style={{ ...card, borderColor: MPL.coral, background: '#FFF4F1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.coralDark, fontWeight: 800 }}>
+                  <MapPin size={18} /> {p.name} se ha perdido
+                </div>
+                {p.lost.area && <div style={{ marginTop: 8, fontSize: 15 }}>Se perdió por <strong>{p.lost.area}</strong>.</div>}
+                {p.lost.notes && <div style={{ marginTop: 4, color: MPL.muted, fontSize: 14.5 }}>{p.lost.notes}</div>}
+                {p.lost.contact ? (
+                  <div style={{ marginTop: 12, background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12.5, color: MPL.muted, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                      Avisa a su familia
+                    </div>
+                    <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, fontWeight: 800, marginTop: 4 }}>
+                      {p.lost.contactName ? `${p.lost.contactName} · ` : ''}{p.lost.contact}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10, fontSize: 14.5, color: MPL.muted }}>
+                    Su familia no ha dejado un teléfono aquí. Avísala con el formulario de aquí abajo.
+                  </div>
+                )}
+                {/* También con teléfono: la ubicación exacta le sirve más que una llamada. */}
+                <SightingForm code={p.code} name={p.name} />
+              </div>
+            )}
+
             {/* Hero */}
             <div style={{ ...card, display: 'grid', gridTemplateColumns: 'minmax(0,260px) 1fr', gap: 20, alignItems: 'center' }} className="passport-hero">
               <div style={{ aspectRatio: '1', borderRadius: 16, overflow: 'hidden', background: MPL.teal100 }}>
@@ -74,9 +114,16 @@ export default function AnimalPassport() {
 
             {/* Procedencia + salud + QR */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+              {/* Una protectora es una organización y su nombre y ciudad son
+                  públicos; una familia no. De ahí que aquí solo salga el nombre
+                  de pila, sin ciudad: lo justo para saber a quién se llama. */}
               <div style={card}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.teal, fontWeight: 800, marginBottom: 8 }}><MapPin size={17} /> Procedencia</div>
-                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, fontWeight: 800 }}>{p.provenance?.shelterName || 'Registrado por su familia'}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: MPL.teal, fontWeight: 800, marginBottom: 8 }}>
+                  {p.provenance ? <><MapPin size={17} /> Procedencia</> : <><Heart size={17} /> Su familia</>}
+                </div>
+                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, fontWeight: 800 }}>
+                  {p.provenance?.shelterName || p.family?.name || 'Registrado por su familia'}
+                </div>
                 {p.provenance?.city && <div style={{ color: MPL.muted, fontSize: 14 }}>{p.provenance.city}</div>}
               </div>
               <div style={card}>

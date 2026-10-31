@@ -4,6 +4,7 @@ import { User } from '../models/user.model';
 import { getUserId } from '../utils/getUserId';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { authenticate } from '../middleware/auth.middleware';
+import { isProduction } from '../utils/env';
 
 const router = Router();
 
@@ -120,9 +121,11 @@ router.post('/:userId/reject', requireAdmin, async (req, res) => {
 
 export default router;
 
-// Dev helper: instantly verify current user if ALLOW_UNVERIFIED=true (non-prod)
+// Dev helper: instantly verify current user if ALLOW_UNVERIFIED=true (non-prod).
+// isProduction() y no NODE_ENV: en el VPS NODE_ENV es development a propósito, y esta
+// ruta abierta permitía a cualquier cuenta autoverificarse (publicar animales, etc.).
 router.post('/dev/verify', async (req, res) => {
-  if (!(process.env.ALLOW_UNVERIFIED === 'true' && process.env.NODE_ENV !== 'production')) {
+  if (!(process.env.ALLOW_UNVERIFIED === 'true' && !isProduction())) {
     return res.status(403).json({ error: 'forbidden' });
   }
   try {

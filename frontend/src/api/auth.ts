@@ -1,4 +1,5 @@
 import { api as axios } from "../api/client";
+import { markNewAccount } from "../utils/webPush";
 
 export type UserAddress = {
   street?: string;
@@ -21,6 +22,12 @@ export type UserProfile = {
   website?: string;
   address?: UserAddress;
   vet?: VetProfile;
+  itemCatalog?: ItemCatalogEntry[];
+};
+
+export type ItemCatalogEntry = {
+  name: string;
+  priceEur?: number;
 };
 
 export type VetServiceItem = {
@@ -62,8 +69,31 @@ export async function login(email: string, password: string): Promise<User> {
   return user;
 }
 
-export async function register(name: string, email: string, password: string, role?: string) {
-  await axios.post("/api/auth/register", { name, email, password, role });
+// acceptLegal: la casilla «Acepto…» del formulario; el servidor guarda la
+// aceptación de los textos vigentes en el mismo alta.
+export async function register(name: string, email: string, password: string, acceptLegal = false) {
+  await axios.post("/api/auth/register", { name, email, password, acceptLegal });
+}
+
+export type SocialProvider = "google" | "apple";
+
+/**
+ * Entra (o se da de alta) con el ID token que ha devuelto Google o Apple.
+ * El backend responde igual que /login, así que la sesión se guarda idéntica.
+ */
+export async function socialLogin(
+  provider: SocialProvider,
+  idToken: string,
+  name?: string,
+): Promise<User> {
+  // acceptLegal: los botones llevan al lado «Al continuar aceptas los términos
+  // y la política de privacidad»; el servidor lo graba como la casilla del registro.
+  const { data } = await axios.post(`/api/auth/oauth/${provider}`, { idToken, name, acceptLegal: true });
+  if (data.created) markNewAccount();
+  const user: User = { ...data.user, token: data.token };
+  localStorage.setItem("user", JSON.stringify(user));
+  axios.defaults.headers.common["Authorization"] = `Bearer ${user.token}`;
+  return user;
 }
 
 export function logout() {
@@ -90,4 +120,18 @@ export async function requestPasswordReset(email: string) {
 
 export async function resetPassword(token: string, password: string) {
   await axios.post(`/api/auth/reset`, { token, password });
+}
+
+export type DeletionBlocker =
+  | "open_vet_appointments" | "locked_patitas" | "patitas_balance" | "pending_payouts"
+  | "open_orders_as_seller" | "open_orders_as_buyer" | "open_adoptions_as_shelter" | "admin_account";
+
+export async function getDeletionCheck(): Promise<{ canDelete: boolean; blockers: DeletionBlocker[]; confirmWith: "password" | "email" }> {
+  const { data } = await axios.get("/api/auth/account/deletion-check");
+  return data;
+}
+
+export async function deleteMyAccount(body: { password?: string; confirmEmail?: string }) {
+  const { data } = await axios.post("/api/auth/account/delete", body);
+  return data as { ok: true };
 }

@@ -4,6 +4,7 @@ import { Coupon } from '../models/coupon.model';
 import { PatitaLog } from '../models/patitaLog.model';
 import { User } from '../models/user.model';
 import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
+import { COUPON_BONUS_MAX_PATITAS } from '../utils/limits';
 
 const codePattern = /^[A-Z0-9]+-\d{3}$/;
 
@@ -169,6 +170,113 @@ export async function updateCoupon(req: Request, res: Response) {
   );
   if (!coupon) return res.status(404).json({ error: 'coupon_not_found' });
   res.json(coupon);
+}
+
+// --- Autoservicio del partner -------------------------------------------------
+//
+// Un partner gestiona SOLO sus cupones. `partnerId` y `partnerType` no se leen
+// nunca del body: salen del token. Si se leyeran, una tienda podría publicar
+// cupones a nombre de la clínica de al lado.
+
+function meId(req: Request): string {
+  const user: any = (req as any).user;
+  return String(user._id || user.id);
+}
+
+/** Valida los campos que un partner sí puede decidir. Devuelve el error o null. */
+function partnerCouponError(data: ReturnType<typeof pickFields>) {
+  if (data.targetAnimalCode && !codePattern.test(data.targetAnimalCode)) {
+    return { status: 400, body: { error: 'invalid_animal_code' } };
+  }
+  if (data.expiresAt) {
+    if (Number.isNaN(data.expiresAt.getTime())) {
+      return { status: 400, body: { error: 'invalid_expiration' } };
+    }
+    // Un cupón que nace caducado no es un cupón, es una queja de un cliente.
+    if (data.expiresAt <= new Date()) {
+      return { status: 400, body: { error: 'expiration_in_past' } };
+    }
+  }
+  if (typeof data.bonusPatitas !== 'undefined') {
+    const bonus = Number(data.bonusPatitas);
+    if (!Number.isFinite(bonus) || bonus < 0) {
+      return { status: 400, body: { error: 'invalid_bonus' } };
+    }
+    if (bonus > COUPON_BONUS_MAX_PATITAS) {
+      return { status: 400, body: { error: 'bonus_too_large', max: COUPON_BONUS_MAX_PATITAS } };
+    }
+  }
+  return null;
+}
+
+export async function listMyCoupons(req: Request, res: Response) {
+  // Sin filtrar por activo/caducado a propósito: el partner tiene que poder ver
+  // los que ya se gastaron, que es justo lo que explica por qué no aparecen.
+  const coupons = await Coupon.find({ partnerId: meId(req) })
+    .sort({ createdAt: -1 })
+    .lean();
+  res.json({ items: coupons.map(serializeCoupon) });
+}
+
+export async function createMyCoupon(req: Request, res: Response) {
+  const user: any = (req as any).user;
+  const data = pickFields(req.body);
+
+  const copyValue = data.copy || data.title;
+  if (!copyValue || !data.discount) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+  const invalid = partnerCouponError(data);
+  if (invalid) return res.status(invalid.status).json(invalid.body);
+
+  const coupon = await Coupon.create({
+    partnerId: meId(req),
+    partnerType: user.role,
+    copy: copyValue,
+    title: data.title || copyValue,
+    description: data.description || undefined,
+    discount: data.discount,
+    bonusPatitas: Number.isFinite(data.bonusPatitas as number) ? Number(data.bonusPatitas) : 0,
+    targetAnimalCode: data.targetAnimalCode || undefined,
+    active: typeof data.active === 'boolean' ? data.active : true,
+    expiresAt: data.expiresAt,
+  });
+  res.status(201).json(serializeCoupon(coupon));
+}
+
+export async function updateMyCoupon(req: Request, res: Response) {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'coupon_not_found' });
+  }
+  const coupon = await Coupon.findById(req.params.id);
+  if (!coupon || String(coupon.partnerId) !== meId(req)) {
+    // 404 y no 403: quién tiene qué cupón no es asunto de otro partner.
+    return res.status(404).json({ error: 'coupon_not_found' });
+  }
+  if (coupon.usedAt) {
+    return res.status(409).json({ error: 'coupon_already_used' });
+  }
+
+  const data = pickFields(req.body);
+  if (typeof data.copy !== 'undefined' && !data.copy.trim()) {
+    return res.status(400).json({ error: 'copy_required' });
+  }
+  if (typeof data.discount !== 'undefined' && !data.discount.trim()) {
+    return res.status(400).json({ error: 'discount_required' });
+  }
+  const invalid = partnerCouponError(data);
+  if (invalid) return res.status(invalid.status).json(invalid.body);
+
+  // Lista blanca explícita: pickFields ya deja fuera sponsored/usedAt, y
+  // partnerId/partnerType se ignoran aunque vengan en el body.
+  const editable = ['copy', 'title', 'description', 'discount', 'bonusPatitas', 'active', 'expiresAt', 'targetAnimalCode'] as const;
+  for (const key of editable) {
+    const value = (data as any)[key];
+    if (typeof value !== 'undefined') (coupon as any)[key] = value;
+  }
+  if (typeof data.copy !== 'undefined' && !coupon.title) coupon.title = data.copy;
+  await coupon.save();
+  res.json(serializeCoupon(coupon));
 }
 
 export async function listAvailableCoupons(req: Request, res: Response) {

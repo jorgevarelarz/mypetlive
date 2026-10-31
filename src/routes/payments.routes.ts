@@ -14,7 +14,9 @@ r.post(
   '/payments/customer',
   authenticate,
   asyncHandler(async (req: any, res) => {
-    const userId = req.user?.id ?? req.header('x-user-id');
+    // `authenticate` ya ha corrido: si no hubiera usuario habría devuelto 401.
+    // El header `x-user-id` NO se mira aquí (era controlable por el cliente).
+    const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: 'missing_user' });
 
     const user = await User.findById(userId);

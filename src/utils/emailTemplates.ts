@@ -1,3 +1,4 @@
+import { escapeHtml } from './escapeHtml';
 // Plantillas de email de marca MyPetLive.
 // HTML compatible con clientes de correo: layout en tablas + estilos inline.
 
@@ -26,7 +27,10 @@ interface BrandedEmailOpts {
 
 /** Envuelve contenido en la maqueta de marca y devuelve el HTML completo. */
 export function brandedEmail(opts: BrandedEmailOpts): string {
-  const { preheader = '', heading, bodyHtml, button, footnote } = opts;
+  const { bodyHtml, button, footnote } = opts;
+  // Asunto, preencabezado y texto del botón son texto plano (llevan nombres de mascota).
+  const preheader = escapeHtml(opts.preheader || '');
+  const heading = escapeHtml(opts.heading);
   const year = new Date().getFullYear();
 
   const buttonBlock = button
@@ -34,7 +38,7 @@ export function brandedEmail(opts: BrandedEmailOpts): string {
          <tr><td align="center" bgcolor="${BRAND.teal}" style="border-radius:10px;">
            <a href="${button.url}" target="_blank"
               style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:10px;">
-             ${button.text}
+             ${escapeHtml(button.text)}
            </a>
          </td></tr>
        </table>`
@@ -119,6 +123,68 @@ export function resetPasswordEmail(resetUrl: string): { text: string; html: stri
       <p style="margin:0;">Pulsa el botón para crear una nueva contraseña. El enlace caduca en <strong>60 minutos</strong>.</p>`,
     button: { text: 'Crear nueva contraseña', url: resetUrl },
     footnote: `Si el botón no funciona, copia y pega este enlace en tu navegador:<br><a href="${resetUrl}" target="_blank" style="color:${BRAND.teal};word-break:break-all;">${resetUrl}</a><br><br>Si no has solicitado este cambio, ignora este mensaje: tu contraseña seguirá siendo la misma.`,
+  });
+
+  return { text, html };
+}
+
+/** Va a la dirección NUEVA: sin este clic el cambio no se aplica. */
+export function confirmEmailChangeEmail(confirmUrl: string, hours: number): { text: string; html: string } {
+  const text = [
+    'Hola,',
+    '',
+    'Has pedido usar esta dirección como correo de tu cuenta de MyPetLive.',
+    `Confírmalo con el siguiente enlace (caduca en ${hours} horas):`,
+    confirmUrl,
+    '',
+    'Hasta que no lo confirmes, tu cuenta seguirá usando la dirección anterior.',
+    'Si no has pedido este cambio, ignora este mensaje.',
+    '',
+    'Gracias,',
+    'Equipo MyPetLive',
+  ].join('\n');
+
+  const html = brandedEmail({
+    preheader: `Confirma tu nueva dirección de correo en MyPetLive (caduca en ${hours} horas).`,
+    heading: 'Confirma tu nueva dirección',
+    bodyHtml: `
+      <p style="margin:0 0 14px;">Hola,</p>
+      <p style="margin:0 0 14px;">Has pedido usar esta dirección como correo de tu cuenta de <strong>MyPetLive</strong>.</p>
+      <p style="margin:0;">Pulsa el botón para confirmarlo. Hasta entonces tu cuenta seguirá usando la dirección anterior. El enlace caduca en <strong>${hours} horas</strong>.</p>`,
+    button: { text: 'Confirmar esta dirección', url: confirmUrl },
+    footnote: `Si el botón no funciona, copia y pega este enlace en tu navegador:<br><a href="${confirmUrl}" target="_blank" style="color:${BRAND.teal};word-break:break-all;">${confirmUrl}</a><br><br>Si no has pedido este cambio, ignora este mensaje: tu correo seguirá siendo el mismo.`,
+  });
+
+  return { text, html };
+}
+
+/**
+ * Va a la dirección ANTIGUA. Es la única señal que recibe alguien a quien le han
+ * secuestrado la sesión: quien controla la cuenta no controla este buzón.
+ */
+export function emailChangeNoticeEmail(newEmail: string, applied: boolean): { text: string; html: string } {
+  const heading = applied ? 'Tu correo de acceso ha cambiado' : 'Alguien ha pedido cambiar tu correo';
+  const what = applied
+    ? `El correo de tu cuenta de MyPetLive ha pasado a ser ${newEmail}. Esta dirección ya no sirve para entrar.`
+    : `Se ha solicitado cambiar el correo de tu cuenta de MyPetLive a ${newEmail}. El cambio no se aplicará hasta que se confirme desde esa dirección.`;
+
+  const text = [
+    'Hola,',
+    '',
+    what,
+    '',
+    'Si no has sido tú, entra ahora en tu cuenta y cambia la contraseña: alguien podría tener acceso.',
+    '',
+    'Equipo MyPetLive',
+  ].join('\n');
+
+  const html = brandedEmail({
+    preheader: what,
+    heading,
+    bodyHtml: `
+      <p style="margin:0 0 14px;">Hola,</p>
+      <p style="margin:0;">${escapeHtml(what)}</p>`,
+    footnote: 'Si no has sido tú, entra ahora en tu cuenta y cambia la contraseña: alguien podría tener acceso.',
   });
 
   return { text, html };
