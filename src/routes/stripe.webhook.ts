@@ -169,9 +169,11 @@ async function reverseDonation(
 
 r.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
-  const secret = process.env.STRIPE_WEBHOOK_SECRET || '';
-  // In producción el secreto es obligatorio
-  if (process.env.NODE_ENV === 'production' && !secret) {
+  const secret = (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+  // El secreto es obligatorio en cualquier entorno salvo en los tests:
+  // el VPS corre con NODE_ENV=development, así que no basta con mirar 'production'.
+  if (!secret && process.env.NODE_ENV !== 'test') {
+    logger.error('STRIPE_WEBHOOK_SECRET vacío: webhook rechazado');
     return res.status(500).json({ error: 'stripe_webhook_secret_missing' });
   }
   if (!isStripeConfigured()) {
