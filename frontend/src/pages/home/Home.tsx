@@ -40,19 +40,32 @@ function Card({
   children,
   className = '',
   style,
+  onClick,
+  label,
 }: {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  // Con onClick la tarjeta entera abre algo (la gente la pulsa esperando que se
+  // abra). Es un <section> con role="link" y no un <button>: index.css da
+  // padding a todo botón y aquí dentro hay más botones.
+  onClick?: () => void;
+  label?: string;
 }) {
   return (
     <section
       className={className}
+      role={onClick ? 'link' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? label : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       style={{
         background: colors.card,
         border: `1px solid ${colors.border}`,
         borderRadius: 20,
         boxShadow: '0 1px 3px rgba(31,55,40,.06), 0 8px 24px -18px rgba(31,55,40,.22)',
+        cursor: onClick ? 'pointer' : undefined,
         ...style,
       }}
     >
@@ -184,7 +197,11 @@ export default function Home() {
           {pets.length > 1 && (
             <PetSwitcher pets={pets} selectedId={currentId} onSelect={selectPet} onAdd={() => nav('/pet?nueva=1')} />
           )}
-          <Card className="overflow-hidden">
+          <Card
+            className="overflow-hidden"
+            onClick={hasPet && !isError ? () => nav('/pet') : undefined}
+            label={`Abrir la ficha de ${displayName}`}
+          >
             <div className="relative aspect-[4/3]" style={{ background: colors.panel }}>
               {isLoading ? (
                 <div className="flex h-full items-center justify-center text-sm font-semibold" style={{ color: colors.soft }}>
@@ -233,9 +250,14 @@ export default function Home() {
                   </h2>
                   {displayAge && <span className="text-sm font-bold" style={{ color: colors.muted }}>{displayAge}</span>}
                 </div>
-                <p className="text-sm font-semibold" style={{ color: colors.muted }}>
-                  {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
-                </p>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                    {displaySpecies}{featuredAnimal?.code ? ` · ${featuredAnimal.code}` : ''}
+                  </p>
+                  <span className="shrink-0 text-sm font-bold" style={{ color: colors.teal }}>
+                    Ver ficha ›
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {featuredAnimal?.city && (
                     <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: colors.bg, color: colors.muted }}>
