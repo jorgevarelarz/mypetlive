@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Home, PawPrint, Heart, Ticket, Gift, User, Users, FileText,
-  Settings, ClipboardList, Circle, Menu, X, QrCode, RefreshCw, LogOut, MessageCircle, CalendarDays,
+  Settings, ClipboardList, Circle, Menu, X, QrCode, RefreshCw, LogOut, MessageCircle, CalendarDays, HouseHeart,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
-import { navItemsForRole, generalItemsForRole, resolvePath, type NavItem } from './navItems';
+import { navItemsForRole, generalItemsForRole, resolvePath, withRehomeItem, type NavItem } from './navItems';
+import { getRehomeStatus } from '../api/rehome';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
 import Brand from '../components/Brand';
 import MobileBottomNav from '../components/MobileBottomNav';
@@ -29,7 +30,17 @@ const iconFor: Record<string, IconType> = {
   '/landlord/questionnaire': ClipboardList,
   '/mensajes': MessageCircle,
   '/citas': CalendarDays,
+  '/buscar-casa': HouseHeart,
 };
+
+/**
+ * Menú lateral (escritorio y drawer móvil) con «Buscar casa» si el admin ha
+ * activado al adoptante. Comparte la queryKey de RehomeEntry: una sola petición.
+ */
+function useSideItems(role?: string): NavItem[] {
+  const q = useQuery({ queryKey: ['rehome-status'], queryFn: getRehomeStatus, enabled: role === 'tenant', staleTime: 5 * 60_000 });
+  return withRehomeItem(navItemsForRole(role), role === 'tenant' && q.data === true);
+}
 
 // Rutas "home" de cada rol: solo se marcan activas en coincidencia exacta (no en sus hijas)
 const INDEX_PATHS = new Set(['/home', '/landlord', '/admin', '/partner', '/pro']);
@@ -79,7 +90,7 @@ function Header() {
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
   const generalItems = generalItemsForRole(role);
   // El drawer móvil replica el menú lateral de la web: misma regla, misma función.
-  const drawerItems = navItemsForRole(role);
+  const drawerItems = useSideItems(role);
   // En la cabecera solo lo que NO está ya en el menú lateral: al adoptante
   // le repetía las nueve entradas; a protectoras y partners les deja los
   // enlaces públicos (Compañeros, Tienda…) que su menú no tiene.
@@ -359,7 +370,7 @@ function SideNav() {
   const { user } = useAuth();
   const unread = useUnreadMessages();
   const role = user?.role as 'tenant' | 'landlord' | 'pro' | 'admin' | 'store' | 'vet' | undefined;
-  const items = navItemsForRole(role);
+  const items = useSideItems(role);
   return (
     <aside className="hidden lg:flex w-60 shrink-0">
       <div

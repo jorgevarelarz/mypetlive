@@ -25,3 +25,18 @@ export function navItemsForRole(role?: string): NavItem[] {
   const roleItems = (role && (navConfig as any)[role] ? (navConfig as any)[role] : []) as NavItem[];
   return roleItems.length > 0 ? roleItems : generalItemsForRole(role);
 }
+
+/** Entrada del menú para quien el admin ha activado como «Busca casa a animales». */
+export const REHOME_ITEM: NavItem = { label: 'Buscar casa', path: '/buscar-casa', to: '/buscar-casa' };
+
+/**
+ * Añade «Buscar casa» al menú del adoptante activado, justo después de «Mi Mascota».
+ * No depende del rol en el JSON porque es un permiso por usuario (`User.rehome`).
+ */
+export function withRehomeItem(items: NavItem[], enabled: boolean): NavItem[] {
+  if (!enabled || items.some(i => resolvePath(i) === REHOME_ITEM.path)) return items;
+  const at = items.findIndex(i => resolvePath(i) === '/pet');
+  const out = items.slice();
+  out.splice(at >= 0 ? at + 1 : out.length, 0, REHOME_ITEM);
+  return out;
+}

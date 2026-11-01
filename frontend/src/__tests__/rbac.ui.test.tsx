@@ -1,4 +1,4 @@
-import { navItemsForRole, generalItemsForRole, resolvePath } from '../layout/navItems';
+import { navItemsForRole, generalItemsForRole, resolvePath, withRehomeItem } from '../layout/navItems';
 
 // Qué ve cada rol en el menú. Antes esto se probaba contra `Sidebar`, un
 // componente que ya no usaba nadie (la navegación viva es `layout/AppShell`),
@@ -60,5 +60,15 @@ describe('Menú por rol', () => {
         expect(resolvePath(item)).not.toBe('#');
       }
     }
+  });
+});
+
+describe('«Buscar casa» en el menú', () => {
+  it('solo aparece si el admin lo ha activado, justo después de «Mi Mascota»', () => {
+    const base = navItemsForRole('tenant');
+    expect(withRehomeItem(base, false).map(resolvePath)).not.toContain('/buscar-casa');
+    const paths = withRehomeItem(base, true).map(resolvePath);
+    expect(paths.indexOf('/buscar-casa')).toBe(paths.indexOf('/pet') + 1);
+    expect(paths.filter(p => p === '/buscar-casa')).toHaveLength(1);
   });
 });
