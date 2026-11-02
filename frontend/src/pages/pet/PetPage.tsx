@@ -716,12 +716,12 @@ export default function PetPage() {
           />
         )}
         {/* Maqueta del 2 nov 2026: dos botones de 28 de alto, 170 de ancho, 15 entre ellos. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, width: '100%', padding: '0 5px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', padding: '0 2px' }}>
           <button type="button" onClick={() => setRegisterOpen(true)} style={TOP_BUTTON}>
-            <CalcoMas size={13} /> Añadir otra mascota
+            <CalcoMas size={15} /> Añadir otra mascota
           </button>
           <button type="button" onClick={() => nav('/animals')} style={TOP_BUTTON}>
-            <CalcoAdoptar size={15} /> Adoptar otra mascota
+            <CalcoAdoptar size={18} /> Adoptar otra mascota
           </button>
         </div>
         <RehomeEntry />
@@ -734,7 +734,7 @@ export default function PetPage() {
       {/* Ficha tipo carnet: la foto con sus datos encima y debajo cuatro
           accesos. Antes eran botones con emojis repartidos en tres filas. */}
       <div style={{ borderRadius: 16, overflow: 'hidden', background: M.tarjeta, boxShadow: M.sombra }}>
-        <div className="relative" style={{ aspectRatio: '366 / 142', background: '#F1ECE4' }}>
+        <div className="relative" style={{ aspectRatio: '366 / 172', background: '#F1ECE4' }}>
           {image ? (
             <img src={toAbsoluteUrl(image)} alt={featuredAnimal.name} className="absolute inset-0 h-full w-full object-cover" />
           ) : canEdit ? (
@@ -754,43 +754,43 @@ export default function PetPage() {
             style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 12px 12px 17px', background: image ? 'linear-gradient(90deg, rgba(10,14,10,.62) 0%, rgba(10,14,10,.25) 45%, rgba(10,14,10,0) 70%)' : 'transparent', color: image ? '#FFFFFF' : M.tinta, pointerEvents: 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-              <h1 style={{ fontFamily: M.titulos, margin: 0, fontSize: 26, lineHeight: 1, fontWeight: 800 }}>
+              <h1 style={{ fontFamily: M.titulos, margin: 0, fontSize: 31, lineHeight: 1, fontWeight: 800 }}>
                 {featuredAnimal.name || 'Mi mascota'}
               </h1>
-              <CalcoDestellosFoto size={17} style={{ marginLeft: 5, marginTop: -11 }} />
+              <CalcoDestellosFoto size={20} style={{ marginLeft: 6, marginTop: -12 }} />
             </div>
             {code && (
-              <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 5, height: 16, padding: '0 7px 0 6px', borderRadius: 8, border: `1px solid ${image ? 'rgba(255,255,255,.9)' : M.borde}`, fontSize: 9.5, fontWeight: 600, letterSpacing: '.02em' }}>
-                <CalcoEtiqueta size={10} color={image ? '#FFFFFF' : M.tinta} /> {code}
+              <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, height: 21, padding: '0 9px 0 7px', borderRadius: 10, border: `1px solid ${image ? 'rgba(255,255,255,.9)' : M.borde}`, fontSize: 12, fontWeight: 600, letterSpacing: '.02em' }}>
+                <CalcoEtiqueta size={13} color={image ? '#FFFFFF' : M.tinta} /> {code}
               </span>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11.5, fontWeight: 600, lineHeight: '13px' }}>
-              {featuredAnimal.species === 'cat' || featuredAnimal.species === 'gato' ? <Cat size={13} /> : featuredAnimal.species === 'dog' || featuredAnimal.species === 'perro' ? <CalcoPerroBlanco size={12} color={image ? '#FFFFFF' : M.tinta} /> : <PawGlyph size={12} />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 9, fontSize: 14, fontWeight: 600, lineHeight: '16px' }}>
+              {featuredAnimal.species === 'cat' || featuredAnimal.species === 'gato' ? <Cat size={13} /> : featuredAnimal.species === 'dog' || featuredAnimal.species === 'perro' ? <CalcoPerroBlanco size={15} color={image ? '#FFFFFF' : M.tinta} /> : <PawGlyph size={12} />}
               {speciesLabel(featuredAnimal.species) || 'Animal'}
               {petAge(featuredAnimal) && (
                 <>
                   <span aria-hidden style={{ margin: '0 4px' }}>•</span>
-                  <CalcoCalendarioBlanco size={13} color={image ? '#FFFFFF' : M.tinta} /> {petAge(featuredAnimal)}
+                  <CalcoCalendarioBlanco size={16} color={image ? '#FFFFFF' : M.tinta} /> {petAge(featuredAnimal)}
                 </>
               )}
             </div>
             {mood && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontSize: 11.5, fontWeight: 600, lineHeight: '13px' }}>
-                <CalcoCorazonBlanco size={13} color={image ? '#FFFFFF' : M.tinta} /> {moodLabel(mood)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 14, fontWeight: 600, lineHeight: '16px' }}>
+                <CalcoCorazonBlanco size={16} color={image ? '#FFFFFF' : M.tinta} /> {moodLabel(mood)}
               </div>
             )}
           </div>
         </div>
         {(petCode || canEdit) && (
-          <div className="grid grid-cols-4" style={{ height: 54, alignItems: 'center' }}>
+          <div className="grid grid-cols-4" style={{ height: 66, alignItems: 'center' }}>
             {canEdit && (
-              <CardAction icon={<CalcoEditar size={19} />} label="Editar" onClick={openEdit} first />
+              <CardAction icon={<CalcoEditar size={23} />} label="Editar" onClick={openEdit} first />
             )}
             {petCode && (
-              <CardAction icon={<CalcoPasaporte size={17} />} label="Pasaporte" onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)} />
+              <CardAction icon={<CalcoPasaporte size={21} />} label="Pasaporte" onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)} />
             )}
             {petCode && (
-              <CardAction icon={<CalcoCompartir size={19} />} label="Compartir" onClick={handleSharePassport} />
+              <CardAction icon={<CalcoCompartir size={23} />} label="Compartir" onClick={handleSharePassport} />
             )}
             {/* «Se ha perdido» activa lo que enseña la chapa a quien la escanea. */}
             {canEdit && (
@@ -803,7 +803,7 @@ export default function PetPage() {
                   disabled={foundMutation.isPending}
                 />
               ) : (
-                <CardAction icon={<CalcoPerdido size={20} />} label="Perdido" color="#B4472A" onClick={openLost} halo />
+                <CardAction icon={<CalcoPerdido size={24} />} label="Perdido" color="#B4472A" onClick={openLost} halo />
               )
             )}
           </div>
@@ -880,14 +880,14 @@ export default function PetPage() {
       )}
 
 
-      <div style={{ ...CARD, padding: '7px 10px 4px 14px' }}>
+      <div style={{ ...CARD, padding: '10px 12px 6px 14px' }}>
         <div className="flex items-center justify-between gap-3">
           <h2 style={SECTION_TITLE}>
-            <CalcoSalud size={21} /> Historial de salud
+            <CalcoSalud size={25} /> Historial de salud
           </h2>
           <button
             type="button"
-            style={{ flexShrink: 0, height: 20, padding: '0 11px', borderRadius: 10, border: `1px solid ${M.verde}`, background: '#FFFFFF', color: M.verdeBoton, fontWeight: 600, fontSize: 10, cursor: 'pointer' }}
+            style={{ flexShrink: 0, height: 28, padding: '0 14px', borderRadius: 14, border: `1px solid ${M.verde}`, background: '#FFFFFF', color: M.verdeBoton, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
             onClick={() => { setHealthOpen(v => !v); setHealthError(null); }}
           >
             {healthOpen ? 'Cancelar' : 'Apuntar'}
@@ -958,13 +958,13 @@ export default function PetPage() {
               <li key={idx} style={{ position: 'relative', display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', columnGap: 0, padding: '4px 0 3px', borderTop: idx ? '1px solid #EDE7DE' : 0 }}>
                 <span aria-hidden style={{ position: 'relative', gridRow: '1 / 3' }}>
                   {idx < all.length - 1 && <span style={{ position: 'absolute', left: 6.5, top: 17, bottom: -14, width: 1.5, background: '#B9D3CF' }} />}
-                  <span style={{ position: 'absolute', left: 0, top: 9, width: 10, height: 10, borderRadius: 999, background: M.verdeBoton, boxShadow: '0 0 0 2px #FFFFFF, 0 0 0 3.5px #B9D3CF' }} />
+                  <span style={{ position: 'absolute', left: 0, top: 13, width: 11, height: 11, borderRadius: 999, background: M.verdeBoton, boxShadow: '0 0 0 2px #FFFFFF, 0 0 0 3.5px #B9D3CF' }} />
                 </span>
-                <span style={{ gridColumn: '2 / 4', fontSize: 8.5, lineHeight: '10px', color: M.gris }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
-                <span style={{ minWidth: 0, fontSize: 10, lineHeight: '13px', color: M.tinta, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ gridColumn: '2 / 4', fontSize: 11, lineHeight: '14px', color: M.gris }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
+                <span style={{ minWidth: 0, fontSize: 13, lineHeight: '17px', color: M.tinta }}>
                   <strong style={{ fontWeight: 700 }}>{healthCategoryLabel(entry.type)}</strong>{entry.notes ? ` · ${entry.notes}` : ''}
                 </span>
-                <span style={{ fontSize: 8.5, lineHeight: '13px', color: M.gris, whiteSpace: 'nowrap', paddingLeft: 8, paddingRight: 2 }}>
+                <span style={{ fontSize: 11, lineHeight: '17px', color: M.gris, whiteSpace: 'nowrap', paddingLeft: 8, paddingRight: 2, alignSelf: 'end' }}>
                   {entry.nextDueAt ? `Próxima: ${new Date(entry.nextDueAt).toLocaleDateString()}` : ''}
                 </span>
               </li>
@@ -983,13 +983,13 @@ export default function PetPage() {
           pasaporte sirva de algo el día que el animal se pierde, y hasta ahora
           la app no la mencionaba en ninguna parte. */}
       {petCodeActual && (
-        <div style={{ ...CARD, background: '#FEFAF7', overflow: 'hidden', display: 'grid', gridTemplateColumns: chapa ? '1fr' : '123px minmax(0, 1fr)', alignItems: 'stretch', minHeight: 102 }}>
+        <div style={{ ...CARD, background: '#FEFAF7', overflow: 'hidden', display: 'grid', gridTemplateColumns: chapa ? '1fr' : '134px minmax(0, 1fr)', alignItems: 'stretch', minHeight: 124 }}>
           {!chapa && (
             // Recorte exacto de la maqueta: la chapa, su mancha verde y los destellos.
-            <img src="/ilustraciones/chapa-maqueta.png" alt="" aria-hidden style={{ width: 123, height: 'auto', display: 'block', alignSelf: 'end' }} />
+            <img src="/ilustraciones/chapa-maqueta.png" alt="" aria-hidden style={{ width: 134, height: 'auto', display: 'block', alignSelf: 'end' }} />
           )}
           <div style={{ display: 'grid', gap: 6, alignContent: 'start', padding: chapa ? 14 : '9px 12px 10px 4px' }}>
-          <h2 style={{ ...SECTION_TITLE, fontSize: 12 }}>La chapa de {featuredAnimal.name}</h2>
+          <h2 style={{ ...SECTION_TITLE, fontSize: 15.5 }}>La chapa de {featuredAnimal.name}</h2>
           {chapa ? (
             // Vinculada: quien la escanee llega a su pasaporte.
             <div className="flex items-center gap-4">
@@ -1031,7 +1031,7 @@ export default function PetPage() {
           ) : (
             // Sin chapa: se ofrece pedirla. Con el pedido pagado aparece el registro.
             <div style={{ display: 'grid', gap: 8 }}>
-              <p style={{ color: '#3A3F3C', margin: 0, fontSize: 9.5, lineHeight: '12.5px' }}>
+              <p style={{ color: '#3A3F3C', margin: 0, fontSize: 12.5, lineHeight: '16px' }}>
                 No tienes chapa de {featuredAnimal.name}. Pide la tuya ya: con ella, quien se la encuentre
                 y la escanee llega a su pasaporte y puede avisarte.
               </p>
@@ -1040,9 +1040,9 @@ export default function PetPage() {
                   type="button"
                   onClick={() => nav(`/tienda/${tagEligQ.data!.productId}`)}
                   className="justify-self-start"
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: 148, height: 25, padding: 0, borderRadius: 9, border: 0, background: '#C24A2B', color: '#FFFFFF', fontWeight: 700, fontSize: 10.5, whiteSpace: 'nowrap', cursor: 'pointer', marginTop: 2 }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: 168, height: 34, padding: 0, borderRadius: 11, border: 0, background: '#C24A2B', color: '#FFFFFF', fontWeight: 700, fontSize: 13.5, whiteSpace: 'nowrap', cursor: 'pointer', marginTop: 2 }}
                 >
-                  <CalcoCarrito size={13} /> Pedir chapa{tagEligQ.data?.priceEur ? ` · ${tagEligQ.data.priceEur.toLocaleString('es-ES')} €` : ''}
+                  <CalcoCarrito size={16} /> Pedir chapa{tagEligQ.data?.priceEur ? ` · ${tagEligQ.data.priceEur.toLocaleString('es-ES')} €` : ''}
                 </button>
               )}
             </div>
@@ -1126,7 +1126,7 @@ export default function PetPage() {
         <button
           type="button"
           onClick={() => setFarewellOpen(true)}
-          style={{ justifySelf: 'center', padding: '2px 0', border: 0, background: 'none', color: '#5E6460', fontSize: 9.5, textDecoration: 'underline', textUnderlineOffset: 2 }}
+          style={{ justifySelf: 'center', padding: '4px 0', border: 0, background: 'none', color: '#5E6460', fontSize: 12.5, textDecoration: 'underline', textUnderlineOffset: 2 }}
         >
           {featuredAnimal.name} ha fallecido
         </button>
@@ -1492,10 +1492,10 @@ function CardAction({ icon, label, onClick, color = M.verde, disabled, halo, fir
       type="button"
       onClick={onClick}
       disabled={disabled}
-      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, height: 54, padding: 0, border: 0, background: 'transparent', color, font: 'inherit', fontSize: 10.5, fontWeight: 700, minWidth: 0, cursor: 'pointer' }}
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, height: 66, padding: 0, border: 0, background: 'transparent', color, font: 'inherit', fontSize: 13, fontWeight: 700, minWidth: 0, cursor: 'pointer' }}
     >
       {!first && <span aria-hidden style={{ position: 'absolute', left: 0, top: 14, bottom: 14, width: 1, background: '#E6DFD4' }} />}
-      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 999, background: halo ? '#FBEAE4' : 'transparent' }}>{icon}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 999, background: halo ? '#FBEAE4' : 'transparent' }}>{icon}</span>
       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{label}</span>
     </button>
   );
@@ -1505,12 +1505,12 @@ const CARD: React.CSSProperties = { borderRadius: 14, background: M.tarjeta, box
 
 const TOP_BUTTON: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 0,
-  height: 28, padding: '0 6px', borderRadius: 13, border: '1px solid #EFE9E0',
-  background: '#FFFFFF', color: M.tinta, fontSize: 10.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden',
+  height: 38, padding: '0 6px', borderRadius: 16, border: '1px solid #EFE9E0',
+  background: '#FFFFFF', color: M.tinta, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden',
   boxShadow: '0 2px 6px -3px rgba(60,45,30,.22)', cursor: 'pointer',
 };
 
 const SECTION_TITLE: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 9, margin: 0, whiteSpace: 'nowrap',
-  fontFamily: M.titulos, fontSize: 13.5, fontWeight: 700, color: M.tinta,
+  fontFamily: M.titulos, fontSize: 17, fontWeight: 700, color: M.tinta,
 };

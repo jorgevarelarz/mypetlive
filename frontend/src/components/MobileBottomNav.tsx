@@ -33,8 +33,8 @@ function BarraProtectora({ pathname }: { pathname: string }) {
         const activa = item.to === '/landlord' ? pathname === '/landlord' : pathname.startsWith(item.to);
         const Icon = item.icon;
         return (
-          <NavLink key={item.to} to={item.to} end={item.to === '/landlord'} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 60, textDecoration: 'none', color: activa ? '#067164' : '#555553', fontSize: 10, fontWeight: activa ? 700 : 500 }}>
-            <Icon size={19} color={activa ? '#067164' : '#666566'} />
+          <NavLink key={item.to} to={item.to} end={item.to === '/landlord'} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 60, textDecoration: 'none', color: activa ? '#067164' : '#555553', fontSize: 11, fontWeight: activa ? 700 : 500 }}>
+            <Icon size={24} color={activa ? '#067164' : '#666566'} />
             {item.label}
           </NavLink>
         );
@@ -69,8 +69,9 @@ function BarraAdoptante() {
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 2,
-        // Maqueta: barra de 55 con esquinas de 22; la pestaña activa en una píldora de 54 × 38.
-        padding: '4px 10px calc(8px + env(safe-area-inset-bottom))',
+        // Estilo de la maqueta a tamaño normal de iPhone (iconos de 23-25 y texto de 11): a la escala
+        // de la maqueta (17 y 9,5) se quedaba pequeña en el teléfono.
+        padding: '6px 8px calc(8px + env(safe-area-inset-bottom))',
         background: '#fff',
         borderTop: `1px solid ${MPL.border}`,
         borderRadius: '22px 22px 0 0',
@@ -99,24 +100,24 @@ function BarraAdoptante() {
               justifyContent: 'center',
               // Pestaña activa en una píldora (propuesta del 2 nov 2026).
               flex: '0 0 auto',
-              width: 64,
-              height: 38,
+              width: 72,
+              height: 50,
               margin: '0 auto',
               padding: 0,
-              borderRadius: 14,
+              borderRadius: 16,
               background: isActive ? '#DCEBE6' : 'transparent',
               transition: 'background-color .3s ease, color .3s ease',
               color: isActive ? M.verdeBoton : '#4E4C49',
               textDecoration: 'none',
-              fontSize: 9.5,
+              fontSize: 11,
               lineHeight: 1,
-              gap: 3,
+              gap: 4,
               fontWeight: isActive ? 700 : 500,
             });
             }}
           >
             <span style={{ position: 'relative', display: 'inline-flex' }}>
-              {item.to === '/' && !inicio ? <IconoInicio size={19} strokeWidth={1.7} color="#6E6C69" /> : <Icon size={17} color={(item.to === '/' ? inicio : pathname.startsWith(item.to)) ? M.verdeBoton : '#6E6C69'} />}
+              {item.to === '/' && !inicio ? <IconoInicio size={25} strokeWidth={1.7} color="#6E6C69" /> : <Icon size={23} color={(item.to === '/' ? inicio : pathname.startsWith(item.to)) ? M.verdeBoton : '#6E6C69'} />}
               {item.to === '/mensajes' && unread > 0 && (
                 <span aria-label={`${unread} sin leer`} style={{ position: 'absolute', top: -6, left: 15, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: MPL.coral, color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'grid', placeItems: 'center', border: '2px solid #fff', lineHeight: 1 }}>
                   {unread > 99 ? '99+' : unread}

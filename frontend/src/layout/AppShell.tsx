@@ -76,17 +76,17 @@ function FilaCajon({ to, label, badge, activa }: { to: string; label: string; ba
     <Link
       to={to}
       style={activa
-        ? { display: 'flex', alignItems: 'center', gap: 9, height: 45, padding: '0 10px 0 8px', borderRadius: 14, background: '#D4E9E8', color: '#0E5F5B', textDecoration: 'none', margin: '4px 0' }
-        : { display: 'flex', alignItems: 'center', gap: 18, height: 42, padding: '0 10px 0 13px', borderRadius: 12, color: '#2F3532', textDecoration: 'none' }}
+        ? { display: 'flex', alignItems: 'center', gap: 10, height: 52, padding: '0 10px 0 8px', borderRadius: 16, background: '#D4E9E8', color: '#0E5F5B', textDecoration: 'none', margin: '4px 0' }
+        : { display: 'flex', alignItems: 'center', gap: 18, height: 48, padding: '0 10px 0 12px', borderRadius: 12, color: '#2F3532', textDecoration: 'none' }}
     >
       {activa ? (
-        <span style={{ width: 34, height: 34, borderRadius: 10, background: '#DDF0EE', border: '1px solid #C8E3DF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Icono size={18} color="#06655B" />
+        <span style={{ width: 38, height: 38, borderRadius: 11, background: '#DDF0EE', border: '1px solid #C8E3DF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icono size={21} color="#06655B" />
         </span>
       ) : (
-        <span style={{ width: 22, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}><Icono size={21} color={GRIS_MENU} /></span>
+        <span style={{ width: 25, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}><Icono size={24} color={GRIS_MENU} /></span>
       )}
-      <span style={{ flex: 1, minWidth: 0, fontSize: activa ? 15.5 : 14.5, fontWeight: activa ? 700 : 600, color: activa ? '#0E5F5B' : '#2B2F2D', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: activa ? 17 : 16, fontWeight: activa ? 700 : 600, color: activa ? '#0E5F5B' : '#2B2F2D', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
       {badge}
     </Link>
   );
@@ -95,7 +95,7 @@ function FilaCajon({ to, label, badge, activa }: { to: string; label: string; ba
 function TituloCajon({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 4px 6px 7px' }}>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.02em', textTransform: 'uppercase', color: '#6B7068', whiteSpace: 'nowrap' }}>{children}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '.02em', textTransform: 'uppercase', color: '#6B7068', whiteSpace: 'nowrap' }}>{children}</span>
       <span style={{ flex: 1, height: 1, background: '#E3DED6' }} />
     </div>
   );
@@ -303,8 +303,8 @@ function Header() {
         // En la app el cajón empieza bajo la barra de estado (ver .safe-top en index.css).
         className="lg:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
         style={{
-          width: 283,
-          maxWidth: '84vw',
+          width: 300,
+          maxWidth: '86vw',
           background: '#FFFFFF',
           borderRight: `1px solid ${MPL.border}`,
           transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
@@ -319,17 +319,17 @@ function Header() {
         <div style={{ flexShrink: 0, fontFamily: M.letra, letterSpacing: 0 }}>
           <div className="flex items-center justify-between" style={{ padding: '17px 14px 0 16px' }}>
             <Link to={roleHome} aria-label="MyPetLive — inicio" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-              <img src="/ilustraciones/logo-tile.png" alt="" style={{ width: 30, height: 31, display: 'block' }} />
-              <span style={{ fontSize: 18.5, fontWeight: 700, color: '#0E5F5B' }}>MyPet<span style={{ color: '#D2552F' }}>Live</span></span>
+              <img src="/ilustraciones/logo-tile.png" alt="" style={{ width: 33, height: 34, display: 'block' }} />
+              <span style={{ fontSize: 20.5, fontWeight: 700, color: '#0E5F5B' }}>MyPet<span style={{ color: '#D2552F' }}>Live</span></span>
             </Link>
             <button
               type="button"
               className="inline-flex items-center justify-center"
-              style={{ width: 36, height: 36, padding: 0, borderRadius: 10, border: '1px solid #E6E1D8', background: '#FFFFFF', boxShadow: '0 2px 6px -4px rgba(60,45,30,.3)', cursor: 'pointer' }}
+              style={{ width: 40, height: 40, padding: 0, borderRadius: 11, border: '1px solid #E6E1D8', background: '#FFFFFF', boxShadow: '0 2px 6px -4px rgba(60,45,30,.3)', cursor: 'pointer' }}
               onClick={() => setMenuOpen(false)}
               aria-label="Cerrar menú"
             >
-              <CalcoMenuCerrar size={15} />
+              <CalcoMenuCerrar size={17} />
             </button>
           </div>
           <img src="/ilustraciones/menu-cabecera.png" alt="" aria-hidden style={{ display: 'block', width: '100%', height: 'auto', marginTop: 5 }} />
@@ -362,8 +362,8 @@ function Header() {
               <img src="/ilustraciones/menu-protectora.png" alt="" aria-hidden style={{ width: 92, height: 'auto', display: 'block' }} />
               <span aria-hidden style={{ width: 1, height: 52, background: '#D5DCCB' }} />
               <span>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1E2A27' }}>Protectora</span>
-                <span style={{ display: 'block', fontSize: 10.5, lineHeight: '14px', color: '#3D4340', marginTop: 2 }}>Dona Patitas y apoya su gran labor.</span>
+                <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: '#1E2A27' }}>Protectora</span>
+                <span style={{ display: 'block', fontSize: 12.5, lineHeight: '16px', color: '#3D4340', marginTop: 2 }}>Dona Patitas y apoya su gran labor.</span>
               </span>
               <CalcoMenuFlecha size={12} />
             </Link>
@@ -375,9 +375,9 @@ function Header() {
               <button
                 type="button"
                 onClick={() => { setMenuOpen(false); logout(); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%', height: 42, padding: '0 10px 0 11px', borderRadius: 12, border: 0, background: 'transparent', fontFamily: M.letra, fontSize: 14.5, fontWeight: 600, color: '#3D4340', cursor: 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%', height: 42, padding: '0 10px 0 11px', borderRadius: 12, border: 0, background: 'transparent', fontFamily: M.letra, fontSize: 16, fontWeight: 600, color: '#3D4340', cursor: 'pointer' }}
               >
-                <CalcoMenuSalir size={19} />
+                <CalcoMenuSalir size={22} />
                 Cerrar sesión
               </button>
             </>

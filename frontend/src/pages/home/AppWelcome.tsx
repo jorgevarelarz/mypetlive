@@ -51,10 +51,10 @@ export default function AppWelcome() {
 
       {/* Medidas de la maqueta «¿Por dónde empezamos?» (2 nov 2026), iPhone de 390. */}
       <section style={{ padding: '18px 12px 4px', fontFamily: M.letra, letterSpacing: 0 }}>
-        <h1 style={{ fontFamily: M.titulos, fontSize: 28.5, lineHeight: '32px', fontWeight: 700, color: '#26302B', margin: '0 8px 7px' }}>
+        <h1 style={{ fontFamily: M.titulos, fontSize: 31, lineHeight: '35px', fontWeight: 700, color: '#26302B', margin: '0 8px 7px' }}>
           ¿Por dónde empezamos?
         </h1>
-        <p style={{ fontSize: 13.5, lineHeight: '20px', color: '#5A5F5B', margin: '0 8px 30px' }}>
+        <p style={{ fontSize: 15.5, lineHeight: '22px', color: '#5A5F5B', margin: '0 8px 28px' }}>
           Lleva al día los cuidados de tu mascota o encuentra a la que está por llegar.
         </p>
 
@@ -66,21 +66,21 @@ export default function AppWelcome() {
                 key={p.key}
                 to={p.to}
                 style={{
-                  position: 'relative', display: 'grid', gridTemplateColumns: '51px minmax(0, 1fr)', alignItems: 'center', columnGap: 9,
-                  minHeight: 119, padding: '0 124px 0 10px', overflow: 'hidden',
+                  position: 'relative', display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr)', alignItems: 'center', columnGap: 11,
+                  minHeight: 132, padding: '0 122px 0 11px', overflow: 'hidden',
                   background: '#FFFFFF', border: '1px solid #EEE8DF', borderRadius: 18,
                   color: M.tinta, textDecoration: 'none', boxShadow: M.sombra,
                 }}
               >
-                <span style={{ width: 51, height: 51, borderRadius: 12, background: p.tint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={27} />
+                <span style={{ width: 56, height: 56, borderRadius: 14, background: p.tint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={30} />
                 </span>
                 <span style={{ minWidth: 0, position: 'relative', zIndex: 1 }}>
-                  <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 16.5, lineHeight: '20px', fontWeight: 700, color: '#26302B', marginBottom: 6 }}>{p.title}</span>
-                  <span style={{ display: 'block', fontSize: 11, lineHeight: '15px', color: '#4F5551' }}>{p.desc}</span>
+                  <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 19, lineHeight: '23px', fontWeight: 700, color: '#26302B', marginBottom: 6 }}>{p.title}</span>
+                  <span style={{ display: 'block', fontSize: 13, lineHeight: '17px', color: '#4F5551' }}>{p.desc}</span>
                 </span>
-                <img src={p.dibujo} alt="" aria-hidden style={{ position: 'absolute', right: 20, bottom: 1, width: p.key === 'mascota' ? 104 : 111, height: 'auto', display: 'block' }} />
-                <CalcoBienvFlecha size={12} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)' }} />
+                <img src={p.dibujo} alt="" aria-hidden style={{ position: 'absolute', right: 20, bottom: 1, width: p.key === 'mascota' ? 112 : 120, height: 'auto', display: 'block' }} />
+                <CalcoBienvFlecha size={14} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)' }} />
               </Link>
             );
           })}

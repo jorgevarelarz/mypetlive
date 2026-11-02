@@ -164,12 +164,12 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
         // Inicio (maqueta): calendario de 25, título de 16,5, dos líneas de 11,5 y botones de 34 de alto.
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-            <CalcoCalendarioHuella size={25} />
-            <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 16.5, fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
+            <CalcoCalendarioHuella size={29} />
+            <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 19.5, fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
           </div>
           <div style={{ display: 'grid', gap: 9, margin: '10px 0 0 12px' }}>
-            <CompactLine icon={<CalcoComidaTachada size={16} />} text={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'} />
-            {showWalk && <CompactLine icon={<CalcoPasos size={16} />} text={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'} />}
+            <CompactLine icon={<CalcoComidaTachada size={19} />} text={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'} />
+            {showWalk && <CompactLine icon={<CalcoPasos size={19} />} text={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'} />}
             {showLitter && <CompactLine icon={<Sparkles size={15} color={M.verde} />} text={lastLitter ? `Arena cambiada ${since(lastLitter.createdAt)}` : 'Aún no registramos un cambio de arena'} />}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (showWalk ? 1 : 0) + (showLitter ? 1 : 0)}, minmax(0, 1fr))`, gap: 12, marginTop: 11, marginLeft: -10 }}>
@@ -181,17 +181,17 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
       ) : (
         // Mi mascota (maqueta): calendario de 25, título de 13,5, caja interior con una fila de 38 por cuidado.
         <>
-          <CalcoHuellaDeco size={31} style={{ position: 'absolute', top: 11, right: 10 }} />
+          <CalcoHuellaDeco size={36} style={{ position: 'absolute', top: 12, right: 12 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 44px 0 4px' }}>
-            <CalcoCalendarioHuella size={25} />
+            <CalcoCalendarioHuella size={30} />
             <div style={{ minWidth: 0 }}>
-              <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 13.5, lineHeight: '15px', fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
-              <div style={{ fontSize: 10, lineHeight: '12px', color: '#3D4340', marginTop: 2 }}>{headline}</div>
+              <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 17, lineHeight: '20px', fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
+              <div style={{ fontSize: 13, lineHeight: '16px', color: '#3D4340', marginTop: 2 }}>{headline}</div>
             </div>
           </div>
           <div style={{ marginTop: 10, borderRadius: 12, background: '#FFFFFF', border: '1px solid #EFE9E0', boxShadow: '0 2px 6px -4px rgba(60,45,30,.2)', minWidth: 0 }}>
             <CareLine
-              icon={<CalcoComida size={17} />}
+              icon={<CalcoComida size={20} />}
               label="Comida"
               title={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'}
               detail={entryDetail(lastFeed)}
@@ -202,7 +202,7 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
             />
             {showWalk && (
               <CareLine
-                icon={<CalcoPaseo size={22} />}
+                icon={<CalcoPaseo size={25} />}
                 label="Paseo"
                 title={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'}
                 detail={entryDetail(lastWalk)}
@@ -366,14 +366,14 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
 type CareAction = { label: string; primary?: boolean; onClick: () => void };
 
 const compactButton: React.CSSProperties = {
-  height: 34, borderRadius: 12, border: '1px solid #CFC9BF', background: '#FFFFFF', color: M.tinta,
-  fontFamily: M.letra, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', padding: '0 6px',
+  height: 42, borderRadius: 14, border: '1px solid #CFC9BF', background: '#FFFFFF', color: M.tinta,
+  fontFamily: M.letra, fontSize: 14.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', padding: '0 6px',
 };
 
 function CompactLine({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, lineHeight: '16px', color: '#2F3532' }}>
-      <span aria-hidden style={{ display: 'inline-flex', width: 17, justifyContent: 'center' }}>{icon}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, lineHeight: '19px', color: '#2F3532' }}>
+      <span aria-hidden style={{ display: 'inline-flex', width: 20, justifyContent: 'center' }}>{icon}</span>
       <span style={{ minWidth: 0 }}>{text}</span>
     </div>
   );
@@ -383,24 +383,24 @@ function CompactLine({ icon, text }: { icon: React.ReactNode; text: string }) {
 function CareLine({ icon, label, title, detail, actor, aside, action, first }: { icon: React.ReactNode; label: string; title: string; detail?: string | null; actor?: string; aside?: string; action: CareAction; first?: boolean }) {
   const extra = [detail || '', actor ? `marcado por ${actor}` : '', aside || ''].filter(Boolean).join(' · ');
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', alignItems: 'center', columnGap: 10, minHeight: 38, padding: '4px 9px 4px 8px', borderTop: first ? 0 : '1px solid #EDE7DE' }}>
-      <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 999, background: '#F5F1EB' }}>{icon}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: '36px minmax(0, 1fr) auto', alignItems: 'center', columnGap: 10, minHeight: 52, padding: '4px 9px 4px 8px', borderTop: first ? 0 : '1px solid #EDE7DE' }}>
+      <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 999, background: '#F5F1EB' }}>{icon}</span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, lineHeight: '13px', fontWeight: 700, color: M.tinta }}>{label}</div>
-        <div style={{ fontSize: 9, lineHeight: '11px', color: '#4A504C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-        {!!extra && <div style={{ fontSize: 8.5, lineHeight: '10px', color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{extra}</div>}
+        <div style={{ fontSize: 14.5, lineHeight: '17px', fontWeight: 700, color: M.tinta }}>{label}</div>
+        <div style={{ fontSize: 12, lineHeight: '15px', color: '#4A504C' }}>{title}</div>
+        {!!extra && <div style={{ fontSize: 11, lineHeight: '14px', color: MUTED }}>{extra}</div>}
       </div>
       <button
         type="button"
         onClick={action.onClick}
         style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: 120, height: 25, padding: 0, borderRadius: 8,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: 132, height: 34, padding: 0, borderRadius: 10,
           border: `1px solid ${action.primary ? M.verdeBoton : '#8FB7B2'}`, background: action.primary ? M.verdeBoton : '#FFFFFF',
-          color: action.primary ? '#FFFFFF' : M.verdeBoton, fontFamily: M.letra, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer',
+          color: action.primary ? '#FFFFFF' : M.verdeBoton, fontFamily: M.letra, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer',
           boxShadow: action.primary ? '0 3px 8px -5px rgba(14,95,91,.7)' : 'none',
         }}
       >
-        <CalcoCheck size={8} color={action.primary ? '#FFFFFF' : M.verdeBoton} /> {action.label}
+        <CalcoCheck size={10} color={action.primary ? '#FFFFFF' : M.verdeBoton} /> {action.label}
       </button>
     </div>
   );

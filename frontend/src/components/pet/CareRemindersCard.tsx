@@ -83,11 +83,11 @@ export default function CareRemindersCard({ animalId, species, petName }: Props)
   return (
     // Maqueta: campana de 20, título de 13,5 y dos tarjetas de 44 de alto lado a lado.
     <div style={{ borderRadius: 14, background: M.tarjeta, boxShadow: M.sombra, border: '1px solid #F1EBE2', padding: '8px 10px 10px 10px', fontFamily: M.letra, letterSpacing: 0, color: M.tinta }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr', columnGap: 10, alignItems: 'start', paddingLeft: 5 }}>
-        <CalcoAviso size={20} />
+      <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 10, alignItems: 'start', paddingLeft: 4 }}>
+        <CalcoAviso size={24} />
         <div>
-          <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 13.5, lineHeight: '15px', fontWeight: 700, color: M.tinta }}>Avisos de cuidado</h2>
-          <p style={{ color: '#3D4340', margin: '2px 0 0', fontSize: 10, lineHeight: '12px' }}>
+          <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 17, lineHeight: '20px', fontWeight: 700, color: M.tinta }}>Avisos de cuidado</h2>
+          <p style={{ color: '#3D4340', margin: '2px 0 0', fontSize: 13, lineHeight: '16px' }}>
             {petName || 'Tu mascota'} te avisará en el móvil. Con su propio estilo.
           </p>
         </div>
@@ -99,16 +99,16 @@ export default function CareRemindersCard({ animalId, species, petName }: Props)
             type="button"
             onClick={() => setEditing(kind)}
             className="text-left"
-            style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) auto', alignItems: 'center', columnGap: 4, minHeight: 44, borderRadius: 10, border: '1px solid #F0EAE1', background: '#F9F5EF', padding: '4px 8px 4px 9px', minWidth: 0, cursor: 'pointer', font: 'inherit', fontFamily: M.letra }}
+            style={{ display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr)', alignItems: 'center', columnGap: 6, rowGap: 2, minHeight: 60, borderRadius: 10, border: '1px solid #F0EAE1', background: '#F9F5EF', padding: '4px 8px 4px 9px', minWidth: 0, cursor: 'pointer', font: 'inherit', fontFamily: M.letra }}
           >
             <span aria-hidden style={{ display: 'inline-flex', justifyContent: 'center' }}>
-              {kind === 'feed' ? <CalcoCuenco size={16} /> : kind === 'walk' ? <CalcoPerroDorado size={20} /> : <Sparkles size={16} color={PET_COLORS.gold} />}
+              {kind === 'feed' ? <CalcoCuenco size={20} /> : kind === 'walk' ? <CalcoPerroDorado size={24} /> : <Sparkles size={16} color={PET_COLORS.gold} />}
             </span>
             <span style={{ minWidth: 0, paddingLeft: 4 }}>
-              <span style={{ display: 'block', color: M.tinta, fontWeight: 700, fontSize: 10.5, lineHeight: '12px' }}>{LABEL[kind].title}</span>
-              <span style={{ display: 'block', color: '#4A504C', fontSize: 8.5, lineHeight: '10.5px', marginTop: 2 }}>{summary(kind, saved)}</span>
+              <span style={{ display: 'block', color: M.tinta, fontWeight: 700, fontSize: 14, lineHeight: '17px' }}>{LABEL[kind].title}</span>
             </span>
-            <span style={{ color: M.verdeBoton, fontSize: 9, fontWeight: 700 }}>Cambiar</span>
+            <span style={{ gridColumn: '1 / -1', color: '#4A504C', fontSize: 11.5, lineHeight: '14px' }}>{summary(kind, saved)}</span>
+            <span style={{ gridColumn: '1 / -1', color: M.verdeBoton, fontSize: 12.5, fontWeight: 700 }}>Cambiar</span>
           </button>
         ))}
       </div>

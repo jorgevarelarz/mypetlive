@@ -172,25 +172,25 @@ export default function Home() {
           .hm-s1 { border-bottom: 0 !important; padding-bottom: 0 !important; gap: 16px !important; }
           .hm-txt { padding: 0 9px 0 9px; gap: 4px !important; }
           .hm-txt-wrap { gap: 15px !important; }
-          .hm-h1 { font-family: ${M.titulos} !important; font-size: 27px !important; line-height: 28px !important; font-weight: 800 !important; letter-spacing: -0.005em !important; color: #1E3A32 !important; }
-          .hm-sub { font-size: 13px !important; line-height: 19px !important; color: #4A4F4C !important; margin-top: 3px; }
+          .hm-h1 { font-family: ${M.titulos} !important; font-size: 31px !important; line-height: 33px !important; font-weight: 800 !important; letter-spacing: -0.005em !important; color: #1E3A32 !important; }
+          .hm-sub { font-size: 15px !important; line-height: 21px !important; color: #4A4F4C !important; margin-top: 3px; }
           .hm-l1 { display: block; }
-          .hm-btns { display: grid !important; grid-template-columns: 205fr 143fr; gap: 12px !important; padding: 0 5px 0 5px; margin-left: -4px; }
-          .hm-btn { height: 37px !important; padding: 0 6px !important; border-radius: 12px !important; font-size: 13px !important; font-weight: 700 !important; font-family: ${M.letra}; }
+          .hm-btns { display: grid !important; grid-template-columns: 205fr 143fr; gap: 10px !important; padding: 0 2px; margin-left: -4px; }
+          .hm-btn { height: 44px !important; padding: 0 6px !important; border-radius: 14px !important; font-size: 15px !important; font-weight: 700 !important; font-family: ${M.letra}; }
           .hm-card { border-radius: 18px !important; box-shadow: ${M.sombra} !important; border: 1px solid #F1EBE2 !important; }
           .hm-foto { aspect-ratio: 370 / 168 !important; }
-          .hm-chip { left: 15px !important; top: 12px !important; height: 25px; display: inline-flex !important; align-items: center; padding: 0 12px !important; border-radius: 12px !important; font-size: 11.5px !important; background: #DDEDE8 !important; color: #0E5F5B !important; }
+          .hm-chip { left: 15px !important; top: 12px !important; height: 29px; display: inline-flex !important; align-items: center; padding: 0 13px !important; border-radius: 14px !important; font-size: 13.5px !important; background: #DDEDE8 !important; color: #0E5F5B !important; }
           .hm-info { padding: 6px 17px 12px 20px !important; gap: 0 !important; }
           .hm-info p { margin: 0 !important; }
-          .hm-nombre { font-family: ${M.titulos} !important; font-size: 23px !important; line-height: 28px !important; letter-spacing: 0 !important; color: #222826 !important; }
-          .hm-edad, .hm-especie { font-size: 11.5px !important; color: #5E6460 !important; font-weight: 600 !important; }
-          .hm-ficha { font-size: 12.5px !important; color: #0E5F5B !important; }
-          .hm-tag { font-size: 10.5px !important; padding: 3px 12px !important; background: #F3EDE2 !important; color: #5E6460 !important; margin-top: 4px; }
+          .hm-nombre { font-family: ${M.titulos} !important; font-size: 27px !important; line-height: 32px !important; letter-spacing: 0 !important; color: #222826 !important; }
+          .hm-edad, .hm-especie { font-size: 14px !important; color: #5E6460 !important; font-weight: 600 !important; }
+          .hm-ficha { font-size: 15px !important; color: #0E5F5B !important; }
+          .hm-tag { font-size: 12.5px !important; padding: 4px 13px !important; background: #F3EDE2 !important; color: #5E6460 !important; margin-top: 4px; }
           .hm-cup { padding: 12px 20px 12px 20px !important; gap: 4px !important; border-radius: 16px !important; box-shadow: ${M.sombra} !important; border: 1px solid #F1EBE2 !important; background: #FDFAF5 !important; }
-          .hm-cup-k { font-size: 9.5px !important; line-height: 12px !important; letter-spacing: .18em !important; color: #6B706A !important; margin: 0 !important; }
-          .hm-cup-t { font-family: ${M.titulos} !important; font-size: 19px !important; line-height: 24px !important; margin-top: 3px !important; letter-spacing: 0 !important; color: #222826 !important; }
-          .hm-cup-p { font-size: 11.5px !important; line-height: 14.5px !important; color: #3D4340 !important; padding-right: 100px !important; margin: 0 0 10px !important; }
-          .hm-cup-b { height: 35px !important; padding: 0 !important; border-radius: 12px !important; font-size: 13px !important; background: #FDF0CF !important; border-color: #F1DFAE !important; color: #A26F14 !important; margin-left: -1px; }
+          .hm-cup-k { font-size: 11px !important; line-height: 14px !important; letter-spacing: .18em !important; color: #6B706A !important; margin: 0 !important; }
+          .hm-cup-t { font-family: ${M.titulos} !important; font-size: 22px !important; line-height: 27px !important; margin-top: 3px !important; letter-spacing: 0 !important; color: #222826 !important; }
+          .hm-cup-p { font-size: 13.5px !important; line-height: 18px !important; color: #3D4340 !important; padding-right: 108px !important; margin: 0 0 10px !important; }
+          .hm-cup-b { height: 44px !important; padding: 0 !important; border-radius: 14px !important; font-size: 15px !important; background: #FDF0CF !important; border-color: #F1DFAE !important; color: #A26F14 !important; margin-left: -1px; }
         }
       `}</style>
       <div className="hm-in mx-auto grid gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8" style={{ maxWidth: 1120 }}>
@@ -210,7 +210,7 @@ export default function Home() {
               >
                 <span className="hm-l1" style={{ whiteSpace: 'nowrap' }}>
                   Cuida, sigue y
-                  <CalcoDestellosTitulo size={23} style={{ verticalAlign: 'top', marginLeft: 10, marginTop: -8 }} />
+                  <CalcoDestellosTitulo size={27} style={{ verticalAlign: 'top', marginLeft: 10, marginTop: -8 }} />
                 </span>{' '}
                 acompaña a <span style={{ color: '#0E5F5B' }}>{titleTarget}</span>.
               </h1>
@@ -354,7 +354,7 @@ export default function Home() {
 
           <Card className="hm-cup grid gap-4 p-5" style={{ position: 'relative', overflow: 'hidden' }}>
             {/* Recorte exacto de la maqueta: cupón dorado, destellos y mancha verde. */}
-            <img src="/ilustraciones/cupon-maqueta.png" alt="" aria-hidden style={{ position: 'absolute', right: 2, top: 0, width: 105, height: 'auto', pointerEvents: 'none' }} />
+            <img src="/ilustraciones/cupon-maqueta.png" alt="" aria-hidden style={{ position: 'absolute', right: 2, top: 0, width: 116, height: 'auto', pointerEvents: 'none' }} />
             <div style={{ position: 'relative' }}>
               <p className="hm-cup-k text-xs font-bold uppercase tracking-[0.14em]" style={{ color: colors.soft }}>
                 Cupones

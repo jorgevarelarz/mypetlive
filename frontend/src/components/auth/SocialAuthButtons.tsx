@@ -137,6 +137,12 @@ export default function SocialAuthButtons({ redirectTo }: Props) {
         if (cancelled || !google?.accounts?.id || !googleRef.current) return;
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
+          // En la web instalada como app (Android) la ventana emergente de
+          // Google se quedaba en blanco y nunca volvía. Ahí se usa FedCM: Chrome
+          // enseña su hoja nativa de cuentas, sin ventana. En una pestaña normal
+          // se deja la ventana de siempre, porque FedCM sin sesión de Google en
+          // el navegador no abre nada (probado: NetworkError y ningún aviso).
+          use_fedcm_for_button: window.matchMedia?.("(display-mode: standalone)").matches ?? false,
           callback: (response: any) => {
             if (response?.credential) enter("google", response.credential);
           },
