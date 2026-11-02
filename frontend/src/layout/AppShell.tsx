@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { IconoCodigoQr, IconoMenu } from '../components/icons/mplIcons';
 import { ShoppingBag, Package } from 'lucide-react';
-import { CalcoMenuAjustes, CalcoMenuAnimales, CalcoMenuCerrar, CalcoMenuCitas, CalcoMenuCuestionario, CalcoMenuFlecha, CalcoMenuInicio, CalcoMenuMensajes, CalcoMenuPerfil, CalcoMenuSalir, CalcoMenuSolicitudes, CalcoMenuVerificacion, CalcoNavBuscar } from '../components/icons/calcados';
+import { CalcoMenuAjustes, CalcoMenuAnimales, CalcoMenuCerrar, CalcoMenuCitas, CalcoMenuCuestionario, CalcoMenuInicio, CalcoMenuMensajes, CalcoMenuPerfil, CalcoMenuSalir, CalcoMenuSolicitudes, CalcoMenuVerificacion, CalcoNavBuscar } from '../components/icons/calcados';
 import { M } from '../components/pet/maqueta';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
@@ -357,17 +357,6 @@ function Header() {
               </>
             );
           })()}
-          {user && role !== 'admin' && (
-            <Link to="/donate" style={{ display: 'grid', gridTemplateColumns: '92px 1px minmax(0, 1fr) 14px', alignItems: 'center', columnGap: 12, minHeight: 83, margin: '30px 0 0 -2px', padding: '0 12px 0 8px', borderRadius: 14, background: '#EEF3E6', textDecoration: 'none' }}>
-              <img src="/ilustraciones/menu-protectora.png" alt="" aria-hidden style={{ width: 92, height: 'auto', display: 'block' }} />
-              <span aria-hidden style={{ width: 1, height: 52, background: '#D5DCCB' }} />
-              <span>
-                <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: '#1E2A27' }}>Protectora</span>
-                <span style={{ display: 'block', fontSize: 12.5, lineHeight: '16px', color: '#3D4340', marginTop: 2 }}>Dona Patitas y apoya su gran labor.</span>
-              </span>
-              <CalcoMenuFlecha size={12} />
-            </Link>
-          )}
           {user && (
             <>
               <div style={{ height: 1, background: '#E3DED6', margin: '20px 6px 6px' }} />
