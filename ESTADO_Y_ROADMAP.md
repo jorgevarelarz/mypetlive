@@ -636,7 +636,7 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
-## 5.29 Mascota compartida (2 nov 2026) — **sin desplegar**
+## 5.29 Mascota compartida (2 nov 2026) — **EN PRODUCCIÓN desde el 2 nov (18:30)**
 
 Antes cada mascota tenía un solo dueño (`ownerId`) y nadie más podía verla. Ahora el dueño
 invita por correo a otras personas (pareja, hijos, quien la saca) y la llevan igual que él.
@@ -665,7 +665,16 @@ invita por correo a otras personas (pareja, hijos, quien la saca) y la llevan ig
   `sharedBy`. El enlace del correo abre la web (no hay universal links); en la app la
   invitación sale en Mi mascota.
 - **Tests:** `src/__tests__/animal.sharing.test.ts` (23).
-- **App iOS:** va en la 1.3.
+- **App iOS:** va en la 1.3 (build `ios-1.3-b35`). El enlace del correo abre la app
+  (enlaces universales): `public/.well-known/apple-app-site-association` reclama
+  `/compartir/*`, entitlement `applinks:mypetlive.es`, capacidad Associated Domains activada
+  en el App ID (y `ios/ci/profile.mjs` la comprueba), `@capacitor/app` +
+  `components/NativeLinkListener.tsx`.
+- **De paso:** la imagen de la API no llevaba `src/data/geo-es.json` (tsc no copia .json), así
+  que «Más cerca» no reconocía ningún sitio en producción. Arreglado en `Dockerfile.api`, y
+  `deploy.sh` sube ahora el Dockerfile. Quitada la tarjeta «Protectora» del menú lateral.
+- **Despliegue:** copia previa en `/opt/mypetlive/deploy-backups/2026-11-02-1821-pre-c8c1f63`;
+  web compilada en el Ryzen. Suite completa: 74 suites, 607 tests en verde.
 
 ## 5.28 El ojo para ver la contraseña (2 sep 2026)
 
