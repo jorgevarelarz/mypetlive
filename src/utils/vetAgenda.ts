@@ -52,6 +52,12 @@ function madridParts(t: Date) {
   return { ymd: `${p.year}-${p.month}-${p.day}`, hhmm: `${p.hour}:${p.minute}`, wd };
 }
 
+/** «2026-11-12 10:00»: el minuto de agenda (hora de España) de un instante. */
+export function minutoMadrid(t: Date) {
+  const p = madridParts(t);
+  return `${p.ymd} ${p.hhmm}`;
+}
+
 /** «2026-11-12» + «12:00» en hora de España → instante UTC (respeta el cambio de hora). */
 export function madridToDate(ymd: string, hhmm: string): Date {
   const [y, m, d] = ymd.split('-').map(Number);

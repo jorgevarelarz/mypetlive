@@ -14,7 +14,7 @@ export function useDialog<T extends HTMLElement>(onClose: () => void) {
     const previo = document.activeElement as HTMLElement | null;
     const nodo = ref.current;
     // Todo lo que no es el diálogo (el portal cuelga de <body>) queda inerte.
-    const hermanos = Array.from(document.body.children).filter(el => nodo && !el.contains(nodo)) as HTMLElement[];
+    const hermanos = Array.from(document.body.children).filter(el => nodo && !el.contains(nodo) && el.id !== 'toasts') as HTMLElement[];
     const antes = hermanos.map(el => [el, el.hasAttribute('inert'), el.getAttribute('aria-hidden')] as const);
     hermanos.forEach(el => { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); });
     const primero = nodo?.querySelector<HTMLElement>(ENFOCABLES);

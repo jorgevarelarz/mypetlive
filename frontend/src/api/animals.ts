@@ -211,7 +211,8 @@ export async function addHealthRecord(
   code: string,
   payload: { category: HealthCategory; note: string; treatment?: string; date?: string; nextDueAt?: string | null },
 ) {
-  const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload);
+  // Quien llama muestra su propio mensaje en español (AUD-3).
+  const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload, { skipErrorToast: true } as any);
   return data as {
     ok: boolean;
     category: HealthCategory;

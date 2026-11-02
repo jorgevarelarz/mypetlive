@@ -51,7 +51,9 @@ const WALLET_CODE_TTL_MS = 10 * 60 * 1000;
 // 10 caracteres de 32 posibles (~10^15 códigos): inviable por fuerza bruta con el
 // límite de intentos de las rutas de canje. Cada código vale para un solo canje.
 const WALLET_CODE_LENGTH = 10;
-export const walletCodeStore = new Map<string, { shelterId: string; expiresAt: number }>();
+// `jti`: el del QR que se generó a la vez; QR y código son la misma pantalla y
+// valen para un solo canje entre los dos (AUD-3, FAC-131).
+export const walletCodeStore = new Map<string, { shelterId: string; expiresAt: number; jti?: string }>();
 function shortCode(length = 6): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length }, () => alphabet[randomInt(alphabet.length)]).join('');
@@ -434,7 +436,7 @@ export async function getWalletToken(req: Request, res: Response) {
   const shelter = await User.findById(me).select('patitas patitasLocked');
   const token = signWalletToken(me);
   const code = shortCode(WALLET_CODE_LENGTH);
-  walletCodeStore.set(code, { shelterId: me, expiresAt: Date.now() + WALLET_CODE_TTL_MS });
+  walletCodeStore.set(code, { shelterId: me, expiresAt: Date.now() + WALLET_CODE_TTL_MS, jti: verifyWalletToken(token)?.jti });
   // El QR que la protectora enseña al partner debe anunciar lo canjeable, no el
   // saldo bruto: lo comprometido en citas no se puede gastar aquí.
   const spendable = availablePatitas(shelter as any);
@@ -451,7 +453,7 @@ function resolveShelterFromBody(body: any): { shelterId: string; viaCode?: strin
   if (body?.code) {
     const code = String(body.code).trim().toUpperCase();
     const entry = walletCodeStore.get(code);
-    if (entry && entry.expiresAt > Date.now()) return { shelterId: entry.shelterId, viaCode: code };
+    if (entry && entry.expiresAt > Date.now()) return { shelterId: entry.shelterId, viaCode: code, jti: entry.jti };
   }
   return null;
 }
@@ -494,8 +496,15 @@ export async function redeemConfirm(req: Request, res: Response) {
   // El código corto vale para un solo canje. Se reserva aquí, de forma síncrona y
   // antes del primer await, para que dos confirm en paralelo no lo usen a la vez;
   // si el canje no llega a debitar, se devuelve al almacén y sigue sirviendo.
-  const claimedEntry = viaCode ? walletCodeStore.get(viaCode) : undefined;
-  if (viaCode) walletCodeStore.delete(viaCode);
+  // Con el QR se reserva también su código corto (y al revés, el código lleva el
+  // jti de su QR): una vía no deja canjear otra vez por la otra (AUD-3, FAC-131).
+  let codigoReservado = viaCode;
+  if (!codigoReservado && jti) {
+    for (const [c, e] of walletCodeStore) if (e.jti === jti) { codigoReservado = c; break; }
+  }
+  const claimedEntry = codigoReservado ? walletCodeStore.get(codigoReservado) : undefined;
+  if (codigoReservado) walletCodeStore.delete(codigoReservado);
+  let walletUseCreado = false;
   let debited: any = null;
   let shelter: any;
   let amount = 0;
@@ -514,6 +523,7 @@ export async function redeemConfirm(req: Request, res: Response) {
       if (jti) {
         try {
           await WalletUse.create([{ _id: jti, shelterId }], opts);
+          walletUseCreado = true;
         } catch (err: any) {
           if (err?.code === 11000) throw new Rechazo(409, { error: 'wallet_already_used' });
           throw err;
@@ -558,7 +568,8 @@ export async function redeemConfirm(req: Request, res: Response) {
     // réplica, solo en desarrollo y tests) se deshace a mano.
     if (sinSesion && !txn) {
       if (debited) await User.updateOne({ _id: shelterId }, { $inc: { patitas: amount } }).catch(() => undefined);
-      if (jti) await WalletUse.deleteOne({ _id: jti }).catch(() => undefined);
+      // Solo si lo creó esta petición: un 409 viene de un canje anterior bueno.
+      if (jti && walletUseCreado) await WalletUse.deleteOne({ _id: jti }).catch(() => undefined);
     }
     if (!txn) debited = null;
     if (err instanceof Rechazo) return res.status(err.status).json(err.body);
@@ -566,7 +577,7 @@ export async function redeemConfirm(req: Request, res: Response) {
   } finally {
     // Sin canje (protectora no válida, importe no válido, saldo insuficiente o
     // error): el código corto no se ha consumido y se restaura.
-    if (!txn && viaCode && claimedEntry) walletCodeStore.set(viaCode, claimedEntry);
+    if (!txn && codigoReservado && claimedEntry) walletCodeStore.set(codigoReservado, claimedEntry);
   }
 
   const valueEur = eurFromPatitas(amount);

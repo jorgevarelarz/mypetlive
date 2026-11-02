@@ -96,7 +96,8 @@ export async function redeemPreview(payload: { walletToken?: string; code?: stri
 }
 
 export async function redeemConfirm(payload: { walletToken?: string; code?: string; amount: number | 'all' }) {
-  const { data } = await client.post('/api/patitas/redeem/confirm', payload);
+  // Los errores los traduce el panel (AUD-3): sin esto salía también el código crudo.
+  const { data } = await client.post('/api/patitas/redeem/confirm', payload, { skipErrorToast: true } as any);
   return data as {
     ok: boolean;
     code: string;

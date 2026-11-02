@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { createPortal } from "react-dom";
 import "./index.css";
 import App from "./App";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -18,6 +19,11 @@ if (isNativeApp()) document.documentElement.classList.add('native-app');
 // api client centralizado configura baseURL, Authorization y toasts
 axios.defaults.baseURL = (api.defaults && api.defaults.baseURL) || '';
 
+// Los avisos viven en su propio contenedor colgado de <body>: los diálogos dejan
+// inerte todo lo demás y así siguen viéndose y anunciándose (AUD-3).
+const toastsEl = document.getElementById("toasts") || Object.assign(document.createElement("div"), { id: "toasts" });
+if (!toastsEl.isConnected) document.body.appendChild(toastsEl);
+
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 const queryClient = new QueryClient();
 root.render(
@@ -26,7 +32,7 @@ root.render(
       <ToastProvider>
         <NotificationsProvider>
           <QueryClientProvider client={queryClient}>
-            <Toaster position="top-right" />
+            {createPortal(<Toaster position="top-right" />, toastsEl)}
             <App />
           </QueryClientProvider>
         </NotificationsProvider>

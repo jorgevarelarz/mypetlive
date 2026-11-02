@@ -45,17 +45,13 @@ export async function previewPetInvite(token: string) {
   return data as InvitePreview;
 }
 
-export async function listMyPetInvites() {
-  const { data } = await client.get('/api/pet-invites/mine');
-  return data as { items: InvitePreview[] };
-}
 
-export async function acceptPetInvite(by: { token: string } | { inviteId: string }) {
+export async function acceptPetInvite(by: { token: string }) {
   const { data } = await client.post('/api/pet-invites/accept', by);
   return data as { ok: true; animalId: string };
 }
 
-export async function declinePetInvite(by: { token: string } | { inviteId: string }) {
+export async function declinePetInvite(by: { token: string }) {
   await client.post('/api/pet-invites/decline', by);
 }
 

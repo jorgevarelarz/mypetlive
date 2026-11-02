@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import { minutoMadrid } from '../utils/vetAgenda';
 
 // Hueco de agenda ya pedido (AUD-2, FAC-120). Comprobar «está libre» y crear la
 // cita eran dos pasos, y dos familias pidiendo a la vez el mismo hueco se lo
@@ -17,4 +18,6 @@ slotClaimSchema.index({ appointmentId: 1 });
 
 export const SlotClaim = model('SlotClaim', slotClaimSchema);
 
-export const slotClaimId = (vetId: string, when: Date) => `${vetId}|${when.toISOString()}`;
+// Por minuto en hora de España, como compara la agenda (AUD-3, FAC-130): con el
+// instante exacto, 10:00:00 y 10:00:30 eran dos claves y dos citas en el hueco.
+export const slotClaimId = (vetId: string, when: Date) => `${vetId}|${minutoMadrid(when)}`;

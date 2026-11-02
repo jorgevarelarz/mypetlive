@@ -80,7 +80,9 @@ export async function redeemCoupon(couponId: string, payload: { animalCode: stri
 }
 
 // Usa un cupón para un cliente identificado, generándole sus Patitas.
-export async function applyCouponToCustomer(couponId: string, userId: string, animalCode?: string) {
-  const { data } = await client.post(`/api/coupons/${couponId}/use`, { userId, animalCode });
+// `ref`: el QR (userToken) o el código con que la caja identificó al cliente;
+// el servidor ya no acepta un userId suelto (AUD-3).
+export async function applyCouponToCustomer(couponId: string, ref: { userToken?: string; code?: string }, animalCode?: string) {
+  const { data } = await client.post(`/api/coupons/${couponId}/use`, { ...ref, animalCode }, { skipErrorToast: true } as any);
   return data as { ok: boolean; coupon: Coupon; earn?: { earned: number; autoDonated: boolean } };
 }

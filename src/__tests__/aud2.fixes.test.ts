@@ -97,6 +97,7 @@ describe('FAC-118 · invitación a un correo sin cuenta', () => {
     const nuevo = id();
     await User.create({ _id: nuevo, name: 'Nuevo', email: 'nuevo@test.com', passwordHash: 'x', role: 'tenant' });
     expect((await request(app).get('/api/pet-invites/mine').set(H(nuevo))).body.items).toHaveLength(0);
+    // Desde AUD-3 nadie acepta por id; con el enlace, sí.
     await request(app).post('/api/pet-invites/accept').set(H(nuevo)).send({ inviteId }).expect(404);
     await request(app).post('/api/pet-invites/accept').set(H(nuevo)).send({ token }).expect(200);
   });
@@ -237,10 +238,11 @@ describe('Mascota compartida', () => {
     expect(o.members[0].email).toBe('pablo@test.com');
   });
 
-  it('invitar a un correo de clínica responde igual y no crea nada', async () => {
+  it('invitar a un correo de clínica crea una invitación normal que la clínica no puede aceptar (AUD-3)', async () => {
     const pet = await mascota();
-    await request(app).post(`/api/animals/${pet._id}/family/invites`).set(H(ownerId)).send({ email: 'vet@test.com' }).expect(201);
-    expect(await PetInvite.countDocuments({ email: 'vet@test.com' })).toBe(0);
+    const { token } = (await request(app).post(`/api/animals/${pet._id}/family/invites`).set(H(ownerId)).send({ email: 'vet@test.com' }).expect(201)).body;
+    expect(await PetInvite.countDocuments({ email: 'vet@test.com', status: 'pending' })).toBe(1);
+    await request(app).post('/api/pet-invites/accept').set(H(vetId, 'vet')).send({ token }).expect(403);
   });
 
   it('dos aceptaciones a la vez del mismo enlace dejan un solo miembro', async () => {

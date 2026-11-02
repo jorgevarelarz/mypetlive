@@ -147,6 +147,8 @@ export default function CuidadosPage() {
   const ultimaDesparas = desparas[0];
   const desparasVencidas = desparas.filter(d => d.nextDueAt && new Date(d.nextDueAt).getTime() < ahora);
   const desparasVencida = desparasVencidas.length > 0;
+  // Sin próxima fecha (aviso quitado) no se puede decir que esté al día (AUD-3).
+  const desparasSinFecha = !!ultimaDesparas && !ultimaDesparas.nextDueAt;
   // Vacunas con aviso quitado: no se puede decir que estén «al día».
   const vacunasSinFecha = vacunas.filter(v => !v.nextDueAt);
   const medicacion = ultimasPorCosa(salud, 'medication');
@@ -210,7 +212,7 @@ export default function CuidadosPage() {
       </Fila>
 
       <Fila icono={<CalcoCuiVacunas size={30} />} fondo="#FDF1DC" titulo="Vacunas"
-        subtitulo={vacunasPendientes.length ? `${vacunasPendientes.length} ${vacunasPendientes.length === 1 ? 'pendiente' : 'pendientes'}` : vacunas.length === vacunasSinFecha.length && vacunas.length ? 'Sin próxima fecha' : vacunas.length ? 'Al día' : 'Sin vacunas apuntadas'}>
+        subtitulo={vacunasPendientes.length ? `${vacunasPendientes.length} ${vacunasPendientes.length === 1 ? 'pendiente' : 'pendientes'}` : vacunas.length === vacunasSinFecha.length && vacunas.length ? 'Sin próxima fecha' : vacunasSinFecha.length ? `${vacunasSinFecha.length} sin próxima fecha` : vacunas.length ? 'Al día' : 'Sin vacunas apuntadas'}>
         {vacunasPendientes[0] && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, padding: '7px 10px', borderRadius: 10, background: '#FCEBDD', fontSize: 14, color: '#3D2A1E' }}>
             <CalcoCuiAlerta size={17} />
@@ -225,10 +227,10 @@ export default function CuidadosPage() {
       </Fila>
 
       <Fila icono={<CalcoCuiDesparasitacion size={30} />} fondo="#E6F2EE" titulo="Desparasitación"
-        subtitulo={!ultimaDesparas ? 'Sin apuntar' : desparasVencida ? 'Pendiente' : 'Al día'}>
+        subtitulo={!ultimaDesparas ? 'Sin apuntar' : desparasVencida ? 'Pendiente' : desparasSinFecha ? 'Sin próxima fecha' : 'Al día'}>
         {ultimaDesparas && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 15, color: '#3D4340' }}>
-            {desparasVencida ? <CalcoCuiAlerta size={17} /> : <Visto />} {desparasVencida ? `${nombreCorto(desparasVencidas[0].notes) || 'Pendiente'}: venció el ${fechaCorta(desparasVencidas[0].nextDueAt)}` : `Última: ${fechaCorta(ultimaDesparas.date)}`}
+            {desparasVencida ? <CalcoCuiAlerta size={17} /> : <Visto />} {desparasVencida ? `${nombreCorto(desparasVencidas[0].notes) || 'Pendiente'}: venció el ${fechaCorta(desparasVencidas[0].nextDueAt)}` : `Última: ${fechaCorta(ultimaDesparas.date)}${desparasSinFecha ? ' · sin próxima fecha' : ''}`}
           </span>
         )}
       </Fila>
@@ -241,7 +243,7 @@ export default function CuidadosPage() {
         <span style={{ position: 'relative' }}>
           <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>Salud general</span>
           <span style={{ display: 'block', fontSize: 15.5, marginTop: 2 }}>
-            {sinNada ? 'Empieza apuntando sus vacunas' : vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? 'cosa pendiente' : 'cosas pendientes'}` : 'Todo en orden'}
+            {sinNada ? 'Empieza apuntando sus vacunas' : vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? 'cosa pendiente' : 'cosas pendientes'}` : vacunasSinFecha.length || desparasSinFecha ? 'Revisa lo que no tiene próxima fecha' : 'Todo en orden'}
           </span>
         </span>
       </div>

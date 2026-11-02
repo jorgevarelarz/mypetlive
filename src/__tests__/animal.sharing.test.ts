@@ -131,10 +131,14 @@ describe('Invitar', () => {
     const pet = await sharedPet();
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'ana@test.com' }).expect(400);
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'pablo@test.com' }).expect(409);
-    // A una cuenta de protectora no se le manda nada, pero la respuesta es la misma
-    // que a una persona: el correo no revela qué tipo de cuenta es (AUD-2).
-    await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'prote@test.com' }).expect(201);
-    expect(await PetInvite.countDocuments({ animalId: pet._id, email: 'prote@test.com' })).toBe(0);
+    // A una cuenta de protectora se le crea y envía como a cualquiera (AUD-3): así
+    // no se distingue qué correos son profesionales. Aceptarla da 403.
+    const { token } = (await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'prote@test.com' }).expect(201)).body;
+    expect(await PetInvite.countDocuments({ animalId: pet._id, email: 'prote@test.com', status: 'pending' })).toBe(1);
+    const fam = (await request(app).get(`/api/animals/${pet._id}/family`).set(ownerH).expect(200)).body;
+    expect(JSON.stringify(fam)).toContain('prote@test.com');
+    const r = await request(app).post('/api/pet-invites/accept').set({ 'x-user-id': shelterId, 'x-user-role': 'landlord', 'x-user-verified': 'true' }).send({ token }).expect(403);
+    expect(r.body.error).toBe('invitee_not_family');
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'no-es-correo' }).expect(400);
   });
 
@@ -188,16 +192,15 @@ describe('Aceptar', () => {
     await request(app).post('/api/pet-invites/accept').set(strangerH).send({ token }).expect(410);
   });
 
-  it('desde la app: ve las invitaciones a su correo y las acepta por id; otra cuenta no', async () => {
+  // Decisión de Jorge (AUD-3): solo con el enlace del correo. Ni lista en la app
+  // ni aceptar o rechazar por id, tampoco la persona invitada.
+  it('desde la app ya no se listan ni se aceptan por id: solo con el enlace', async () => {
     const pet = await createPet();
-    const { id } = await invite(pet._id);
-    const list = await request(app).get('/api/pet-invites/mine').set(partnerH).expect(200);
-    expect(list.body.items).toHaveLength(1);
-    expect(list.body.items[0]).toMatchObject({ id, animal: { name: 'Luna' } });
-    expect((await request(app).get('/api/pet-invites/mine').set(strangerH)).body.items).toHaveLength(0);
-
-    await request(app).post('/api/pet-invites/accept').set(strangerH).send({ inviteId: id }).expect(404);
-    await request(app).post('/api/pet-invites/accept').set(partnerH).send({ inviteId: id }).expect(200);
+    const { id, token } = await invite(pet._id);
+    expect((await request(app).get('/api/pet-invites/mine').set(partnerH).expect(200)).body.items).toHaveLength(0);
+    await request(app).post('/api/pet-invites/accept').set(partnerH).send({ inviteId: id }).expect(404);
+    await request(app).post('/api/pet-invites/decline').set(partnerH).send({ inviteId: id }).expect(404);
+    await request(app).post('/api/pet-invites/accept').set(partnerH).send({ token }).expect(200);
   });
 
   it('rechazarla la cierra', async () => {

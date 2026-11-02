@@ -357,8 +357,26 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
       }
       if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
       if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
-      // Cancelada o movida a otra hora: el hueco que reclamó vuelve a quedar libre.
-      if (status === 'cancelled' || status === 'rescheduled') await SlotClaim.deleteMany({ appointmentId: appt._id }, session ? { session } : {});
+      // El hueco reservado sigue a la hora real de la cita (AUD-3, FAC-130).
+      // Cancelada: se suelta. Confirmada o movida: se reserva la hora nueva (409 si
+      // ya es de otra cita) y se suelta la anterior, todo en la misma transacción.
+      const optsS = session ? { session } : {};
+      if (status === 'cancelled') {
+        await SlotClaim.deleteMany({ appointmentId: appt._id }, optsS);
+      } else if ((status === 'confirmed' || status === 'rescheduled') && appt.scheduledAt) {
+        const nueva = slotClaimId(String(appt.vetId), appt.scheduledAt);
+        const actual: any = await SlotClaim.findById(nueva).session(session ?? null).lean();
+        if (actual && String(actual.appointmentId || '') !== String(appt._id)) throw new AppError('slot_taken', { status: 409 });
+        if (!actual) {
+          try {
+            await SlotClaim.create([{ _id: nueva, appointmentId: appt._id }], optsS);
+          } catch (err: any) {
+            if (err?.code === 11000) throw new AppError('slot_taken', { status: 409 });
+            throw err;
+          }
+        }
+        await SlotClaim.deleteMany({ appointmentId: appt._id, _id: { $ne: nueva } }, optsS);
+      }
       appt.status = status;
       let patitasSettlementFailed = false;
       if (status === 'cancelled' && appt.patitasReserved && !appt.patitasPaid) {

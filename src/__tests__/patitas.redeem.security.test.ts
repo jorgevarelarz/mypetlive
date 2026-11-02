@@ -217,6 +217,31 @@ describe('Canje con el token del QR', () => {
     return res.body.token;
   }
 
+  // AUD-3 (FAC-131): QR y código corto de la misma pantalla son un solo canje.
+  it('canjear con el QR deja sin valor su código corto, y al revés', async () => {
+    const shelterId = await createShelter(100);
+    const storeId = await createStore();
+    const w1 = (await request(app).get('/api/patitas/wallet/token').set(headers(shelterId, 'landlord')).expect(200)).body;
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: w1.token, amount: 10 }).expect(200);
+    const viaCodigo = await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ code: w1.code, amount: 10 });
+    expect(viaCodigo.status).toBeGreaterThanOrEqual(400);
+    const w2 = (await request(app).get('/api/patitas/wallet/token').set(headers(shelterId, 'landlord')).expect(200)).body;
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ code: w2.code, amount: 10 }).expect(200);
+    const viaQr = await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: w2.token, amount: 10 });
+    expect(viaQr.status).toBe(409);
+    expect(await balance(shelterId)).toBe(80);
+  });
+
+  it('un QR ya usado sigue dando 409 en el tercer intento', async () => {
+    const shelterId = await createShelter(100);
+    const storeId = await createStore();
+    const t = await walletToken(shelterId);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 10 }).expect(200);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 10 }).expect(409);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 10 }).expect(409);
+    expect(await balance(shelterId)).toBe(90);
+  });
+
   it('el mismo token no sirve para un segundo canje y el saldo no vuelve a bajar', async () => {
     const shelterId = await createShelter(100);
     const storeId = await createStore();

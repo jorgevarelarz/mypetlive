@@ -39,7 +39,6 @@ export default function AcceptPetInvite() {
     mutationFn: () => acceptPetInvite({ token }),
     onSuccess: data => {
       queryClient.invalidateQueries({ queryKey: ['my-pets'] });
-      queryClient.invalidateQueries({ queryKey: ['my-pet-invites'] });
       saveSelectedPet(data.animalId);
       navigate(`/pet?mascota=${data.animalId}`, { replace: true });
     },
@@ -49,7 +48,6 @@ export default function AcceptPetInvite() {
   const decline = useMutation({
     mutationFn: () => declinePetInvite({ token }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-pet-invites'] });
       navigate('/', { replace: true });
     },
     onError: err => setError(sharingErrorMessage(err)),

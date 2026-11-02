@@ -116,12 +116,6 @@ export async function invite(req: Request, res: Response) {
     const inviteeId = String(invitee._id);
     if (inviteeId === String(familyOwnerId(animal))) return res.status(400).json({ error: 'cannot_invite_self' });
     if (memberIds.includes(inviteeId)) return res.status(409).json({ error: 'already_member' });
-    // Cuenta de protectora, tienda o veterinario: no se crea ni se envía nada, pero
-    // se responde igual que si se hubiera enviado (AUD-2): si no, el dueño podría
-    // sondear qué correos son cuentas profesionales.
-    if (invitee.role !== 'tenant') {
-      return res.status(201).json({ id: String(new Types.ObjectId()), email, createdAt: new Date(), expiresAt: new Date(Date.now() + PET_INVITE_DAYS * 86_400_000) });
-    }
   }
 
   // Reenviar a quien ya tenía una pendiente la sustituye: el enlace viejo deja de valer.
@@ -163,11 +157,14 @@ export async function invite(req: Request, res: Response) {
     }),
   ).catch(err => logger.error({ err, animalId: String(animal._id) }, '[compartir] fallo al enviar la invitación'));
 
-  // Si ya tiene cuenta, también le llega al móvil y la ve en la app sin abrir el correo.
-  if (invitee) {
+  // A una cuenta de protectora, tienda o veterinario se le crea y se le envía como
+  // a cualquiera (AUD-3): así el dueño no distingue qué correos son cuentas
+  // profesionales. No podrá aceptarla (accept exige familia). Sin push: se acepta
+  // con el enlace del correo, y el aviso al móvil solo va a familias.
+  if (invitee && invitee.role === 'tenant') {
     sendPushToUser(String(invitee._id), {
       title: `${who} quiere compartir a ${animal.name} contigo`,
-      body: 'Toca para aceptar la invitación.',
+      body: 'Te hemos enviado un correo con el enlace para aceptarla.',
       url: '/pet',
     }).catch(() => undefined);
   }
@@ -257,37 +254,24 @@ export async function previewByToken(req: Request, res: Response) {
 }
 
 /** Invitaciones pendientes a mi correo: así las ve en la app sin abrir el correo. */
-export async function listMine(req: Request, res: Response) {
-  const me: any = await User.findById(uidOf(req)).select('email createdAt').lean();
-  if (!me?.email) return res.json({ items: [] });
-  // Solo las enviadas DESPUÉS de crear la cuenta (AUD-2, FAC-118): el alta no
-  // verifica el correo, y si no, cualquiera podía registrarse con el de la persona
-  // invitada y aceptar sin haber visto el enlace. Las demás, con el enlace.
-  const invites = await PetInvite.find({
-    email: String(me.email).toLowerCase(),
-    status: 'pending',
-    expiresAt: { $gt: new Date() },
-    ...(me.createdAt ? { createdAt: { $gt: me.createdAt } } : {}),
-  }).sort({ createdAt: -1 }).limit(10);
-  const items = (await Promise.all(invites.map(previewOf))).filter(i => i.animal);
-  res.json({ items });
+// Ya no se listan en la app (ver resolveInvite): eso enseñaba a quien se hubiera
+// registrado con el correo ajeno quién le invitaba y a qué mascota. Se deja la
+// ruta, vacía, para las versiones de la app que aún la llaman.
+export async function listMine(_req: Request, res: Response) {
+  res.json({ items: [] });
 }
 
 /**
  * La invitación que quiere responder: por token (el enlace del correo, vale
  * desde cualquier cuenta) o por id (desde la app, solo si fue a su correo).
  */
+// Solo con el enlace del correo (decisión de Jorge, AUD-3): el alta no verifica
+// el correo, así que quien se registrara con el de otra persona podía aceptar o
+// rechazar desde la app invitaciones que no eran suyas. El enlace solo lo tiene
+// quien lee ese buzón.
 async function resolveInvite(req: Request) {
   if (req.body?.token) return inviteByToken(req.body.token);
-  const id = String(req.params.inviteId || req.body?.inviteId || '');
-  if (!Types.ObjectId.isValid(id)) return null;
-  const invite = await PetInvite.findById(id);
-  if (!invite) return null;
-  const me: any = await User.findById(uidOf(req)).select('email createdAt').lean();
-  if (!me?.email || String(me.email).toLowerCase() !== invite.email) return null;
-  // Por id solo si la cuenta ya existía cuando se invitó (ver listMine).
-  if (me.createdAt && new Date(me.createdAt).getTime() >= new Date(invite.createdAt).getTime()) return null;
-  return invite;
+  return null;
 }
 
 // POST /api/pet-invites/accept — { token } o { inviteId }.
@@ -322,7 +306,12 @@ export async function accept(req: Request, res: Response) {
     { $set: { status: 'accepted', acceptedBy: new Types.ObjectId(me), respondedAt: new Date() } },
     { new: true },
   );
-  if (!reclamada) return res.status(410).json({ error: 'invite_accepted' });
+  if (!reclamada) {
+    // Doble toque o reintento de la misma persona (AUD-3): ya es suya, todo bien.
+    const ahora: any = await PetInvite.findById(invite._id).lean();
+    if (ahora?.status === 'accepted' && String(ahora.acceptedBy) === me) return res.json({ ok: true, animalId: String(invite.animalId) });
+    return res.status(410).json({ error: 'invite_accepted' });
+  }
   if (!familyMemberIds(animal).includes(me)) {
     const añadido = await Animal.updateOne(
       { _id: animal._id, 'members.userId': { $ne: new Types.ObjectId(me) }, [`members.${MAX_PET_MEMBERS - 1}`]: { $exists: false } },

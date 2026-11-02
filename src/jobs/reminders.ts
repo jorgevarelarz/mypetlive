@@ -29,15 +29,17 @@ const HEALTH_LABELS: Record<string, string> = {
   other: 'una cita de salud',
 };
 
-function fmtDate(d?: Date | string | null) {
+// En hora de España (AUD-3, FAC-136): el servidor va en UTC y la cita de las
+// 12:00 salía anunciada a las 11:00.
+export function fmtDate(d?: Date | string | null) {
   if (!d) return 'fecha por confirmar';
-  return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+  return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Madrid' });
 }
 
 // Sin hora: una vacuna toca un día, no a las 17:30.
 function fmtDueDate(d?: Date | string | null) {
   if (!d) return 'sin fecha';
-  return new Date(d).toLocaleDateString('es-ES', { dateStyle: 'long' });
+  return new Date(d).toLocaleDateString('es-ES', { dateStyle: 'long', timeZone: 'Europe/Madrid' });
 }
 
 // Best-effort: un fallo con un destinatario no detiene el resto de la pasada.

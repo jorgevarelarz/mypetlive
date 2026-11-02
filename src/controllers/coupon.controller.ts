@@ -5,6 +5,8 @@ import { PatitaLog } from '../models/patitaLog.model';
 import { User } from '../models/user.model';
 import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
 import { COUPON_BONUS_MAX_PATITAS } from '../utils/limits';
+import { withTxnIfAvailable } from '../utils/txn';
+import { resolveUserFromBody } from './patitas.controller';
 
 const codePattern = /^[A-Z0-9]+-\d{3}$/;
 
@@ -343,8 +345,26 @@ export async function useCoupon(req: Request, res: Response) {
   if (!user || !['store', 'vet', 'admin'].includes(user.role)) {
     return res.status(403).json({ error: 'forbidden' });
   }
-  const { animalCode, logId, userId } = (req.body || {}) as { animalCode?: string; logId?: string; userId?: string };
+  const body = (req.body || {}) as { animalCode?: string; logId?: string; userId?: string; userToken?: string; code?: string };
+  const { animalCode, logId } = body;
   const normalizedCode = (animalCode || '').trim().toUpperCase();
+  const partnerId = String(user._id || user.id);
+
+  // A quién van las Patitas (AUD-3, FAC-127): solo al cliente que está delante,
+  // probado con su QR (userToken) o su código corto. Un `userId` suelto ya no
+  // vale: un partner creaba cupones y se los acreditaba a cualquier cuenta.
+  let beneficiaryId: string | null = null;
+  if (body.userToken || body.code) {
+    beneficiaryId = await resolveUserFromBody(body, { allowUserId: false });
+    if (!beneficiaryId) return res.status(400).json({ error: 'invalid_user_code' });
+    const b = await User.findById(beneficiaryId).select('role').lean();
+    if (!b || (b as any).role !== 'tenant' || beneficiaryId === partnerId) {
+      return res.status(400).json({ error: 'invalid_beneficiary' });
+    }
+  } else if (body.userId) {
+    return res.status(400).json({ error: 'invalid_user_code' });
+  }
+
   const coupon = await Coupon.findById(req.params.id);
   if (!coupon) return res.status(404).json({ error: 'coupon_not_found' });
 
@@ -352,7 +372,7 @@ export async function useCoupon(req: Request, res: Response) {
   if (coupon.partnerType !== role) {
     return res.status(403).json({ error: 'coupon_partner_mismatch' });
   }
-  if (user.role !== 'admin' && String(coupon.partnerId) !== String(user._id || user.id)) {
+  if (user.role !== 'admin' && String(coupon.partnerId) !== partnerId) {
     return res.status(403).json({ error: 'invalid_partner_coupon' });
   }
   if (!coupon.active) {
@@ -367,11 +387,6 @@ export async function useCoupon(req: Request, res: Response) {
   if (coupon.targetAnimalCode && coupon.targetAnimalCode !== normalizedCode) {
     return res.status(400).json({ error: 'coupon_animal_mismatch' });
   }
-
-  coupon.usedAt = new Date();
-  coupon.usedBy = user._id || user.id;
-  await coupon.save();
-
   let updatedLog: any;
   if (logId) {
     if (!isValidObjectId(logId)) {
@@ -384,30 +399,49 @@ export async function useCoupon(req: Request, res: Response) {
     if (updatedLog.source !== coupon.partnerType) {
       return res.status(400).json({ error: 'log_partner_mismatch' });
     }
+  }
+
+  // Reclamarlo es atómico (AUD-3): dos peticiones a la vez ya no lo usan las dos.
+  // Marcarlo y acreditar van juntos en la transacción; sin réplica, si el abono
+  // falla se devuelve el cupón a su estado.
+  let earn: any;
+  let claimed: any;
+  let sinSesion = false;
+  try {
+    await withTxnIfAvailable(async session => {
+      sinSesion = !session;
+      claimed = await Coupon.findOneAndUpdate(
+        { _id: coupon._id, active: true, usedAt: null },
+        { $set: { usedAt: new Date(), usedBy: user._id || user.id } },
+        { new: true, session },
+      );
+      if (!claimed) return;
+      if (beneficiaryId) {
+        const reward = Number(coupon.bonusPatitas) > 0 ? Math.round(Number(coupon.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
+        earn = await earnForUser({
+          userId: beneficiaryId,
+          amount: reward,
+          source: 'coupon',
+          partnerId,
+          couponId: String(coupon._id),
+          concept: coupon.title || coupon.copy || 'Cupón',
+        }, session);
+      }
+    });
+  } catch (err) {
+    if (sinSesion && claimed) await Coupon.updateOne({ _id: coupon._id }, { $unset: { usedAt: 1, usedBy: 1 } });
+    throw err;
+  }
+  if (!claimed) return res.status(400).json({ error: 'coupon_already_used' });
+
+  if (updatedLog) {
     updatedLog.couponId = coupon._id;
     await updatedLog.save();
   }
 
-  // Generación de Patitas para el usuario identificado (modelo nuevo).
-  let earn: any;
-  if (userId && isValidObjectId(userId)) {
-    const beneficiary = await User.findById(userId).select('role');
-    if (beneficiary) {
-      const reward = Number(coupon.bonusPatitas) > 0 ? Math.round(Number(coupon.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
-      earn = await earnForUser({
-        userId: String(userId),
-        amount: reward,
-        source: 'coupon',
-        partnerId: String(user._id || user.id),
-        couponId: String(coupon._id),
-        concept: coupon.title || coupon.copy || 'Cupón',
-      });
-    }
-  }
-
   res.json({
     ok: true,
-    coupon,
+    coupon: claimed,
     logId: updatedLog ? String(updatedLog._id) : undefined,
     earn,
   });

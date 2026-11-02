@@ -449,12 +449,18 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     if (!customer) return;
     setBusy(true);
     try {
-      const r = await applyCouponToCustomer(coupon._id, customer.userId, coupon.targetAnimalCode || undefined);
+      const r = await applyCouponToCustomer(coupon._id, customer.ref, coupon.targetAnimalCode || undefined);
       toast.success(`Cupón aplicado · +${r.earn?.earned ?? coupon.bonusPatitas ?? 0} 🐾 a ${customer.name || 'el cliente'}`);
       couponsQ.refetch();
       reset();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'No se pudo aplicar el cupón');
+      const code = e?.response?.data?.error;
+      if (code === 'invalid_user_code') { toast.error(CUSTOMER_CODE_EXPIRED); reset(); return; }
+      toast.error(code === 'coupon_already_used' ? 'Este cupón ya se ha usado.'
+        : code === 'coupon_expired' ? 'Este cupón ha caducado.'
+        : code === 'invalid_beneficiary' ? 'Los cupones solo dan Patitas a familias.'
+        : code === 'coupon_animal_mismatch' ? 'Este cupón es para otra mascota.'
+        : 'No se pudo aplicar el cupón');
     } finally { setBusy(false); }
   };
 
@@ -723,8 +729,15 @@ export function RedeemFromShelter() {
       setPreview(null); setWalletRef(null); setCode('');
       qc.invalidateQueries({ queryKey: ['patitas-me'] });
     } catch (e: any) {
-      if (isTooManyAttempts(e)) return;
-      toast.error(e?.response?.data?.error === 'insufficient_patitas' ? 'La protectora no tiene saldo suficiente' : 'No se pudo completar el canje');
+      // redeemConfirm va sin el aviso genérico del interceptor: todos los avisos salen de aquí.
+      if (isTooManyAttempts(e)) { toast.error('Demasiados intentos de canje. Espera unos minutos.'); return; }
+      const code = e?.response?.data?.error;
+      if (code === 'wallet_already_used' || code === 'invalid_wallet') {
+        toast.error(code === 'wallet_already_used' ? 'Este QR ya se ha usado. Pide a la protectora que genere uno nuevo.' : 'El QR o el código de la protectora ha caducado. Pide uno nuevo.');
+        setPreview(null); setWalletRef(null); setCode('');
+        return;
+      }
+      toast.error(code === 'insufficient_patitas' ? 'La protectora no tiene saldo suficiente' : 'No se pudo completar el canje');
     } finally {
       setBusy(false);
     }

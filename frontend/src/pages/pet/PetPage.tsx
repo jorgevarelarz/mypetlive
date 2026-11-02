@@ -35,7 +35,6 @@ import DailyCareCard from '../../components/pet/DailyCareCard';
 import CareRemindersCard from '../../components/pet/CareRemindersCard';
 import PetFamilyCard from '../../components/pet/PetFamilyCard';
 import HealthEntrySheet from '../../components/pet/HealthEntrySheet';
-import PetInvitesBanner from '../../components/pet/PetInvitesBanner';
 import RehomeEntry from '../../components/rehome/RehomeEntry';
 import MemorialFamily from '../../components/memorial/MemorialFamily';
 import FarewellSheet from '../../components/memorial/FarewellSheet';
@@ -676,7 +675,6 @@ export default function PetPage() {
   if (!featuredAnimal) {
     return (
       <div className="p-6 grid gap-3" style={{ color: '#3F4A3C' }}>
-        <PetInvitesBanner onAccepted={id => setSelectedPetId(id)} />
         <p className="text-lg font-semibold">Todavía no tienes ninguna mascota aquí</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>
           Registra la mascota con la que ya vives o busca un animal en adopción.
@@ -739,7 +737,6 @@ export default function PetPage() {
         <RehomeEntry />
       </div>
 
-      <PetInvitesBanner onAccepted={id => setSelectedPetId(id)} />
 
       {isSharedWithMe && currentPetEntry?.sharedBy && (
         <p style={{ margin: '-2px 4px 0', fontSize: 12.5, color: M.gris }}>

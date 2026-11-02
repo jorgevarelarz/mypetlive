@@ -14,7 +14,7 @@ import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesFilter, speciesVariants } from '../utils/species';
 import { ageFromBirthDate, parseBirthDate } from '../utils/age';
 import { canPublishAnimals } from '../utils/shelterVerification';
-import { canManageAnimal, familyRecipientIds } from '../utils/animalAccess';
+import { canManageAnimal, familyRecipientIds, isFamilyPet } from '../utils/animalAccess';
 import { distanciaKm, geolocalizar, type Lugar } from '../utils/geo';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
@@ -190,7 +190,12 @@ export async function getByCode(req: Request, res: Response) {
 
 // Construye la línea de tiempo unificada del pasaporte (eventos de ciclo de vida + salud/vet).
 // `full` (dueño/admin) incluye nombres de las familias; el público recibe versión redactada.
-const DETALLE_PRIVADO = new Set(['medication', 'test', 'surgery', 'visit']);
+// Lo único que el pasaporte público cuenta con detalle (AUD-3, FAC-135): qué
+// vacuna y qué desparasitación. El resto (revisiones, medicación, pruebas, notas
+// libres) es dato de salud de la familia y sale solo con su título.
+/** Días tras una cita completada en los que el vet aún puede apuntar en el pasaporte. */
+export const VET_PERMISO_DIAS = 30;
+const DETALLE_PUBLICO = new Set(['vaccine', 'deworming']);
 
 const HEALTH_TITLES: Record<string, string> = {
   vaccine: 'Vacuna',
@@ -242,7 +247,7 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
   for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: full ? v.note : undefined });
   // El tipo se guarda en inglés (es la clave del registro); el pasaporte lo enseña
   // en castellano. `kind` lleva la clave para que la web ponga su icono.
-  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: full || !DETALLE_PRIVADO.has(h.type) ? h.notes : undefined });
+  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: full || DETALLE_PUBLICO.has(h.type) ? h.notes : undefined });
   return items
     .filter(i => i.at)
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -261,7 +266,9 @@ export async function getTimeline(req: Request, res: Response) {
   const viewer: any = (req as any).user;
   const viewerId = String(viewer?._id || viewer?.id || '');
   // Quien comparte la mascota (members) la ve igual que el dueño.
-  const isOwner = !!viewerId && (String(animal.ownerId || '') === viewerId || String(animal.shelter || '') === viewerId || canManageAnimal(viewer, animal));
+  // La protectora de origen de una mascota ya adoptada no ve la versión completa
+  // (AUD-3, FAC-129): `canManageAnimal` ya la excluye en mascotas de familia.
+  const isOwner = !!viewerId && (canManageAnimal(viewer, animal) || (!isFamilyPet(animal) && String(animal.ownerId || '') === viewerId));
   const full = !!viewer && (viewer.role === 'admin' || isOwner);
 
   const events = await AnimalEvent.find({ animalId: animal._id })
@@ -331,10 +338,18 @@ export async function addHealthRecord(req: Request, res: Response) {
   // FAC-116): con una cita suya no cancelada para él, o si lo gestiona. Antes
   // bastaba con saber el código (NOMBRE-NNN, se adivina).
   if (user?.role === 'vet' && !canManageAnimal(user, animal)) {
+    // Solo con una cita aceptada, o completada hace poco (AUD-3, FAC-132): una
+    // pedida que la clínica aún no ha visto, o una de hace años, no da permiso.
+    const desde = new Date(Date.now() - VET_PERMISO_DIAS * 86_400_000);
     const atiende = await VetAppointment.exists({
       vetId: uidActor,
-      status: { $ne: 'cancelled' },
-      $or: [{ animalId: animal._id }, { animalCode: animal.code }],
+      $and: [
+        { $or: [{ animalId: animal._id }, { animalCode: animal.code }] },
+        { $or: [
+          { status: { $in: ['confirmed', 'rescheduled'] } },
+          { status: 'completed', $or: [{ scheduledAt: { $gte: desde } }, { scheduledAt: null, requestedAt: { $gte: desde } }] },
+        ] },
+      ],
     });
     if (!atiende) return res.status(403).json({ error: 'no_appointment_with_animal' });
   }

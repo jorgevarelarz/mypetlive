@@ -167,6 +167,8 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
   const headerItems = sinMenuLateral
     ? [...drawerItems, ...generalItems.filter(item => !sideTargets.has(resolvePath(item)))]
     : generalItems.filter(item => !sideTargets.has(resolvePath(item)));
+  // El cajón también hace falta entre lg y xl si la cabecera no lo enseña todo.
+  const ocultarCajon = sinMenuLateral && headerItems.length > 6 ? 'xl:hidden' : 'lg:hidden';
   const botonMenu = React.useRef<HTMLButtonElement>(null);
   const cajon = React.useRef<HTMLElement>(null);
   const yaAbierto = React.useRef(false);
@@ -220,14 +222,16 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
             portada o el catálogo a cupones/perfil la cabecera no cambia. */}
         <Link to={roleHome} aria-label="MyPetLive — inicio" style={{ textDecoration: 'none' }}><BrandWordmark /></Link>
 
-        <nav className="hidden lg:flex items-center gap-2 text-sm">
-          {headerItems.map((item: NavItem) => {
+        {/* Sin menú lateral caben todas desde xl; entre lg y xl, las seis primeras y
+            el resto en el cajón (AUD-3: a 1100 px se partían en dos líneas). */}
+        <nav className="hidden lg:flex items-center gap-2 text-sm min-w-0">
+          {headerItems.map((item: NavItem, i: number) => {
             const target = resolvePath(item);
             return (
               <NavLink
                 key={target}
                 to={target}
-                className={({ isActive }) => `px-2 py-1 rounded ${isActive ? 'bg-[#F4EFE7]' : ''}`}
+                className={({ isActive }) => `px-2 py-1 rounded whitespace-nowrap ${sinMenuLateral && i >= 6 ? 'hidden xl:inline' : ''} ${isActive ? 'bg-[#F4EFE7]' : ''}`}
               >
                 {item.label}
                 {target === '/mensajes' && unread > 0 && (
@@ -293,7 +297,7 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
               en PublicHeader. En la app y sin sesión sobra: la barra inferior
               ya lleva a todo. */}
           {(user || !isNativeApp()) && <button
-            className="lg:hidden inline-flex items-center justify-center"
+            className={`${ocultarCajon} inline-flex items-center justify-center`}
             style={{ width: 40, height: 40, padding: 0, flexShrink: 0, border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}
             ref={botonMenu}
             onClick={() => setMenuOpen(true)}
@@ -312,7 +316,7 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
         para position:fixed y los dejaría atrapados en sus 56px de alto. */}
       {/* Fondo del drawer móvil */}
       <div
-        className="lg:hidden fixed inset-0 z-40 transition-opacity duration-200"
+        className={`${ocultarCajon} fixed inset-0 z-40 transition-opacity duration-200`}
         style={{ background: 'rgba(63,74,60,0.4)', opacity: menuOpen ? 1 : 0, pointerEvents: menuOpen ? 'auto' : 'none' }}
         onClick={() => setMenuOpen(false)}
         aria-hidden="true"
@@ -322,7 +326,7 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
       <aside
         id="mobile-menu"
         // En la app el cajón empieza bajo la barra de estado (ver .safe-top en index.css).
-        className="lg:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
+        className={`${ocultarCajon} fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200`}
         style={{
           width: 300,
           maxWidth: '86vw',

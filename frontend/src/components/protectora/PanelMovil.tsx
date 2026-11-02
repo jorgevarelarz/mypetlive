@@ -92,7 +92,7 @@ export default function PanelMovil({ shelterId, orgName, publicados, solicitudes
   );
 
   const fechaCita = cita ? new Date(cita.scheduledAt || cita.requestedAt) : null;
-  const dia = (f: Date, o: Intl.DateTimeFormatOptions) => f.toLocaleDateString('es-ES', o).replace('.', '').toUpperCase();
+  const dia = (f: Date, o: Intl.DateTimeFormatOptions) => f.toLocaleDateString('es-ES', { ...o, timeZone: 'Europe/Madrid' }).replace('.', '').toUpperCase();
 
   return (
     <div style={{ fontFamily: M.letra, letterSpacing: 0, color: M.tinta, display: 'grid', gap: 12, margin: '-24px 0 0', paddingTop: 6 }}>
@@ -145,7 +145,7 @@ export default function PanelMovil({ shelterId, orgName, publicados, solicitudes
           <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr', columnGap: 12 }}>
             <div style={{ height: 58, borderRadius: 10, background: '#E6F1EE', display: 'grid', placeItems: 'center', alignContent: 'center', color: '#0B6A5F', lineHeight: 1 }}>
               <span style={{ fontSize: 11, fontWeight: 700 }}>{dia(fechaCita, { weekday: 'short' })}</span>
-              <span style={{ fontFamily: M.titulos, fontSize: 19, fontWeight: 800, color: '#14231F', margin: '2px 0' }}>{fechaCita.getDate()}</span>
+              <span style={{ fontFamily: M.titulos, fontSize: 19, fontWeight: 800, color: '#14231F', margin: '2px 0' }}>{dia(fechaCita, { day: 'numeric' })}</span>
               <span style={{ fontSize: 11, fontWeight: 700 }}>{dia(fechaCita, { month: 'short' })}</span>
             </div>
             <Link to="/citas" style={{ display: 'grid', gridTemplateColumns: '1fr 10px', alignItems: 'center', columnGap: 8, padding: '0 12px 0 11px', minHeight: 58, borderRadius: 10, border: '1px solid #ECE6DC', textDecoration: 'none', color: M.tinta }}>
@@ -154,7 +154,7 @@ export default function PanelMovil({ shelterId, orgName, publicados, solicitudes
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#5E6460', marginTop: 3 }}>
                   <CalcoPanelUbicacion size={13} />
                   <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {cita.vetId?.profile?.orgName || cita.vetId?.name || 'Veterinario'} · {fechaCita.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    {cita.vetId?.profile?.orgName || cita.vetId?.name || 'Veterinario'} · {fechaCita.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}
                   </span>
                 </span>
               </span>

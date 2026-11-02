@@ -45,7 +45,8 @@ export async function listVets(params?: { city?: string; q?: string }) {
 }
 
 export async function createVetAppointment(payload: { vetId: string; reason: string; requestedAt: string; animalCode?: string; serviceName?: string; patitasCost?: number }) {
-  const { data } = await client.post('/api/vet-appointments', payload);
+  // Cada pantalla traduce sus errores (AUD-3): sin esto salía también el código crudo.
+  const { data } = await client.post('/api/vet-appointments', payload, { skipErrorToast: true } as any);
   return data as VetAppointment;
 }
 

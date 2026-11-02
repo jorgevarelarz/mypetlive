@@ -68,9 +68,35 @@ describe('Flujo de Patitas (moneda de impacto)', () => {
     const res = await request(app)
       .post(`/api/coupons/${coupon._id}/use`)
       .set(storeH)
-      .send({ userId: tenantId })
+      .send({ userToken: signUserToken(tenantId) })
       .expect(200);
     expect(res.body.earn.earned).toBe(30);
+    expect(await balance(tenantId)).toBe(30);
+  });
+
+  // AUD-3 (FAC-127): sin prueba de que el cliente está delante no hay Patitas,
+  // ni para una protectora ni para el propio partner, y el cupón se usa una vez.
+  it('cupón: un userId suelto no acredita y no gasta el cupón', async () => {
+    const coupon = await Coupon.create({ partnerId: storeId, partnerType: 'store', copy: 'X', discount: '5%', active: true, bonusPatitas: 30 });
+    const res = await request(app).post(`/api/coupons/${coupon._id}/use`).set(storeH).send({ userId: tenantId }).expect(400);
+    expect(res.body.error).toBe('invalid_user_code');
+    expect(await balance(tenantId)).toBe(0);
+    expect((await Coupon.findById(coupon._id).lean() as any).usedAt).toBeFalsy();
+  });
+
+  it('cupón: ni a una protectora ni al propio partner', async () => {
+    const c1 = await Coupon.create({ partnerId: storeId, partnerType: 'store', copy: 'X', discount: '5%', active: true, bonusPatitas: 30 });
+    await request(app).post(`/api/coupons/${c1._id}/use`).set(storeH).send({ userToken: signUserToken(shelterId) }).expect(400);
+    await request(app).post(`/api/coupons/${c1._id}/use`).set(storeH).send({ userToken: signUserToken(storeId) }).expect(400);
+    expect(await balance(shelterId)).toBe(0);
+    expect(await balance(storeId)).toBe(0);
+  });
+
+  it('cupón: dos usos a la vez acreditan una sola vez', async () => {
+    const coupon = await Coupon.create({ partnerId: storeId, partnerType: 'store', copy: 'X', discount: '5%', active: true, bonusPatitas: 30 });
+    const userToken = signUserToken(tenantId);
+    const r = await Promise.all([1, 2, 3].map(() => request(app).post(`/api/coupons/${coupon._id}/use`).set(storeH).send({ userToken })));
+    expect(r.filter(x => x.status === 200)).toHaveLength(1);
     expect(await balance(tenantId)).toBe(30);
   });
 
@@ -101,7 +127,7 @@ describe('Flujo de Patitas (moneda de impacto)', () => {
   it('auto-donación: las Patitas generadas se reenvían a la protectora', async () => {
     await request(app).patch(`/api/users/${tenantId}`).set(tenantH).send({ profile: { autoDonate: { enabled: true, shelterId } } }).expect(200);
     const coupon = await Coupon.create({ partnerId: storeId, partnerType: 'store', copy: 'Premios', discount: '10%', active: true, bonusPatitas: 12 });
-    const res = await request(app).post(`/api/coupons/${coupon._id}/use`).set(storeH).send({ userId: tenantId }).expect(200);
+    const res = await request(app).post(`/api/coupons/${coupon._id}/use`).set(storeH).send({ userToken: signUserToken(tenantId) }).expect(200);
     expect(res.body.earn.autoDonated).toBe(true);
     expect(await balance(tenantId)).toBe(0);
     expect(await balance(shelterId)).toBe(12);

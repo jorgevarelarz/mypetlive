@@ -100,6 +100,10 @@ export default function BookVetAppointment({ soloLista = false }: { soloLista?: 
         animal_not_owned: 'Solo puedes pedir cita para tus propias mascotas',
         insufficient: 'No tienes suficientes Patitas', insufficient_patitas: 'No tienes suficientes Patitas',
         service_not_found: 'Ese servicio ya no está en el catálogo del veterinario',
+        slot_taken: 'Esa hora ya está pedida. Elige otra.',
+        slot_not_available: 'Esa hora no se puede pedir: fuera del horario de la clínica o demasiado pronto.',
+        too_many_pending: 'Ya hay 3 citas pendientes de confirmar con esta clínica.',
+        invalid_date: 'La fecha no es válida',
       };
       toast.error(map[code] || 'No se pudo crear la solicitud');
     },
@@ -210,7 +214,7 @@ export default function BookVetAppointment({ soloLista = false }: { soloLista?: 
             </label>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
               Fecha y hora
-              <input type="datetime-local" min={datetimeLocalNow()} value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
+              <input type="datetime-local" step={1800} min={datetimeLocalNow()} value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
             </label>
           </div>
           <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>

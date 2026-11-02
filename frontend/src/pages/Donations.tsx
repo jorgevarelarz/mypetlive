@@ -12,7 +12,7 @@ import { isNativeApp, openPaymentPage, webUrl } from '../utils/native';
 const PRESETS = [5, 10, 20, 50];
 
 export default function DonationsPage() {
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
   const [amount, setAmount] = useState<string>('10');
   const [shelterId, setShelterId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
@@ -45,13 +45,19 @@ export default function DonationsPage() {
 
   const recipientName = animalId ? animalShelterName : shelters.find(item => item.id === shelterId)?.name;
 
-  // Stripe vuelve aquí con `?donation=success&session_id=…` o `?donation=cancel`
-  // (AUD-2). El éxito no se da por hecho por el parámetro: el cobro lo confirma
-  // el webhook de Stripe, así que se dice que se está confirmando.
-  const vuelta = sp.get('donation');
+  // Stripe vuelve aquí con `?donation=success&session_id=…` o `?donation=cancel`.
+  // Se lee una vez y se quita de la dirección (AUD-3), para que no reaparezca al
+  // recargar o compartir. El parámetro no prueba el cobro (lo confirma el webhook
+  // de Stripe): la pantalla no lo da por hecho ni promete recibo.
+  const [resultado] = useState(() => sp.get('donation'));
   useEffect(() => {
-    if (vuelta === 'cancel') setError('Has cancelado el pago. No se te ha cobrado nada.');
-  }, [vuelta]);
+    if (!sp.get('donation')) return;
+    if (sp.get('donation') === 'cancel') setError('Has cancelado el pago. No se te ha cobrado nada.');
+    const limpio = new URLSearchParams(sp);
+    limpio.delete('donation'); limpio.delete('session_id');
+    setSp(limpio, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [verResultado, setVerResultado] = useState(resultado === 'success');
 
   const value = Number(amount);
   // El servidor tiene la última palabra sobre el tope; aquí solo se evita el
@@ -87,6 +93,26 @@ export default function DonationsPage() {
       setSubmitting(false);
     }
   };
+
+  if (verResultado && !isNativeApp()) {
+    return (
+      <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', padding: '32px 20px' }}>
+        <div role="status" style={{ maxWidth: 480, margin: '0 auto', display: 'grid', gap: 16 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: MPL.coral }}>
+            <PawMark size={26} />
+            <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: MPL.ink, margin: 0 }}>Gracias por tu donación</h1>
+          </div>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: '22px' }}>
+            Si el pago se ha completado, lo verás en tu banco en unos minutos y la protectora recibirá el dinero. Si no aparece, revisa tu banco antes de volver a donar.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link to="/" style={{ background: MPL.coralDark, color: '#fff', borderRadius: 13, padding: '12px 20px', fontWeight: 800, textDecoration: 'none' }}>Volver al inicio</Link>
+            <button type="button" onClick={() => setVerResultado(false)} style={{ background: '#fff', color: MPL.ink, border: `1px solid ${MPL.border}`, borderRadius: 13, padding: '12px 20px', font: 'inherit', fontWeight: 700, cursor: 'pointer' }}>Hacer otra donación</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // App Store 3.2.2(iv): una app que no es de una ONG aprobada por Apple no puede
   // cobrar donaciones dentro; sí puede mandar a hacerlas en Safari.
@@ -203,13 +229,6 @@ export default function DonationsPage() {
               style={{ width: '100%', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 15, fontFamily: MPL_FONT_BODY, color: MPL.ink, background: '#fff' }}
             />
           </label>
-
-          {vuelta === 'success' && sp.get('session_id') && (
-            <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: MPL.ink, background: '#E6F2EE', border: '1px solid #B9D8CC', borderRadius: 12, padding: '11px 13px', fontSize: 13.5 }}>
-              <Info size={17} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>Gracias. Estamos confirmando tu pago con Stripe; cuando se complete te llegará el recibo por correo. Si no llega en unos minutos, mira tu banco antes de volver a donar.</span>
-            </div>
-          )}
 
           {error && (
             <div role="alert" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: MPL.coralDark, background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 12, padding: '11px 13px', fontSize: 13 }}>

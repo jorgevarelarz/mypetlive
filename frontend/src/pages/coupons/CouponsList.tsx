@@ -32,7 +32,7 @@ export default function CouponsList() {
   const { user } = useAuth();
   const { openAuth } = useAuthModal();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: listCoupons });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['coupons'], queryFn: listCoupons });
 
   // Un partner puede destacar sus propios cupones (o el admin cualquiera).
   const canSponsor = (coupon: Coupon) =>
@@ -139,11 +139,11 @@ export default function CouponsList() {
             <span aria-hidden style={{ position: 'absolute', right: -18, bottom: -26, color: 'rgba(255,255,255,.08)' }}><PawMark size={120} /></span>
             <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', gap: 12, alignItems: 'start' }}>
               {[
-                { icono: <CalcoCupPatitas size={24} />, n: totalPatitas || 0, label: 'Patitas potenciales' },
+                { icono: <CalcoCupPatitas size={24} />, n: isError ? '—' : totalPatitas || 0, label: 'Patitas potenciales' },
                 null,
-                { icono: <CalcoCupTicket size={22} color="#FFFFFF" />, n: activeCoupons.length, label: 'Cupones activos' },
+                { icono: <CalcoCupTicket size={22} color="#FFFFFF" />, n: isError ? '—' : activeCoupons.length, label: 'Cupones activos' },
                 null,
-                { icono: <CalcoCupCategorias size={23} color="#FFFFFF" />, n: new Set(activeCoupons.map(c => c.partnerType || 'store')).size, label: 'Categorías' },
+                { icono: <CalcoCupCategorias size={23} color="#FFFFFF" />, n: isError ? '—' : new Set(activeCoupons.map(c => c.partnerType || 'store')).size, label: 'Categorías' },
               ].map((x, i) => x ? (
                 <div key={i} style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -178,6 +178,12 @@ export default function CouponsList() {
 
         {isLoading ? (
           <div style={{ color: MPL.muted }}>Cargando cupones...</div>
+        ) : isError ? (
+          // Un fallo de carga no es «no hay cupones» (AUD-3).
+          <div role="alert" style={{ background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, padding: '20px', fontSize: 15, color: '#B3261E' }}>
+            No hemos podido cargar los cupones.{' '}
+            <button type="button" onClick={() => refetch()} style={{ border: 0, background: 'none', padding: 0, color: '#0E5F5B', font: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}>Reintentar</button>
+          </div>
         ) : activeCoupons.length === 0 ? (
           <div style={{ display: 'grid', justifyItems: 'center', gap: 14, textAlign: 'center', background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, padding: '22px 20px 24px', boxShadow: '0 8px 22px -16px rgba(60,45,30,.3)' }}>
             <img src="/ilustraciones/cupones-vacio.png" alt="" aria-hidden style={{ width: 140, height: 'auto' }} />
