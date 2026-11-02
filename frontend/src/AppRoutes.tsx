@@ -71,6 +71,7 @@ import StoreProductsPage from "./pages/partners/StoreProductsPage";
 import StoreOrdersPage from "./pages/partners/StoreOrdersPage";
 import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
+import AcceptPetInvite from "./pages/pet/AcceptPetInvite";
 import PatitasPage from "./pages/patitas/PatitasPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
 import Favorites from "./pages/Favorites";
@@ -108,6 +109,9 @@ export default function AppRoutes() {
             {/* Chapa física del collar. Fuera del AppShell y sin ProtectedRoute:
                 se llega escaneando un QR en la calle, a menudo sin cuenta. */}
             <Route path="/t/:code" element={<TagLanding />} />
+            {/* Invitación a compartir una mascota (enlace del correo). Sin
+                ProtectedRoute: quizá aún no tiene cuenta; el token es la credencial. */}
+            <Route path="/compartir/:token" element={<AcceptPetInvite />} />
             <Route element={<AppShell />}>
               <Route path="/animals" element={<AnimalsPublicList />} />
               <Route path="/animals/:id" element={<AnimalDetail />} />

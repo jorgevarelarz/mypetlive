@@ -2,6 +2,7 @@ import { VetAppointment } from '../models/vetAppointment.model';
 import { WelcomePlan, WELCOME_TASKS } from '../models/welcomePlan.model';
 import { User } from '../models/user.model';
 import { Animal } from '../models/animal.model';
+import { familyRecipientIds } from '../utils/animalAccess';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
 import { sendPushToUser, type PushPayload } from '../utils/push';
@@ -194,48 +195,52 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
     // de enviar sigue siendo lo correcto (un fallo de correo pierde un aviso, y
     // eso es mejor que repetirlo cada cuarto de hora), pero solo cuando hay a
     // quién enviárselo.
-    const owner: any = await User.findById(animal.ownerId || animal.shelter).select('email role').lean();
-    if (!owner?.email) continue;
+    // A toda la familia: el dueño y con quien comparta la mascota.
+    const people: any[] = await User.find({ _id: { $in: familyRecipientIds(animal) } }).select('email role').lean();
+    const recipients = people.filter(p => p.email);
+    if (!recipients.length) continue;
 
     for (const h of due) h.reminderSentAt = new Date();
     await animal.save();
 
-    const petName = animal.name || 'tu mascota';
-    const base = FRONTEND_URL();
-    // La familia lo lleva en «Mi mascota»; una protectora, en su lista de animales.
-    const petPath = owner.role === 'landlord' ? '/landlord/animals' : '/pet';
-    // "Pendiente" y no "le toca pronto" cuando la fecha ya pasó. Desde que el
-    // alta pregunta por la última vacuna, entran fechas históricas: una vacuna
-    // de hace catorce meses programa un aviso ya vencido, y decirle a alguien
-    // que "le toca pronto" algo de hace dos meses le hace dudar del dato.
-    const linea = (h: any) => {
-      const vencido = h.nextDueAt && new Date(h.nextDueAt).getTime() < now.getTime();
-      return `${HEALTH_LABELS[h.type] || h.type} — ${fmtDueDate(h.nextDueAt)}${vencido ? ' · pendiente' : ''}`;
-    };
+    for (const owner of recipients) {
+      const petName = animal.name || 'tu mascota';
+      const base = FRONTEND_URL();
+      // La familia lo lleva en «Mi mascota»; una protectora, en su lista de animales.
+      const petPath = owner.role === 'landlord' ? '/landlord/animals' : '/pet';
+      // "Pendiente" y no "le toca pronto" cuando la fecha ya pasó. Desde que el
+      // alta pregunta por la última vacuna, entran fechas históricas: una vacuna
+      // de hace catorce meses programa un aviso ya vencido, y decirle a alguien
+      // que "le toca pronto" algo de hace dos meses le hace dudar del dato.
+      const linea = (h: any) => {
+        const vencido = h.nextDueAt && new Date(h.nextDueAt).getTime() < now.getTime();
+        return `${HEALTH_LABELS[h.type] || h.type} — ${fmtDueDate(h.nextDueAt)}${vencido ? ' · pendiente' : ''}`;
+      };
 
-    const text =
-      `A ${petName} le toca pronto:\n` +
-      due.map((h: any) => `- ${linea(h)}`).join('\n') +
-      `\n\nApúntalo cuando lo hagáis en su pasaporte: ${base}${petPath}`;
-    const html = brandedEmail({
-      preheader: `A ${petName} le toca ${HEALTH_LABELS[due[0].type] || 'una revisión'}`,
-      heading: `A ${petName} le toca pronto`,
-      bodyHtml:
-        `<ul style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">` +
-        due.map((h: any) => `<li style="margin:0 0 10px;">${linea(h)}</li>`).join('') +
-        `</ul>` +
-        `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;">Cuando lo hagáis, apúntalo en su pasaporte y te avisamos la próxima vez.</p>`,
-      button: { text: `Ver el pasaporte de ${petName}`, url: `${base}${petPath}` },
-      footnote: 'Te avisamos una semana antes de cada cita que anotes en el pasaporte.',
-    });
+      const text =
+        `A ${petName} le toca pronto:\n` +
+        due.map((h: any) => `- ${linea(h)}`).join('\n') +
+        `\n\nApúntalo cuando lo hagáis en su pasaporte: ${base}${petPath}`;
+      const html = brandedEmail({
+        preheader: `A ${petName} le toca ${HEALTH_LABELS[due[0].type] || 'una revisión'}`,
+        heading: `A ${petName} le toca pronto`,
+        bodyHtml:
+          `<ul style="margin:0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;">` +
+          due.map((h: any) => `<li style="margin:0 0 10px;">${linea(h)}</li>`).join('') +
+          `</ul>` +
+          `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;">Cuando lo hagáis, apúntalo en su pasaporte y te avisamos la próxima vez.</p>`,
+        button: { text: `Ver el pasaporte de ${petName}`, url: `${base}${petPath}` },
+        footnote: 'Te avisamos una semana antes de cada cita que anotes en el pasaporte.',
+      });
 
-    await notify(owner.email, `A ${petName} le toca pronto 🐾`, text, html);
-    await push(owner._id, {
-      title: `A ${petName} le toca pronto 🐾`,
-      body: due.map((h: any) => { const l = linea(h); return l[0].toUpperCase() + l.slice(1); }).join('\n'),
-      url: petPath,
-    });
-    sent += 1;
+      await notify(owner.email, `A ${petName} le toca pronto 🐾`, text, html);
+      await push(owner._id, {
+        title: `A ${petName} le toca pronto 🐾`,
+        body: due.map((h: any) => { const l = linea(h); return l[0].toUpperCase() + l.slice(1); }).join('\n'),
+        url: petPath,
+      });
+      sent += 1;
+    }
   }
   if (sent) logger.info({ sent }, '[reminders] recordatorios de salud enviados');
   return sent;

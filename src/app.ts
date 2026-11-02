@@ -21,6 +21,7 @@ import notifyRoutes from './routes/notify.routes';
 import userRoutes from './routes/user.routes';
 import chatRoutes from './routes/chat.routes';
 import rehomeRoutes from './routes/rehome.routes';
+import petInviteRoutes from './routes/petInvite.routes';
 import foundRoutes from './routes/found.routes';
 import paymentsRoutes from './routes/payments.routes';
 import connectRoutes from './routes/connect.routes';
@@ -250,6 +251,9 @@ app.use('/api/notify', notifyRoutes);
 app.use(seoRoutes);
 app.use('/api/animals', animalRoutes);
 app.use('/api/found', foundRoutes);
+// Invitaciones para compartir una mascota. La vista previa del enlace es sin
+// sesión (quien la recibe quizá aún no tiene cuenta); el resto pide login.
+app.use('/api/pet-invites', petInviteRoutes);
 // Chapas físicas del collar. Montado aquí arriba (zona pública) porque
 // resolver un QR tiene que funcionar sin sesión: quien encuentra al animal no
 // tiene cuenta. Cada ruta pone su propio `authenticate` donde hace falta.

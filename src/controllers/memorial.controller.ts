@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import { Animal } from '../models/animal.model';
 import { CareLog } from '../models/careLog.model';
 import { MemorialMessage } from '../models/memorialMessage.model';
-import { canManageAnimal } from '../utils/animalAccess';
+import { canManageAnimal, familyRecipientIds, isPrimaryOwner } from '../utils/animalAccess';
 import { sendPushToUser } from '../utils/push';
 import logger from '../utils/logger';
 
@@ -99,6 +99,8 @@ export function publicMemorial(animal: any) {
 export async function startMemorial(req: Request, res: Response) {
   const animal = await manageable(req, res);
   if (!animal) return;
+  // Despedirla es cosa de su dueño, no de con quien la comparte.
+  if (!isPrimaryOwner((req as any).user, animal)) return res.status(403).json({ error: 'owner_only' });
 
   const diedAt = req.body?.diedAt ? new Date(req.body.diedAt) : undefined;
   if (diedAt && (Number.isNaN(diedAt.getTime()) || diedAt.getTime() > Date.now() + 24 * 3_600_000)) {
@@ -135,6 +137,7 @@ export async function startMemorial(req: Request, res: Response) {
 export async function stopMemorial(req: Request, res: Response) {
   const animal = await manageable(req, res);
   if (!animal) return;
+  if (!isPrimaryOwner((req as any).user, animal)) return res.status(403).json({ error: 'owner_only' });
   if (animal.memorial) animal.memorial.active = false;
   await animal.save();
   res.json({ ok: true });
@@ -293,11 +296,13 @@ export async function leaveMessage(req: Request, res: Response) {
   // La familia se entera para poder publicarlo. Sin texto del mensaje en la
   // notificación: se lee con calma dentro, no en la pantalla bloqueada.
   if (animal.ownerId) {
-    void sendPushToUser(String(animal.ownerId), {
-      title: `Unas palabras para ${animal.name}`,
-      body: `${name} ha dejado un mensaje en su mural.`,
-      url: `/pet?mascota=${animal._id}`,
-    }).catch(err => logger.error({ err }, '[mural] fallo al avisar del mensaje'));
+    for (const recipientId of familyRecipientIds(animal)) {
+      void sendPushToUser(recipientId, {
+        title: `Unas palabras para ${animal.name}`,
+        body: `${name} ha dejado un mensaje en su mural.`,
+        url: `/pet?mascota=${animal._id}`,
+      }).catch(err => logger.error({ err }, '[mural] fallo al avisar del mensaje'));
+    }
   }
   res.status(201).json({ ok: true });
 }

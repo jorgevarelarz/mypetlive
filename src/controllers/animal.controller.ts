@@ -13,7 +13,7 @@ import { AnimalEvent } from '../models/animalEvent.model';
 import { speciesFilter, speciesVariants } from '../utils/species';
 import { ageFromBirthDate, parseBirthDate } from '../utils/age';
 import { canPublishAnimals } from '../utils/shelterVerification';
-import { canManageAnimal } from '../utils/animalAccess';
+import { canManageAnimal, familyRecipientIds } from '../utils/animalAccess';
 import { distanciaKm, geolocalizar, type Lugar } from '../utils/geo';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
@@ -34,7 +34,8 @@ function needsVerification(status: unknown): boolean {
 // público (`getPassport`) ya construye su propia respuesta reducida a mano;
 // esto cubre las otras rutas, que hasta ahora devolvían el documento entero.
 function stripInternalFields<T extends Record<string, any>>(animal: T): T {
-  const { ownerId, __v, ...rest } = animal as any;
+  // `members`: con quién comparte la familia la mascota; tan privado como `ownerId`.
+  const { ownerId, members, __v, ...rest } = animal as any;
   if (rest.lost) rest.lost = { ...rest.lost, sightings: undefined };
   // Cesión de un particular: es una persona, no una entidad. Fuera su correo, y
   // del microchip solo las 4 últimas cifras (el anuncio lo lleva, art. 57.2).
@@ -241,7 +242,8 @@ export async function getTimeline(req: Request, res: Response) {
 
   const viewer: any = (req as any).user;
   const viewerId = String(viewer?._id || viewer?.id || '');
-  const isOwner = !!viewerId && (String(animal.ownerId || '') === viewerId || String(animal.shelter || '') === viewerId);
+  // Quien comparte la mascota (members) la ve igual que el dueño.
+  const isOwner = !!viewerId && (String(animal.ownerId || '') === viewerId || String(animal.shelter || '') === viewerId || canManageAnimal(viewer, animal));
   const full = !!viewer && (viewer.role === 'admin' || isOwner);
 
   const events = await AnimalEvent.find({ animalId: animal._id })
@@ -603,11 +605,16 @@ export async function reportSighting(req: Request, res: Response) {
   res.status(201).json({ ok: true });
 }
 
+// A todos los que cuidan de la mascota (dueño y con quien la comparte): cuando
+// alguien la ve, cualquiera de ellos puede ser el que está más cerca.
 async function notifySighting(animal: any, sighting: any) {
-  const ownerId = animal.ownerId || animal.shelter;
-  if (!ownerId) return;
-  const owner: any = await User.findById(ownerId).select('email name role').lean();
-  if (!owner) return;
+  const ids = familyRecipientIds(animal);
+  if (!ids.length) return;
+  const people: any[] = await User.find({ _id: { $in: ids } }).select('email name role').lean();
+  await Promise.all(people.map(person => notifySightingTo(person, animal, sighting).catch(() => undefined)));
+}
+
+async function notifySightingTo(owner: any, animal: any, sighting: any) {
 
   // Lo más urgente de la app: va al móvil antes que al correo. Al tocarlo se
   // abre la ficha con los avisos (ubicación, mensaje, contacto).
@@ -941,9 +948,14 @@ export async function listMine(req: Request, res: Response) {
   const userId = user?._id || user?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
 
-  const [personalDocs, adoptions] = await Promise.all([
+  const [personalDocs, adoptions, sharedDocs] = await Promise.all([
     Animal.find({ ownerId: userId, isPersonalPet: true }),
     Adoption.find({ adopterId: userId, status: 'aprobada' }).lean(),
+    // Las que otra persona comparte conmigo. Solo mascotas de familia: si una
+    // adopción se deshace, el animal vuelve a la protectora y deja de salir.
+    Types.ObjectId.isValid(String(userId))
+      ? Animal.find({ 'members.userId': new Types.ObjectId(String(userId)), $or: [{ isPersonalPet: true }, { status: 'adoptado' }] })
+      : Promise.resolve([] as any[]),
   ]);
 
   const personal = [] as any[];
@@ -954,6 +966,20 @@ export async function listMine(req: Request, res: Response) {
     }
     personalIds.add(String(doc._id));
     personal.push(doc.toObject());
+  }
+
+  // Compartidas: van como 'personal' (la ficha es la misma) con `sharedBy`, el
+  // nombre de pila de quien la compartió, para que la app lo diga.
+  const sharedOwners: any[] = sharedDocs.length
+    ? await User.find({ _id: { $in: sharedDocs.map((d: any) => d.ownerId).filter(Boolean) } }).select('name profile.firstName').lean()
+    : [];
+  const ownerName = new Map(sharedOwners.map(u => [String(u._id), String(u.profile?.firstName || u.name || '').trim().split(/\s+/)[0] || 'Otra persona']));
+  const shared: any[] = [];
+  for (const doc of sharedDocs as any[]) {
+    if (personalIds.has(String(doc._id))) continue;
+    if (!doc.code) await ensureAnimalCode(doc);
+    personalIds.add(String(doc._id));
+    shared.push({ type: 'personal', role: 'member', sharedBy: ownerName.get(String(doc.ownerId)) || 'Otra persona', animal: doc.toObject() });
   }
 
   const adoptionAnimalIds = adoptions.map(ad => String(ad.animalId || '')).filter(Boolean);
@@ -975,8 +1001,9 @@ export async function listMine(req: Request, res: Response) {
   }
 
   const items = [
-    ...personal.map(animal => ({ type: 'personal', animal })),
-    ...adopted,
+    ...personal.map(animal => ({ type: 'personal', role: 'owner', animal })),
+    ...adopted.map(item => ({ ...item, role: 'owner' })),
+    ...shared,
   ];
   // Las que ya no están, al final: la primera es la que se elige al abrir la
   // app, y tiene que ser una que sigue en casa.

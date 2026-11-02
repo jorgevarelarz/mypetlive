@@ -1,4 +1,5 @@
 import { Animal } from '../models/animal.model';
+import { familyRecipientIds } from '../utils/animalAccess';
 import { User } from '../models/user.model';
 import { sendPushToUser } from '../utils/push';
 import { normalizeSpecies } from '../utils/species';
@@ -101,7 +102,7 @@ export async function sendCareReminders(now = new Date()): Promise<number> {
       { lastLitterChange: { $gte: activeSince } },
     ],
   })
-    .select('name species ownerId careReminders lastFeeding lastWalk lastLitterChange')
+    .select('name species ownerId members isPersonalPet status careReminders lastFeeding lastWalk lastLitterChange')
     .lean();
   if (!animals.length) return 0;
 
@@ -113,8 +114,10 @@ export async function sendCareReminders(now = new Date()): Promise<number> {
 
   const pending: Pending[] = [];
   for (const animal of animals as any[]) {
-    const ownerId = String(animal.ownerId);
-    if (!families.has(ownerId)) continue;
+    if (!families.has(String(animal.ownerId))) continue;
+    // El aviso le llega a toda la familia: el dueño y con quien la comparta.
+    const recipients = familyRecipientIds(animal);
+    const remind = (p: Omit<Pending, 'ownerId'>) => { for (const ownerId of recipients) pending.push({ ...p, ownerId }); };
     const cfg = animal.careReminders || {};
     const sent = cfg.sent || {};
     const set: Record<string, unknown> = {};
@@ -137,7 +140,7 @@ export async function sendCareReminders(now = new Date()): Promise<number> {
           // unas horas de margen: cambiarla a las 18:00 cuenta para las 19:00).
           done = now.getTime() - last.getTime() < rule.everyDays * 24 * H_MS - 3 * H_MS;
         }
-        if (!done) pending.push({ ownerId, kind, animal, mode: 'time' });
+        if (!done) remind({ kind, animal, mode: 'time' });
         continue;
       }
 
@@ -150,7 +153,7 @@ export async function sendCareReminders(now = new Date()): Promise<number> {
       const lateAt = sent[`${kind}Late`] ? new Date(sent[`${kind}Late`]) : null;
       if (lateAt && lateAt > last) continue;
       set[`careReminders.sent.${kind}Late`] = now;
-      pending.push({ ownerId, kind, animal, mode: 'late', hoursSince });
+      remind({ kind, animal, mode: 'late', hoursSince });
     }
 
     // Se marca antes de enviar, como el resto de recordatorios: perder un aviso

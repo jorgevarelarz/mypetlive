@@ -10,6 +10,7 @@ import * as memorial from '../controllers/memorial.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import * as favoriteCtrl from '../controllers/animalFavorite.controller';
 import * as alertCtrl from '../controllers/animalAlert.controller';
+import * as sharing from '../controllers/petSharing.controller';
 
 const r = Router();
 
@@ -71,6 +72,20 @@ r.post('/:id/memorial/memories', authenticate, asyncHandler(memorial.addMemory))
 r.delete('/:id/memorial/memories/:memoryId', authenticate, asyncHandler(memorial.removeMemory));
 r.patch('/:id/memorial/messages/:messageId', authenticate, asyncHandler(memorial.setMessageStatus));
 r.delete('/:id/memorial/messages/:messageId', authenticate, asyncHandler(memorial.deleteMessage));
+// Mascota compartida: quién más la cuida. Invitar y quitar es del dueño; un
+// miembro puede salirse (`members/me`). Las invitaciones mandan correo: limitadas.
+// Por persona, no por IP: en una casa todos salen por la misma.
+const familyInviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.PET_INVITE_HOURLY_LIMIT || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req.user?._id || req.user?.id || req.ip),
+});
+r.get('/:id/family', authenticate, asyncHandler(sharing.getFamily));
+r.post('/:id/family/invites', authenticate, familyInviteLimiter, asyncHandler(sharing.invite));
+r.delete('/:id/family/invites/:inviteId', authenticate, asyncHandler(sharing.revokeInvite));
+r.delete('/:id/family/members/:userId', authenticate, asyncHandler(sharing.removeMember));
 r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
 // Registro clínico del animal por su código. El control de quién puede escribir
 // vive en el controlador y no aquí: además del vet y el admin, puede la familia

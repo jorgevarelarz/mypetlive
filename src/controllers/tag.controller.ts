@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { Request, Response } from 'express';
 import { Tag, generateTags, normalizeTagCode, tagStatus } from '../models/tag.model';
 import { Animal } from '../models/animal.model';
@@ -145,7 +146,12 @@ export async function listMyTags(req: Request, res: Response) {
   const uid = String(user?._id || user?.id || '');
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const tags = await Tag.find({ claimedBy: uid, revokedAt: null })
+  // Las que activó y las de las mascotas que lleva: si la comparte, la chapa
+  // que puso la otra persona también es la de su perro.
+  const mine: any[] = Types.ObjectId.isValid(uid)
+    ? await Animal.find({ $or: [{ ownerId: uid }, { 'members.userId': uid }] }).select('_id').lean()
+    : [];
+  const tags = await Tag.find({ revokedAt: null, $or: [{ claimedBy: uid }, { animalId: { $in: mine.map(a => a._id) } }] })
     .populate('animalId', 'code name images')
     .sort({ claimedAt: -1 })
     .lean();

@@ -27,7 +27,7 @@ import {
 // mural. Aquí la familia lo llena, lee los mensajes que dejan las visitas y
 // decide cuáles se publican.
 
-type Props = { animal: any; onChanged: () => void };
+type Props = { animal: any; onChanged: () => void; /** Quien comparte la mascota no deshace la despedida: eso es del dueño. */ canUndo?: boolean };
 type Section = 'media' | 'memories' | 'favorites' | 'words' | null;
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 16 };
@@ -54,7 +54,7 @@ function yearOf(value?: string | null) {
   return Number.isNaN(d.getTime()) ? null : d.getFullYear();
 }
 
-export default function MemorialFamily({ animal, onChanged }: Props) {
+export default function MemorialFamily({ animal, onChanged, canUndo = true }: Props) {
   const id = String(animal._id || animal.id || '');
   const name = animal.name || 'tu mascota';
   const nav = useNavigate();
@@ -429,7 +429,7 @@ export default function MemorialFamily({ animal, onChanged }: Props) {
 
       <div style={{ display: 'grid', gap: 4, padding: '6px 4px 0' }}>
         {code && <div style={{ fontSize: 14, color: MPL.muted }}>Su chapa {code} enseña ahora este mural.</div>}
-        <button
+        {canUndo && <button
           type="button"
           onClick={() => {
             if (window.confirm(`¿${name} sigue con vosotros? Su ficha vuelve a ser la de siempre y se guarda lo que hayáis escrito.`)) undo.mutate();
@@ -437,7 +437,7 @@ export default function MemorialFamily({ animal, onChanged }: Props) {
           style={{ justifySelf: 'start', padding: '6px 0', border: 0, background: 'none', color: MPL.teal, font: 'inherit', fontWeight: 600, fontSize: 14 }}
         >
           Ha sido un error: {name} sigue con nosotros
-        </button>
+        </button>}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { recordProductUse } from '../utils/petCatalog';
 import { Types } from 'mongoose';
 import { Animal } from '../models/animal.model';
+import { isFamilyMember } from '../utils/animalAccess';
 import { Adoption } from '../models/adoption.model';
 import { User } from '../models/user.model';
 import { CareLog, WALK_KINDS, type WalkKind } from '../models/careLog.model';
@@ -33,6 +34,8 @@ async function animalIfAllowed(animalId: string, user: any) {
   // Mascota personal: su dueño es `ownerId` y no hay adopción de por medio, así que
   // sin esta comprobación el propio dueño recibía 403 al marcar comida/arena.
   if (animal.ownerId && String(animal.ownerId) === userId) return animal;
+  // Con quien la familia comparte la mascota la cuida igual.
+  if (isFamilyMember(user, animal)) return animal;
   if (user.role === 'tenant') {
     // Estado real de `AdoptionStatus`: 'aprobada'. Se comparaba con 'accepted'
     // (legado de alquiler), que nunca casaba → el adoptante no podía cuidar

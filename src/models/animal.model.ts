@@ -335,9 +335,30 @@ const animalSchema = new Schema(
       type: new Schema({ userId: String, since: Date, foundId: String }, { _id: false }),
     },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    // Mascota compartida: el resto de la familia (pareja, hijos, quien la saca
+    // cuando no estás). Entran por invitación del dueño (`PetInvite`) y la
+    // cuidan igual que él —ficha, salud, cuidado diario, modo perdido, chapa—,
+    // pero no la despiden en el mural ni gestionan quién más entra: eso es del
+    // dueño (`ownerId`). Ver utils/animalAccess.
+    members: {
+      type: [
+        new Schema(
+          {
+            userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+            addedAt: { type: Date, default: Date.now },
+            invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
+
+// «Mis mascotas» de quien está invitado: busca por miembro, no por dueño.
+animalSchema.index({ 'members.userId': 1 });
 
 // Buscar "animales perdidos cerca de mí" es una consulta por zona, no por animal.
 animalSchema.index({ 'lost.isLost': 1, city: 1 });

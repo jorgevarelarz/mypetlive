@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Adoption } from '../models/adoption.model';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
+import { PetInvite } from '../models/petInvite.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { Questionnaire } from '../models/questionnaire.model';
@@ -347,7 +348,10 @@ export async function applyStatusChange(
     animal.createdByRole = 'tenant';
     animal.isPersonalPet = true;
     animal.status = 'adoptado';
+    // Familia nueva: nadie de antes conserva acceso a la ficha.
+    animal.members = [] as any;
     await animal.save();
+    await PetInvite.updateMany({ animalId: animal._id, status: 'pending' }, { $set: { status: 'revoked', respondedAt: new Date() } });
     await logAnimalEvent({
       animalId: String(animal._id), code: animal.code, type: 'adopted',
       actorId: userId,
@@ -590,7 +594,10 @@ export async function undoApproval(req: Request, res: Response) {
   animal.createdByRole = animal.cession?.microchip ? 'particular' : 'protectora';
   animal.isPersonalPet = false;
   animal.status = 'reservado';
+  // Con quien el adoptante la compartía tampoco la sigue viendo.
+  animal.members = [] as any;
   await animal.save();
+  await PetInvite.updateMany({ animalId: animal._id, status: 'pending' }, { $set: { status: 'revoked', respondedAt: new Date() } });
 
   // 2. Linaje: evento de vuelta, sin tocar el 'adopted' anterior.
   await logAnimalEvent({

@@ -1,4 +1,5 @@
 import { Animal } from '../models/animal.model';
+import { familyRecipientIds } from '../utils/animalAccess';
 import { CareLog } from '../models/careLog.model';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
@@ -66,12 +67,8 @@ function describeLeft(kind: Kind, forecast: { usesLeft: number | null; daysLeft:
   return `para ${uses}, unos ${forecast.daysLeft === 1 ? '1 día' : `${forecast.daysLeft} días`}`;
 }
 
-/** A quién le importa: el dueño de la mascota, o la protectora si aún está a su cargo. */
-function recipientIdOf(animal: any): string | undefined {
-  if (animal.ownerId) return String(animal.ownerId);
-  if (animal.shelter) return String(animal.shelter);
-  return undefined;
-}
+// A quién le importa: el dueño de la mascota (o la protectora si aún está a su
+// cargo) y las personas con las que la comparte. Ver `familyRecipientIds`.
 
 /**
  * Bloque "dónde comprarlo". Los enlaces pasan por el redirector medido para
@@ -126,8 +123,8 @@ export async function sendSupplyAlerts(): Promise<number> {
   let sent = 0;
 
   for (const animal of animals as any[]) {
-    const recipientId = recipientIdOf(animal);
-    if (!recipientId) continue;
+    const recipientIds = familyRecipientIds(animal);
+    if (!recipientIds.length) continue;
 
     for (const kind of ['food', 'litter'] as Kind[]) {
       const list = kind === 'food' ? animal.carePantry?.foods : animal.carePantry?.litters;
@@ -139,7 +136,7 @@ export async function sendSupplyAlerts(): Promise<number> {
         if (!isLow(forecast)) continue;
 
         try {
-          const user = await User.findById(recipientId).select('email name').lean();
+          const users: any[] = await User.find({ _id: { $in: recipientIds } }).select('email name').lean();
           const left = describeLeft(kind, forecast);
           const quantity = formatBase(supply.remaining, (supply.unit as SupplyUnit) || 'g');
           const subject =
@@ -151,7 +148,8 @@ export async function sendSupplyAlerts(): Promise<number> {
             `Te avisamos con tiempo para que no te pille en el último momento.`;
           const shop = await whereToBuyBlock(supply.name, String(animal._id));
 
-          if (user?.email) {
+          for (const user of users) {
+            if (!user.email) continue;
             await sendEmail(
               user.email,
               subject,
@@ -166,11 +164,13 @@ export async function sendSupplyAlerts(): Promise<number> {
             );
           }
 
-          await sendPushToUser(recipientId, {
-            title: subject,
-            body: `Queda ${quantity} de ${supply.name} (${left}).`,
-            url: '/pet',
-          });
+          for (const recipientId of recipientIds) {
+            await sendPushToUser(recipientId, {
+              title: subject,
+              body: `Queda ${quantity} de ${supply.name} (${left}).`,
+              url: '/pet',
+            });
+          }
 
           supply.lowNotifiedAt = new Date();
           sent += 1;

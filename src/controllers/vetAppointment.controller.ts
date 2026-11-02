@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { VetAppointment } from '../models/vetAppointment.model';
 import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
+import { isFamilyMember } from '../utils/animalAccess';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { sendPushToUser } from '../utils/push';
@@ -184,10 +185,11 @@ export async function createAppointment(req: Request, res: Response) {
   let code: string | undefined;
   if (animalCode) {
     const normalized = String(animalCode).trim().toUpperCase();
-    const animal: any = await Animal.findOne({ code: normalized }).select('_id code ownerId shelter').lean();
+    const animal: any = await Animal.findOne({ code: normalized }).select('_id code ownerId shelter members isPersonalPet status').lean();
     if (!animal) return res.status(404).json({ error: 'animal_not_found' });
     const uid = String(userId);
-    const isOwner = String(animal.ownerId || '') === uid || String(animal.shelter || '') === uid;
+    // También quien comparte la mascota: la lleva al veterinario quien puede.
+    const isOwner = String(animal.ownerId || '') === uid || String(animal.shelter || '') === uid || isFamilyMember({ _id: uid }, animal);
     if (!isOwner && role !== 'admin') return res.status(403).json({ error: 'animal_not_owned' });
     animalId = String(animal._id);
     code = animal.code;

@@ -33,6 +33,8 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import CareRemindersCard from '../../components/pet/CareRemindersCard';
+import PetFamilyCard from '../../components/pet/PetFamilyCard';
+import PetInvitesBanner from '../../components/pet/PetInvitesBanner';
 import RehomeEntry from '../../components/rehome/RehomeEntry';
 import MemorialFamily from '../../components/memorial/MemorialFamily';
 import FarewellSheet from '../../components/memorial/FarewellSheet';
@@ -176,6 +178,9 @@ function backendErrorMessage(error: any, fallback: string) {
 type PetListEntry = {
   type: 'personal' | 'adopted';
   adoptionId?: string;
+  /** 'member': otra persona la comparte conmigo (`sharedBy`, su nombre de pila). */
+  role?: 'owner' | 'member';
+  sharedBy?: string;
   animal: any;
 };
 
@@ -668,6 +673,7 @@ export default function PetPage() {
   if (!featuredAnimal) {
     return (
       <div className="p-6 grid gap-3" style={{ color: '#3F4A3C' }}>
+        <PetInvitesBanner onAccepted={id => setSelectedPetId(id)} />
         <p className="text-lg font-semibold">Todavía no tienes ninguna mascota aquí</p>
         <p className="text-sm" style={{ color: '#7A8273' }}>
           Registra la mascota con la que ya vives o busca un animal en adopción.
@@ -703,7 +709,10 @@ export default function PetPage() {
   // Solo se edita lo propio: el respaldo (`fallbackQuery`) puede estar pintando
   // el animal destacado de una protectora, que no es de esta familia.
   const canEdit = Boolean(currentPetEntry);
+  // Compartida conmigo: la llevo igual, pero despedirla es cosa de su dueño.
+  const isSharedWithMe = currentPetEntry?.role === 'member';
   const inMemory = Boolean(featuredAnimal.memorial?.active);
+  const petIdActual = String(featuredAnimal._id || featuredAnimal.id || '');
 
   return (
     <div style={{ color: M.tinta, fontFamily: M.letra, letterSpacing: 0, display: 'grid', gap: 10, padding: '11px 0 16px', maxWidth: 480, margin: '-24px auto 0', boxSizing: 'border-box' }}>
@@ -727,8 +736,16 @@ export default function PetPage() {
         <RehomeEntry />
       </div>
 
+      <PetInvitesBanner onAccepted={id => setSelectedPetId(id)} />
+
+      {isSharedWithMe && currentPetEntry?.sharedBy && (
+        <p style={{ margin: '-2px 4px 0', fontSize: 12.5, color: M.gris }}>
+          {currentPetEntry.sharedBy} comparte a {featuredAnimal.name} contigo.
+        </p>
+      )}
+
       {inMemory && canEdit ? (
-        <MemorialFamily animal={featuredAnimal} onChanged={() => { refetchPets(); invalidateAnimalCaches(); }} />
+        <MemorialFamily animal={featuredAnimal} canUndo={!isSharedWithMe} onChanged={() => { refetchPets(); invalidateAnimalCaches(); }} />
       ) : (
       <>
       {/* Ficha tipo carnet: la foto con sus datos encima y debajo cuatro
@@ -876,6 +893,14 @@ export default function PetPage() {
           animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
           species={featuredAnimal.species}
           petName={featuredAnimal.name}
+        />
+      )}
+
+      {canEdit && petIdActual && (
+        <PetFamilyCard
+          animalId={petIdActual}
+          petName={featuredAnimal.name}
+          onLeft={() => { setSelectedPetId(null); refetchPets(); }}
         />
       )}
 
@@ -1122,7 +1147,7 @@ export default function PetPage() {
       )}
 
       {/* Discreto y al final: nadie debería encontrárselo buscando otra cosa. */}
-      {canEdit && (
+      {canEdit && !isSharedWithMe && (
         <button
           type="button"
           onClick={() => setFarewellOpen(true)}

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { Types } from 'mongoose';
 import { User } from '../models/user.model';
 import { Animal } from '../models/animal.model';
+import { PetInvite } from '../models/petInvite.model';
 import { Adoption } from '../models/adoption.model';
 import { VetAppointment } from '../models/vetAppointment.model';
 import { Order } from '../models/order.model';
@@ -112,9 +113,29 @@ export async function deleteAccount(userId: string): Promise<void> {
     // no sea una adopción cerrada (la protectora conserva el expediente de esa).
     await Adoption.updateMany({ adopterId: userId, status: { $ne: 'aprobada' } }, { $set: { answers: [] } }, opts);
 
-    // 2) Mascotas propias: se archivan sin dueño. No se borran porque su código,
-    //    pasaporte e historial pueden venir de una protectora.
+    // 2) Mascotas propias. Si las compartía con alguien, pasan a la primera
+    //    persona que entró: la mascota sigue en esa casa y no se queda sin
+    //    nadie que la lleve. Si no, se archivan sin dueño. No se borran porque
+    //    su código, pasaporte e historial pueden venir de una protectora.
+    const shared = await Animal.find({ ownerId: id, 'members.0': { $exists: true } }, null, opts);
+    for (const animal of shared as any[]) {
+      const [heir, ...rest] = animal.members;
+      // En una mascota registrada por la familia `shelter` también es el dueño.
+      if (String(animal.shelter || '') === userId) animal.shelter = heir.userId;
+      animal.ownerId = heir.userId;
+      animal.members = rest;
+      await animal.save(opts);
+    }
     await Animal.updateMany({ ownerId: id }, { $set: { ownerId: null, status: 'archivado' } }, opts);
+    // Las que otras personas compartían con ella dejan de incluirla, y sus
+    // invitaciones (enviadas o recibidas) quedan anuladas.
+    await Animal.updateMany({ 'members.userId': id }, { $pull: { members: { userId: id } } }, opts);
+    const email = (await User.findById(id).select('email').session(session ?? null).lean() as any)?.email;
+    await PetInvite.updateMany(
+      { status: 'pending', $or: [{ invitedBy: id }, ...(email ? [{ email: String(email).toLowerCase() }] : [])] },
+      { $set: { status: 'revoked', respondedAt: new Date() } },
+      opts,
+    );
     if (PROFESSIONAL_ROLES.includes(user.role)) {
       await Animal.updateMany({ shelter: id, status: { $nin: ['adoptado', 'archivado'] } }, { $set: { status: 'archivado' } }, opts);
       await Product.updateMany({ sellerId: id }, { $set: { active: false } }, opts);

@@ -636,6 +636,37 @@ desplegué sin correr la suite del frontend.
 
 Deploy: `./scripts/deploy.sh all`. Copia previa: `httpdocs.bak.cupones-*.tgz`.
 
+## 5.29 Mascota compartida (2 nov 2026) — **sin desplegar**
+
+Antes cada mascota tenía un solo dueño (`ownerId`) y nadie más podía verla. Ahora el dueño
+invita por correo a otras personas (pareja, hijos, quien la saca) y la llevan igual que él.
+
+- **Modelo:** `Animal.members[] { userId, addedAt, invitedBy }` (índice `members.userId`) y
+  `PetInvite` (`models/petInvite.model.ts`): token de un solo uso guardado como sha256,
+  caduca a los 14 días, estados pending/accepted/declined/revoked.
+- **Permisos (`utils/animalAccess.ts`):** `canManageAnimal` deja pasar a los miembros en
+  mascotas de familia, así que ficha, salud, cuidado diario, modo perdido, avistamientos,
+  chapa y mural funcionan para los dos sin tocar cada controlador. `isPrimaryOwner` se queda
+  para lo que es solo del dueño: invitar, quitar gente, despedirla en el mural y deshacerlo.
+- **Avisos a todos (`familyRecipientIds`):** avistamientos (correo + push), recordatorios de
+  salud, despensa, cuidado diario y mensajes del mural.
+- **API:** `GET /api/animals/:id/family`, `POST …/family/invites` (máx. 5 personas contando
+  pendientes, límite de 20 invitaciones/hora por persona), `DELETE …/family/invites/:id`,
+  `DELETE …/family/members/:userId|me`; `GET /api/pet-invites/token/:token` (vista previa
+  sin sesión), `GET /api/pet-invites/mine`, `POST /api/pet-invites/accept|decline`
+  (`{token}` desde el correo, o `{inviteId}` si la invitación fue a su correo).
+- **Reglas:** solo cuentas de familia (tenant) pueden entrar; el pasaporte y el catálogo no
+  dicen con quién se comparte (`stripInternalFields` quita `members`); si el dueño borra su
+  cuenta, la mascota pasa a la primera persona que la compartía en vez de archivarse; una
+  adopción aprobada o deshecha vacía `members` y anula invitaciones.
+- **Web:** tarjeta «Quién cuida de X» en Mi mascota (`components/pet/PetFamilyCard.tsx`),
+  aviso de invitaciones pendientes arriba (`PetInvitesBanner.tsx`), página `/compartir/:token`
+  (`pages/pet/AcceptPetInvite.tsx`). `/api/animals/mine` devuelve `role: 'owner'|'member'` y
+  `sharedBy`. El enlace del correo abre la web (no hay universal links); en la app la
+  invitación sale en Mi mascota.
+- **Tests:** `src/__tests__/animal.sharing.test.ts` (23).
+- **App iOS:** va en la 1.3.
+
 ## 5.28 El ojo para ver la contraseña (2 sep 2026)
 
 Petición de Jorge. Son **cuatro pantallas** con campo de contraseña —el modal de acceso, `/login`,
