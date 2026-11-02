@@ -13,6 +13,10 @@ import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
 import PublicHeader from '../../components/PublicHeader';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import {
+  CalcoFilAdulto, CalcoFilBotonLupa, CalcoFilCachorro, CalcoFilCiudad, CalcoFilConejo, CalcoFilConvivencia, CalcoFilEdad, CalcoFilEspecie,
+  CalcoFilGato, CalcoFilHembra, CalcoFilJoven, CalcoFilLupa, CalcoFilMacho, CalcoFilPerro, CalcoFilReptil, CalcoFilSenior, CalcoFilSexo, CalcoFilTamano,
+} from '../../components/icons/calcados';
 
 // Las mismas cuatro del filtro de arriba. Valores canónicos (el servidor casa
 // también las variantes en español, ver utils/species.ts).
@@ -40,6 +44,46 @@ const ageOptions = [
   { label: 'Adulto', value: 'adult' },
   { label: 'Senior', value: 'senior' },
 ];
+
+// --- Piezas de los filtros (maqueta del 2 nov 2026) ---------------------------
+const ICONO_ESPECIE: Record<string, React.ComponentType<{ size?: number }>> = { cat: CalcoFilGato, dog: CalcoFilPerro, reptile: CalcoFilReptil, other: CalcoFilConejo };
+const ICONO_EDAD: Record<string, React.ComponentType<{ size?: number }>> = { puppy: CalcoFilCachorro, young: CalcoFilJoven, adult: CalcoFilAdulto, senior: CalcoFilSenior };
+
+function FiltroSeccion({ icono, titulo, primero, children }: { icono: React.ReactNode; titulo: string; primero?: boolean; children: React.ReactNode }) {
+  return (
+    <div style={{ borderTop: primero ? 0 : '1px solid #ECE8E0', padding: primero ? '6px 0 18px' : '18px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 14, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: '#4A524D' }}>
+        {icono}{titulo}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChipFiltro({ icono, active, onClick, children }: { icono: React.ReactNode; active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 9, height: 46, padding: '0 18px 0 14px', borderRadius: 999, cursor: 'pointer',
+        border: active ? '1.5px solid #0E5F5B' : '1px solid #E2DED5', background: active ? '#E4F2DE' : '#FFFFFF',
+        color: '#1E2A27', font: 'inherit', fontSize: 16, fontWeight: active ? 800 : 500,
+      }}>
+      {icono}{children}
+    </button>
+  );
+}
+
+function Casilla({ activa, onClick, children }: { activa: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={activa}
+      style={{ border: 0, background: 'none', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 14, font: 'inherit', fontSize: 16, cursor: 'pointer', color: '#1E2A27', textAlign: 'left' }}>
+      <span style={{ width: 26, height: 26, borderRadius: 7, boxSizing: 'border-box', border: activa ? 0 : '1.5px solid #D8D3C6', background: activa ? '#0E5F5B' : '#FFFFFF', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        {activa && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+      </span>
+      {children}
+    </button>
+  );
+}
 
 function Chip({
   active,
@@ -253,7 +297,7 @@ export default function AnimalsPublicList() {
           .catalog-filter-trigger{display:flex!important}
           .catalog-filter-close{display:grid!important}
           .catalog-filter-overlay{display:block!important}
-          .catalog-aside{display:none;position:fixed!important;inset:0 0 0 auto!important;z-index:51!important;width:min(88vw,360px)!important;height:100dvh!important;overflow-y:auto!important;border-radius:0!important;padding:22px!important}
+          .catalog-aside{display:none;position:fixed!important;inset:auto 0 0 0!important;top:auto!important;z-index:51!important;width:100%!important;box-sizing:border-box!important;max-height:92dvh!important;overflow-y:auto!important;border-radius:26px 26px 0 0!important;padding:18px 20px calc(18px + env(safe-area-inset-bottom))!important;box-shadow:0 -12px 40px -20px rgba(0,0,0,.35)}
           .catalog-aside.is-open{display:block!important}
         }
         @media (max-width: 640px){.catalog-results{grid-template-columns:minmax(0,1fr)!important;width:calc(100vw - 40px)!important;max-width:calc(100vw - 40px)!important;gap:14px}.catalog-hero{padding:22px 20px 16px!important}.catalog-search{align-items:stretch!important;flex-wrap:wrap}.catalog-search > label{flex-basis:100%!important}.catalog-grid{padding:0 20px 92px!important}.catalog-results .catalog-card{border-radius:16px!important}.catalog-results .catalog-card > a > div:first-child{height:190px!important}.catalog-results .catalog-card > a > div:last-child{padding:14px 16px 17px!important}}
@@ -413,103 +457,100 @@ export default function AnimalsPublicList() {
 
         <div className="catalog-grid" style={{ padding: '0 32px 56px' }}>
           {filtersOpen && <button className="catalog-filter-overlay" type="button" aria-label="Cerrar filtros" onClick={() => setFiltersOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 50, border: 0, background: 'rgba(31,55,40,.42)' }} />}
-          <aside className={`catalog-aside${filtersOpen ? ' is-open' : ''}`} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 24, position: 'sticky', top: 90, alignSelf: 'start' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-              <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, fontWeight: 800 }}>Filtros</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Filtros calcados de la maqueta del 2 nov 2026: en el móvil, hoja que sube
+              desde abajo; en el ordenador, columna. Tamaños normales de iPhone. */}
+          <aside className={`catalog-aside${filtersOpen ? ' is-open' : ''}`} style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 22, padding: '20px 22px 22px', position: 'sticky', top: 90, alignSelf: 'start' }}>
+            <span className="catalog-filter-close" aria-hidden style={{ width: 44, height: 5, borderRadius: 99, background: '#D9D6CF', margin: '-6px auto 12px' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 26, fontWeight: 800, color: '#17352D' }}>Filtros</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {activeFilters.length > 0 && (
-                  <button type="button" onClick={clearFilters} style={{ border: 0, background: 'none', color: MPL.coral, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                  <button type="button" onClick={clearFilters} style={{ border: 0, background: 'none', color: MPL.coral, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
                     Limpiar
                   </button>
                 )}
-                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ padding: 0, width: 36, height: 36, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 11, color: MPL.muted }}>
-                  <X size={17} />
+                <button className="catalog-filter-close" type="button" onClick={() => setFiltersOpen(false)} aria-label="Cerrar filtros" style={{ padding: 0, width: 42, height: 42, placeItems: 'center', border: `1px solid ${MPL.border}`, background: '#fff', borderRadius: 13, color: '#17352D' }}>
+                  <X size={20} />
                 </button>
               </div>
             </div>
 
-            <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Especie</div>
+            <FiltroSeccion icono={<CalcoFilEspecie size={20} />} titulo="Especie" primero>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {speciesOptions.map(option => (
-                  <Chip key={option.value} active={normalizedSpecies === option.value} onClick={() => setFilter('species', normalizedSpecies === option.value ? '' : option.value)}>
-                    {option.label}
-                  </Chip>
-                ))}
+                {speciesOptions.map(option => {
+                  const Icono = ICONO_ESPECIE[option.value];
+                  return (
+                    <ChipFiltro key={option.value} icono={Icono ? <Icono size={22} /> : null} active={normalizedSpecies === option.value} onClick={() => setFilter('species', normalizedSpecies === option.value ? '' : option.value)}>
+                      {option.label}
+                    </ChipFiltro>
+                  );
+                })}
               </div>
-            </div>
+            </FiltroSeccion>
 
-            <div style={{ marginBottom: 22, borderTop: `1px solid ${MPL.bg}`, paddingTop: 20 }}>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Tamaño</div>
-              <div style={{ display: 'grid', gap: 10 }}>
+            <FiltroSeccion icono={<CalcoFilTamano size={20} />} titulo="Tamaño">
+              <div style={{ display: 'grid', gap: 4 }}>
                 {sizeOptions.map(option => (
-                  <button key={option.value} type="button" onClick={() => setFilter('size', size === option.value ? '' : option.value)} style={{ border: 0, background: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 10, font: 'inherit', fontSize: 14, cursor: 'pointer', color: MPL.ink }}>
-                    <span style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${size === option.value ? MPL.teal : '#D8D3C6'}`, background: size === option.value ? MPL.teal : '#fff', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
-                      {size === option.value ? '✓' : ''}
-                    </span>
-                    {option.label}
-                  </button>
+                  <Casilla key={option.value} activa={size === option.value} onClick={() => setFilter('size', size === option.value ? '' : option.value)}>{option.label}</Casilla>
                 ))}
               </div>
-            </div>
+            </FiltroSeccion>
 
-            <div style={{ borderTop: `1px solid ${MPL.bg}`, paddingTop: 20, marginBottom: 22 }}>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Sexo</div>
-              <div style={{ display: 'flex', gap: 8 }}>
+            <FiltroSeccion icono={<CalcoFilSexo size={20} />} titulo="Sexo">
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {sexOptions.map(option => (
-                  <Chip key={option.value} active={sex === option.value} onClick={() => setFilter('sex', sex === option.value ? '' : option.value)}>
+                  <ChipFiltro key={option.value} icono={option.value === 'female' ? <CalcoFilHembra size={21} /> : <CalcoFilMacho size={19} />} active={sex === option.value} onClick={() => setFilter('sex', sex === option.value ? '' : option.value)}>
                     {option.label}
-                  </Chip>
+                  </ChipFiltro>
                 ))}
               </div>
-            </div>
+            </FiltroSeccion>
 
-            <div style={{ borderTop: `1px solid ${MPL.bg}`, paddingTop: 20, marginBottom: 22 }}>
-              <label style={{ display: 'grid', gap: 8, fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800 }}>
-                Ciudad
+            <FiltroSeccion icono={<CalcoFilCiudad size={20} />} titulo="Ciudad">
+              <label style={{ position: 'relative', display: 'block' }}>
+                <CalcoFilLupa size={19} style={{ position: 'absolute', left: 14, top: 13, pointerEvents: 'none' }} />
                 <input
                   type="search"
                   defaultValue={city || ''}
                   placeholder="Madrid, Valencia..."
+                  aria-label="Ciudad"
                   onKeyDown={event => {
                     if (event.key === 'Enter') setFilter('city', event.currentTarget.value.trim());
                   }}
-                  style={{ width: '100%', height: 42, border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '0 12px', color: MPL.ink, font: 'inherit', textTransform: 'none', fontWeight: 600, outline: 0 }}
+                  onBlur={event => { if (event.currentTarget.value.trim() !== (city || '')) setFilter('city', event.currentTarget.value.trim()); }}
+                  style={{ width: '100%', boxSizing: 'border-box', height: 46, border: `1px solid ${MPL.border}`, borderRadius: 14, padding: '0 14px 0 44px', color: MPL.ink, font: 'inherit', fontSize: 16, outline: 0 }}
                 />
               </label>
-            </div>
+            </FiltroSeccion>
 
-            <div style={{ borderTop: `1px solid ${MPL.bg}`, paddingTop: 20, marginBottom: 22 }}>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Edad</div>
+            <FiltroSeccion icono={<CalcoFilEdad size={20} />} titulo="Edad">
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {ageOptions.map(option => (
-                  <Chip key={option.value} active={ageGroup === option.value} onClick={() => setFilter('ageGroup', ageGroup === option.value ? '' : option.value)}>
-                    {option.label}
-                  </Chip>
-                ))}
+                {ageOptions.map(option => {
+                  const Icono = ICONO_EDAD[option.value];
+                  return (
+                    <ChipFiltro key={option.value} icono={Icono ? <Icono size={20} /> : null} active={ageGroup === option.value} onClick={() => setFilter('ageGroup', ageGroup === option.value ? '' : option.value)}>
+                      {option.label}
+                    </ChipFiltro>
+                  );
+                })}
               </div>
-            </div>
+            </FiltroSeccion>
 
-            <div style={{ borderTop: `1px solid ${MPL.bg}`, paddingTop: 20 }}>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: MPL.faint, fontWeight: 800, marginBottom: 11 }}>Convivencia</div>
-              <div style={{ display: 'grid', gap: 10 }}>
+            <FiltroSeccion icono={<CalcoFilConvivencia size={20} />} titulo="Convivencia">
+              <div style={{ display: 'grid', gap: 4 }}>
                 {[
                   ['goodWithChildren', 'Con niños', goodWithChildren],
                   ['goodWithDogs', 'Con perros', goodWithDogs],
                   ['goodWithCats', 'Con gatos', goodWithCats],
                 ].map(([key, label, active]) => (
-                  <button key={String(key)} type="button" onClick={() => setFilter(String(key), active ? '' : 'true')} style={{ border: 0, background: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 10, font: 'inherit', fontSize: 14, cursor: 'pointer', color: MPL.ink }}>
-                    <span style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${active ? MPL.teal : '#D8D3C6'}`, background: active ? MPL.teal : '#fff', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12 }}>
-                      {active ? '✓' : ''}
-                    </span>
-                    {String(label)}
-                  </button>
+                  <Casilla key={String(key)} activa={Boolean(active)} onClick={() => setFilter(String(key), active ? '' : 'true')}>{String(label)}</Casilla>
                 ))}
               </div>
-            </div>
+            </FiltroSeccion>
 
-            <button type="button" onClick={() => setFiltersOpen(false)} className="catalog-filter-trigger" style={{ width: '100%', marginTop: 24, alignItems: 'center', justifyContent: 'center', border: 0, borderRadius: 13, padding: '13px 16px', background: MPL.teal, color: '#fff', font: 'inherit', fontWeight: 800 }}>
-              Ver {total} compañeros
+            <button type="button" onClick={() => setFiltersOpen(false)} className="catalog-filter-trigger" style={{ width: '100%', height: 54, marginTop: 22, alignItems: 'center', justifyContent: 'center', gap: 12, border: 0, borderRadius: 16, background: '#0E5F5B', color: '#fff', font: 'inherit', fontSize: 17.5, fontWeight: 800 }}>
+              <CalcoFilBotonLupa size={22} color="#FFFFFF" />
+              Ver {total} {total === 1 ? 'compañero' : 'compañeros'}
             </button>
           </aside>
 

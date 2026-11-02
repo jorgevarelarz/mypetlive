@@ -7,7 +7,8 @@ import { donatePatitas, getMyPatitas, getMyPatitasImpact, listProtectoras } from
 import PatitasHistory from '../../components/patitas/PatitasHistory';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
 import CountUp from '../../components/CountUp';
-import { MPL, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
+import { M } from '../../components/pet/maqueta';
+import { CalcoPanelPatitasNaranja, CalcoPatAutomatica, CalcoPatCorazon, CalcoPatEscudo, CalcoPatHistorial, CalcoPatHuella, CalcoPatRegalo } from '../../components/icons/calcados';
 
 /**
  * Pantalla de Patitas (se llega desde el contador de la cabecera): el saldo con
@@ -15,8 +16,21 @@ import { MPL, MPL_FONT_DISPLAY, PawMark } from '../../styles/mypetlive';
  * automática o a mano, qué se ha hecho con ellas y el historial.
  */
 
-const card: React.CSSProperties = { background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 18 };
-const h2: React.CSSProperties = { fontFamily: MPL_FONT_DISPLAY, fontSize: 19, fontWeight: 800, margin: 0 };
+const TARJETA: React.CSSProperties = { background: '#FEFEFE', borderRadius: 22, border: '1px solid #EEE9E1', boxShadow: '0 1px 2px rgba(60,45,30,.04), 0 8px 20px -16px rgba(60,45,30,.3)', padding: '16px 16px 18px' };
+const TITULO: React.CSSProperties = { margin: 0, fontFamily: M.titulos, fontSize: 20, lineHeight: '25px', fontWeight: 800, color: '#1E2A27' };
+const CUADRO: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 14, flexShrink: 0 };
+
+function Cabecera({ icono, fondo, titulo, subtitulo }: { icono: React.ReactNode; fondo: string; titulo: string; subtitulo: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <span style={{ ...CUADRO, width: 54, height: 54, background: fondo }}>{icono}</span>
+      <span style={{ minWidth: 0 }}>
+        <h2 style={TITULO}>{titulo}</h2>
+        <span style={{ display: 'block', marginTop: 2, fontSize: 14.5, lineHeight: '19px', color: '#5E6460' }}>{subtitulo}</span>
+      </span>
+    </div>
+  );
+}
 
 const SOURCE_LABEL: Record<string, string> = {
   coupon: 'Cupones', visit: 'Visitas a tiendas', purchase: 'Compras', manual: 'Regalos', otros: 'Otros',
@@ -76,38 +90,46 @@ export default function PatitasPage() {
 
   const impact = impactQ.data;
 
+  const [verEjemplos, setVerEjemplos] = React.useState(false);
+  const historial = me?.history || [];
+
+  // Maqueta del 2 nov 2026, a tamaño normal de iPhone (títulos 19-20, textos 14-15).
   return (
-    <div style={{ display: 'grid', gap: 14, maxWidth: 640, margin: '0 auto', color: MPL.ink }}>
+    <div style={{ display: 'grid', gap: 14, maxWidth: 560, margin: '0 auto', color: '#1E2A27', fontFamily: M.letra }}>
       {/* El saldo: sube desde 0 cada vez que se entra. `key` lo reinicia si cambia. */}
-      <section style={{ ...card, background: MPL.teal, border: 'none', color: '#fff', padding: '22px 20px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>Tus Patitas</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 2px' }}>
-          <span style={{ color: MPL.gold }}><PawMark size={34} /></span>
-          <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 52, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-            {me ? <CountUp key={available} to={available} durationMs={1400} /> : '…'}
-          </span>
+      <section style={{ position: 'relative', overflow: 'hidden', borderRadius: 24, background: '#14726E', color: '#fff', padding: '20px 20px 18px', minHeight: 132 }}>
+        <img src="/ilustraciones/patitas-cabecera.png" alt="" aria-hidden style={{ position: 'absolute', right: 0, bottom: 0, height: '100%', maxHeight: 150, width: 'auto' }} />
+        <div style={{ position: 'relative', maxWidth: '62%' }}>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>Tus Patitas</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 6px' }}>
+            <CalcoPanelPatitasNaranja size={30} />
+            <span style={{ fontFamily: M.titulos, fontSize: 52, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              {me ? <CountUp key={available} to={available} durationMs={1400} /> : '…'}
+            </span>
+          </div>
+          <div style={{ fontSize: 14.5, lineHeight: '20px', opacity: 0.95 }}>
+            = {eur(available * (me?.patitaValueEur ?? 0.1))} para protectoras · {me?.totalGenerated ?? 0} generadas en total
+          </div>
         </div>
-        <div style={{ fontSize: 14, opacity: 0.9 }}>
-          ≈ {eur(available * (me?.patitaValueEur ?? 0.1))} para protectoras · {me?.totalGenerated ?? 0} generadas en total
-        </div>
-        <span style={{ position: 'absolute', right: -18, bottom: -24, color: 'rgba(255,255,255,.08)' }} aria-hidden><PawMark size={150} /></span>
       </section>
 
       {/* A dónde van. */}
-      <section style={{ ...card, display: 'grid', gap: 12 }}>
-        <h2 style={h2}>A qué protectora van</h2>
+      <section style={TARJETA}>
+        <Cabecera icono={<CalcoPatEscudo size={26} />} fondo="#E3F2E6" titulo="A qué protectora van" subtitulo="Elige la protectora que recibirá tus donaciones." />
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', border: `1.5px solid ${MPL.border}`, borderRadius: 14, background: MPL.bg, font: 'inherit', cursor: 'pointer', textAlign: 'left', color: MPL.ink }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', height: 52, marginTop: 14, padding: '0 16px', border: '1px solid #E2DED5', borderRadius: 14, background: '#fff', font: 'inherit', cursor: 'pointer', textAlign: 'left', color: '#1E2A27' }}
         >
-          <span style={{ fontWeight: 800 }}>{target?.name || 'Elige una protectora'}</span>
-          <span style={{ fontSize: 13, color: MPL.teal, fontWeight: 800 }}>{target ? 'Cambiar' : 'Elegir'}</span>
+          <span style={{ fontSize: 16.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{target?.name || 'Elige una protectora'}</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2A27" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
         </button>
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, cursor: auto.shelterId ? 'pointer' : 'default', opacity: auto.shelterId ? 1 : 0.55 }}>
-          <span>
-            <span style={{ display: 'block', fontWeight: 800 }}>Donación automática</span>
-            <span style={{ display: 'block', fontSize: 13, color: MPL.muted }}>Cada Patita que ganes va directa a {target?.name || 'tu protectora'}.</span>
+        <div style={{ height: 1, background: '#ECE8E0', margin: '16px 0 14px' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 14, cursor: auto.shelterId ? 'pointer' : 'default', opacity: auto.shelterId ? 1 : 0.55 }}>
+          <span style={{ ...CUADRO, width: 44, height: 44, background: '#E3F2E6' }}><CalcoPatAutomatica size={22} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 16, fontWeight: 800 }}>Donación automática</span>
+            <span style={{ display: 'block', fontSize: 14, lineHeight: '19px', color: '#5E6460' }}>Cada Patita que ganes va directa a {target?.name || 'tu protectora'}.</span>
           </span>
           <Switch
             checked={!!auto.enabled}
@@ -118,74 +140,112 @@ export default function PatitasPage() {
       </section>
 
       {/* A mano. */}
-      <section style={{ ...card, display: 'grid', gap: 12 }}>
-        <h2 style={h2}>Donar a mano</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <section style={TARJETA}>
+        <Cabecera icono={<CalcoPatRegalo size={26} />} fondo="#FBE7DC" titulo="Donar a mano" subtitulo="Elige cuántas Patitas donar ahora." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 7, marginTop: 14 }}>
+          {[10, 25, 50, 100].map(n => {
+            const activo = amount === String(n);
+            return (
+              <button key={n} type="button" onClick={() => setAmount(activo ? '' : String(n))} aria-pressed={activo} disabled={available < n}
+                style={{
+                  height: 44, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: 0, cursor: available < n ? 'default' : 'pointer',
+                  border: activo ? '1.5px solid #0E5F5B' : '1px solid #E2DED5', background: activo ? '#E4F2DE' : '#fff',
+                  color: '#1E2A27', font: 'inherit', fontSize: 15.5, fontWeight: 800, opacity: available < n ? 0.45 : 1,
+                }}>
+                <CalcoPatHuella size={14} />{n}
+              </button>
+            );
+          })}
           <input
             type="number"
             inputMode="numeric"
             min={1}
             max={available}
-            placeholder="Cuántas"
-            value={amount}
+            placeholder="Otras"
+            aria-label="Otra cantidad"
+            value={[10, 25, 50, 100].map(String).includes(amount) ? '' : amount}
             onChange={e => setAmount(e.target.value)}
-            style={{ flex: 1, minWidth: 0, border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '11px 13px', font: 'inherit', background: '#fff' }}
+            style={{ minWidth: 0, height: 44, boxSizing: 'border-box', border: '1px solid #E2DED5', borderRadius: 12, padding: '0 10px', font: 'inherit', fontSize: 15.5, background: '#fff', textAlign: 'center' }}
           />
-          <button type="button" onClick={() => setAmount(String(available))} disabled={!available} style={{ padding: '0 14px', border: `1.5px solid ${MPL.border}`, borderRadius: 12, background: '#fff', font: 'inherit', fontWeight: 800, color: MPL.ink, cursor: 'pointer' }}>
-            Todas
-          </button>
         </div>
         <button
           type="button"
           onClick={() => donate(Number(amount))}
           disabled={donateMut.isPending || !available || !(Number(amount) > 0)}
-          style={{ padding: '13px 16px', border: 0, borderRadius: 14, background: MPL.coral, color: '#fff', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: !available || !(Number(amount) > 0) ? 0.5 : 1 }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%', height: 54, marginTop: 14, border: 0, borderRadius: 14, background: '#C0491B', color: '#fff', font: 'inherit', fontSize: 17, fontWeight: 800, cursor: 'pointer', opacity: !available || !(Number(amount) > 0) ? 0.55 : 1 }}
         >
+          <CalcoPatCorazon size={22} color="#FFFFFF" />
           {donateMut.isPending ? 'Donando…' : `Donar${amount ? ` ${amount}` : ''} a ${target?.name || 'una protectora'}`}
         </button>
-        {!available && <p style={{ margin: 0, fontSize: 13, color: MPL.muted }}>Ganas Patitas al usar cupones y comprar en tiendas asociadas.</p>}
+        <p style={{ margin: '12px 0 0', fontSize: 13.5, color: '#5E6460', textAlign: 'center' }}>Ganas Patitas al usar cupones y comprar en tiendas asociadas.</p>
       </section>
 
       {/* Qué se ha hecho con ellas. */}
-      <section style={{ ...card, display: 'grid', gap: 12 }}>
-        <h2 style={h2}>Qué se ha hecho con tus Patitas</h2>
+      <section style={{ ...TARJETA, background: 'linear-gradient(135deg, #F4F9F2 0%, #EAF4EC 100%)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '96px 1px minmax(0, 1fr)', gap: 14, alignItems: 'center' }}>
+          <img src="/ilustraciones/patitas-casa.png" alt="" aria-hidden style={{ width: 96, height: 'auto' }} />
+          <span aria-hidden style={{ alignSelf: 'stretch', background: '#D9E3D6' }} />
+          <div>
+            <h2 style={{ ...TITULO, fontSize: 18.5 }}>Qué se ha hecho con tus Patitas</h2>
+            <p style={{ margin: '4px 0 6px', fontSize: 14.5, lineHeight: '20px', color: '#4A524D' }}>
+              {impact?.shelters?.length
+                ? 'A qué protectoras han ido tus Patitas y en qué las han usado.'
+                : 'Cuando dones Patitas verás aquí a qué protectora fueron y en qué las ha usado (veterinario, tienda…).'}
+            </p>
+            {!impact?.shelters?.length && (
+              <button type="button" onClick={() => setVerEjemplos(v => !v)} style={{ border: 0, background: 'none', padding: 0, color: '#0E5F5B', font: 'inherit', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>
+                {verEjemplos ? 'Ocultar ejemplos' : 'Ver ejemplos ›'}
+              </button>
+            )}
+          </div>
+        </div>
+        {verEjemplos && !impact?.shelters?.length && (
+          <ul style={{ margin: '12px 0 0', paddingLeft: 20, display: 'grid', gap: 6, fontSize: 14.5, lineHeight: '20px', color: '#3D4340' }}>
+            <li>Con 100 Patitas (10 €), una protectora paga parte de una vacuna en una clínica asociada.</li>
+            <li>Con 250 Patitas (25 €), compra un saco de pienso en una tienda asociada.</li>
+            <li>Cada canje sale aquí con la protectora, el sitio y lo que se pagó.</li>
+          </ul>
+        )}
         {impact?.earned?.length ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
             {impact.earned.map(e => (
-              <span key={e.source} style={{ padding: '6px 10px', borderRadius: 10, background: MPL.gold100, color: MPL.goldDark, fontSize: 13, fontWeight: 800 }}>
+              <span key={e.source} style={{ padding: '6px 10px', borderRadius: 10, background: '#FDF0D5', color: '#7A5A12', fontSize: 13.5, fontWeight: 800 }}>
                 {SOURCE_LABEL[e.source] || e.source}: {e.amount}
               </span>
             ))}
           </div>
         ) : null}
-        {impact?.shelters?.length ? (
-          impact.shelters.map(s => (
-            <div key={s.id} style={{ borderTop: `1px solid ${MPL.border}`, paddingTop: 12, display: 'grid', gap: 6 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
-                <strong>{s.name}</strong>
-                <span style={{ fontWeight: 800, color: MPL.teal, whiteSpace: 'nowrap' }}>{s.donated} · {eur(s.donatedEur)}</span>
-              </div>
-              {s.auto > 0 && <div style={{ fontSize: 13, color: MPL.muted }}>{s.auto} de ellas con la donación automática.</div>}
-              {s.uses.length ? (
-                <div style={{ fontSize: 13, color: MPL.muted }}>
-                  Con las Patitas que recibe, {s.name} ha pagado:{' '}
-                  {s.uses.map(u => `${u.concept.replace(/^Canje en /, '').toLowerCase()} (${eur(u.valueEur)})`).join(', ')}.
-                </div>
-              ) : (
-                <div style={{ fontSize: 13, color: MPL.muted }}>Todavía no las ha canjeado: las guarda para veterinario o tienda.</div>
-              )}
+        {impact?.shelters?.map(s => (
+          <div key={s.id} style={{ borderTop: '1px solid #D9E3D6', marginTop: 12, paddingTop: 12, display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+              <strong style={{ fontSize: 15.5 }}>{s.name}</strong>
+              <span style={{ fontWeight: 800, color: '#0E5F5B', whiteSpace: 'nowrap' }}>{s.donated} · {eur(s.donatedEur)}</span>
             </div>
-          ))
-        ) : (
-          <p style={{ margin: 0, fontSize: 14, color: MPL.muted }}>
-            Cuando dones Patitas verás aquí a qué protectora fueron y en qué las ha usado (veterinario, tienda…).
-          </p>
-        )}
+            {s.auto > 0 && <div style={{ fontSize: 14, color: '#5E6460' }}>{s.auto} de ellas con la donación automática.</div>}
+            {s.uses.length ? (
+              <div style={{ fontSize: 14, color: '#5E6460' }}>
+                Con las Patitas que recibe, {s.name} ha pagado:{' '}
+                {s.uses.map(u => `${u.concept.replace(/^Canje en /, '').toLowerCase()} (${eur(u.valueEur)})`).join(', ')}.
+              </div>
+            ) : (
+              <div style={{ fontSize: 14, color: '#5E6460' }}>Todavía no las ha canjeado: las guarda para veterinario o tienda.</div>
+            )}
+          </div>
+        ))}
       </section>
 
-      <section style={{ ...card, display: 'grid', gap: 8 }}>
-        <h2 style={h2}>Historial</h2>
-        <PatitasHistory items={me?.history || []} meId={meId} emptyText="Aún no tienes movimientos." />
+      <section style={TARJETA}>
+        <Cabecera icono={<CalcoPatHistorial size={26} />} fondo="#D7ECE9" titulo="Historial" subtitulo="Tus donaciones y movimientos de Patitas." />
+        {historial.length ? (
+          <div style={{ marginTop: 12 }}>
+            <PatitasHistory items={historial} meId={meId} emptyText="Aún no tienes movimientos." />
+          </div>
+        ) : (
+          <div style={{ display: 'grid', justifyItems: 'center', gap: 10, padding: '14px 0 6px' }}>
+            <img src="/ilustraciones/patitas-vacio.png" alt="" aria-hidden style={{ width: 128, height: 'auto' }} />
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#3D4340' }}>Aún no tienes movimientos.</span>
+          </div>
+        )}
       </section>
 
       <SelectProtectoraModal
@@ -210,9 +270,9 @@ function Switch({ checked, disabled, onChange }: { checked: boolean; disabled?: 
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      style={{ width: 50, height: 30, padding: 0, borderRadius: 999, border: 0, flexShrink: 0, background: checked ? MPL.teal : '#D7D0C2', position: 'relative', cursor: disabled ? 'default' : 'pointer', transition: 'background .2s' }}
+      style={{ width: 56, height: 32, padding: 0, borderRadius: 999, border: 0, flexShrink: 0, background: checked ? '#136D69' : '#D7D0C2', position: 'relative', cursor: disabled ? 'default' : 'pointer', transition: 'background .2s' }}
     >
-      <span style={{ position: 'absolute', top: 3, left: checked ? 23 : 3, width: 24, height: 24, borderRadius: 999, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.25)', transition: 'left .2s' }} />
+      <span style={{ position: 'absolute', top: 3, left: checked ? 27 : 3, width: 26, height: 26, borderRadius: 999, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.25)', transition: 'left .2s' }} />
     </button>
   );
 }

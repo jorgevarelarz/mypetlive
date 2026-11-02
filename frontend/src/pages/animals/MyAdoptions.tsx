@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import { listMyAdoptions, cancelAdoption, ADOPTION_STATUS_LABEL, type AdoptionStatus } from '../../api/adoptions';
 import { toAbsoluteUrl } from '../../utils/media';
 import { speciesLabel } from '../../styles/mypetlive';
+import { M } from '../../components/pet/maqueta';
+import { CalcoSolHuella, CalcoSolLupa } from '../../components/icons/calcados';
 
 const STATUS_STEPS: AdoptionStatus[] = [
   'recibida',
@@ -218,20 +220,25 @@ export default function MyAdoptions() {
   }
 
   return (
-    <div className="grid gap-5 p-4" style={{ color: '#3F4A3C' }}>
-      <header className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-        <div>
-          <p className="text-sm font-medium" style={{ color: '#6A7B4F' }}>Adopciones</p>
-          <h1 className="text-2xl font-semibold">Mis solicitudes</h1>
-          <p className="mt-1 max-w-2xl text-sm" style={{ color: '#7A8273' }}>
-            Sigue el estado de cada proceso y revisa los próximos pasos con la protectora.
-          </p>
+    // Maqueta del 2 nov 2026 (cabecera con dibujo, botón verde, vacío con portapapeles),
+    // a tamaño normal de iPhone.
+    <div className="grid gap-5" style={{ color: '#3F4A3C', maxWidth: 640, margin: '0 auto', padding: '4px 0 0', fontFamily: M.letra }}>
+      <header style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', alignItems: 'center', gap: 4 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#2E6B3F' }}>Adopciones</p>
+            <h1 style={{ margin: '2px 0 6px', fontFamily: M.titulos, fontSize: 30, lineHeight: '34px', fontWeight: 800, color: '#17352D' }}>Mis solicitudes</h1>
+            <p style={{ margin: 0, fontSize: 15, lineHeight: '21px', color: '#5E6460' }}>
+              Sigue el estado de cada proceso y revisa los próximos pasos con la protectora.
+            </p>
+          </div>
+          <img src="/ilustraciones/solicitudes-cabecera.png" alt="" aria-hidden style={{ width: 150, height: 'auto' }} />
         </div>
         <Link
           to="/animals"
-          className="inline-flex px-4 py-2 text-sm font-medium text-white"
-          style={{ background: '#6A7B4F', borderRadius: 8 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 14, height: 54, padding: '0 20px', borderRadius: 16, background: '#0E5F5B', color: '#fff', fontSize: 17, fontWeight: 800, textDecoration: 'none' }}
         >
+          <CalcoSolLupa size={21} color="#FFFFFF" />
           Buscar animales
         </Link>
       </header>
@@ -274,15 +281,20 @@ export default function MyAdoptions() {
           </div>
         </section>
       ) : items.length === 0 ? (
-        <section className="grid gap-3 border bg-white p-6" style={{ borderColor: '#E7E1D5', borderRadius: 8 }}>
-          <h2 className="text-xl font-semibold">Aún no tienes solicitudes</h2>
-          <p className="max-w-xl text-sm" style={{ color: '#7A8273' }}>
-            Cuando solicites una adopción, aparecerá aquí con su estado y los siguientes pasos.
-          </p>
-          <Link to="/animals" className="text-sm font-medium" style={{ color: '#1F6F6F' }}>
-            Explorar animales disponibles
-          </Link>
-        </section>
+        <>
+          <section style={{ display: 'grid', justifyItems: 'center', textAlign: 'center', gap: 12, padding: '24px 20px 26px', background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, boxShadow: '0 8px 20px -16px rgba(60,45,30,.3)' }}>
+            <img src="/ilustraciones/solicitudes-vacio.png" alt="" aria-hidden style={{ width: 150, height: 'auto' }} />
+            <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 22, fontWeight: 800, color: '#17352D' }}>Aún no tienes solicitudes</h2>
+            <p style={{ margin: 0, maxWidth: 300, fontSize: 15.5, lineHeight: '22px', color: '#5E6460' }}>
+              Cuando solicites una adopción, aparecerá aquí con su estado y los siguientes pasos.
+            </p>
+            <Link to="/animals" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 50, padding: '0 22px', marginTop: 4, border: '1.5px solid #0E5F5B', borderRadius: 16, color: '#0E5F5B', fontSize: 16, fontWeight: 800, textDecoration: 'none' }}>
+              <CalcoSolHuella size={20} />
+              Explorar animales disponibles
+            </Link>
+          </section>
+          <img src="/ilustraciones/solicitudes-pie.png" alt="" aria-hidden style={{ width: '100%', height: 'auto', display: 'block', marginTop: 8 }} />
+        </>
       ) : (
         <section className="grid gap-3">
           {items.map((item: any) => (
