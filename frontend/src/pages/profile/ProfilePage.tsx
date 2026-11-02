@@ -65,9 +65,16 @@ type FormState = {
     services: string[];
     serviceCatalog: { name: string; priceEur: string; pricingType: 'fijo' | 'variable' }[];
     schedule: string;
+    agenda: { dias: number[]; horas: string[] };
     emergency24h: boolean;
   };
 };
+
+// Agenda de reservas del veterinario: lo que ve la familia como huecos en «Citas».
+// La de por defecto es la misma que usa el servidor (utils/vetAgenda.ts).
+const AGENDA_POR_DEFECTO = { dias: [1, 2, 3, 4, 5], horas: ['10:00', '11:00', '12:00', '13:00', '16:00', '17:00', '18:00'] };
+const DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const HORAS_AGENDA = Array.from({ length: 27 }, (_, i) => `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // mismo tope que multer en upload.routes.ts
 
@@ -111,6 +118,7 @@ function initForm(user: any): FormState {
         pricingType: s.pricingType === 'fijo' ? 'fijo' : 'variable',
       })),
       schedule: p.vet?.schedule || '',
+      agenda: p.vet?.agenda?.dias?.length && p.vet?.agenda?.horas?.length ? p.vet.agenda : AGENDA_POR_DEFECTO,
       emergency24h: Boolean(p.vet?.emergency24h),
     },
   };
@@ -304,6 +312,7 @@ export default function ProfilePage() {
               };
             }),
           schedule: form.vet.schedule.trim(),
+          agenda: form.vet.agenda,
           emergency24h: form.vet.emergency24h,
         };
       }
@@ -552,6 +561,41 @@ export default function ProfilePage() {
               </div>
               <Field label="Horario de atención" hint="Texto libre, ej. L-V 9:00–14:00 y 17:00–20:00">
                 <textarea value={form.vet.schedule} maxLength={300} onChange={e => set('vet', { ...form.vet, schedule: e.target.value })} style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} />
+              </Field>
+              <Field label="Citas desde MyPetLive" hint="Los días y horas que las familias ven libres al reservar. Lo que ya está pedido no sale.">
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {DIAS_SEMANA.map((d, i) => {
+                      const n = i + 1;
+                      const on = form.vet.agenda.dias.includes(n);
+                      return (
+                        <button key={d} type="button" aria-pressed={on}
+                          onClick={() => {
+                            const dias = on ? form.vet.agenda.dias.filter(x => x !== n) : [...form.vet.agenda.dias, n].sort();
+                            if (dias.length) set('vet', { ...form.vet, agenda: { ...form.vet.agenda, dias } });
+                          }}
+                          style={{ width: 40, height: 40, borderRadius: 10, border: `1.5px solid ${on ? MPL.teal : MPL.border}`, background: on ? MPL.teal100 : '#fff', color: on ? MPL.tealDark : MPL.ink, fontWeight: 800, cursor: 'pointer' }}>
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6 }}>
+                    {HORAS_AGENDA.map(h => {
+                      const on = form.vet.agenda.horas.includes(h);
+                      return (
+                        <button key={h} type="button" aria-pressed={on}
+                          onClick={() => {
+                            const horas = on ? form.vet.agenda.horas.filter(x => x !== h) : [...form.vet.agenda.horas, h].sort();
+                            if (horas.length) set('vet', { ...form.vet, agenda: { ...form.vet.agenda, horas } });
+                          }}
+                          style={{ height: 36, borderRadius: 999, border: `1.5px solid ${on ? MPL.teal : MPL.border}`, background: on ? MPL.teal100 : '#fff', color: on ? MPL.tealDark : MPL.ink, fontWeight: on ? 800 : 600, fontSize: 13.5, cursor: 'pointer' }}>
+                          {h}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </Field>
               <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 14 }}>
                 <input type="checkbox" checked={form.vet.emergency24h} onChange={e => set('vet', { ...form.vet, emergency24h: e.target.checked })} />

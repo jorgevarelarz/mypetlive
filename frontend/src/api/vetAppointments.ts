@@ -74,3 +74,15 @@ export async function rotateVetCalendarFeed() {
   const { data } = await client.post('/api/vets/me/calendar-feed/rotate');
   return data as { url: string };
 }
+
+/** Huecos libres de un veterinario (hora de España): días con las horas que aún se pueden pedir. */
+export type VetAvailability = {
+  agendaPropia: boolean;
+  agenda: { dias: number[]; horas: string[] };
+  dias: Array<{ fecha: string; horas: string[] }>;
+};
+
+export async function getVetAvailability(vetId: string, desde: string, dias: number) {
+  const { data } = await client.get(`/api/vets/${vetId}/availability`, { params: { desde, dias } });
+  return data as VetAvailability;
+}

@@ -10,12 +10,15 @@ import {
   getCalendarFeed,
   rotateCalendarFeed,
   calendarFeedIcs,
+  vetAvailability,
 } from '../controllers/vetAppointment.controller';
 
 const router = Router();
 
 // Directorio público de veterinarios.
 router.get('/vets', optionalAuthenticate, asyncHandler(listVets));
+// Huecos libres de un veterinario para reservar (calendario de «Citas»).
+router.get('/vets/:id/availability', optionalAuthenticate, asyncHandler(vetAvailability));
 
 // Feed iCal de la agenda del vet (suscripción desde Google/Apple/Outlook).
 router.get('/vets/me/calendar-feed', ...assertRole('vet'), asyncHandler(getCalendarFeed));

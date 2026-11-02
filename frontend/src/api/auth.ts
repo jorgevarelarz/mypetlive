@@ -42,6 +42,8 @@ export type VetProfile = {
   services?: string[];
   serviceCatalog?: VetServiceItem[];
   schedule?: string;
+  /** Días (1 = lunes … 7 = domingo) y horas en que acepta citas desde MyPetLive. */
+  agenda?: { dias: number[]; horas: string[] };
   emergency24h?: boolean;
 };
 

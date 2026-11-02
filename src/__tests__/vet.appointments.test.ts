@@ -33,7 +33,10 @@ const vetH = { 'x-user-id': vetId, 'x-user-role': 'vet', 'x-user-verified': 'tru
 const userH = { 'x-user-id': userId, 'x-user-role': 'tenant', 'x-user-verified': 'true' };
 const shelterH = { 'x-user-id': shelterId, 'x-user-role': 'landlord', 'x-user-verified': 'true' };
 
-const future = () => new Date(Date.now() + 86_400_000).toISOString();
+// Cada cita, una hora distinta: desde que la reserva no da dos veces el mismo
+// hueco (slot_taken), dos citas al mismo minuto serían otra cosa que lo que se prueba.
+let hueco = 0;
+const future = () => new Date(Date.now() + 86_400_000 + (hueco++) * 3_600_000).toISOString();
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {

@@ -25,7 +25,11 @@ export function servicePriceLabel(s: VetCatalogService) {
   return s.pricingType === 'fijo' ? eur : `desde ${eur}`;
 }
 
-export default function BookVetAppointment() {
+/**
+ * `soloLista`: solo la tarjeta «Mis citas» (la familia reserva con `ReservarCita`, el
+ * calendario de huecos; la protectora sigue reservando con este formulario).
+ */
+export default function BookVetAppointment({ soloLista = false }: { soloLista?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isShelter = user?.role === 'landlord';
@@ -124,7 +128,7 @@ export default function BookVetAppointment() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div style={card}>
+      {!soloLista && <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <span style={{ width: 38, height: 38, borderRadius: 11, background: MPL.teal100, color: MPL.teal, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CalendarPlus size={20} />
@@ -229,7 +233,7 @@ export default function BookVetAppointment() {
             {createMut.isPending ? 'Enviando…' : 'Solicitar cita'}
           </button>
         </div>
-      </div>
+      </div>}
 
       <div style={card}>
         <h3 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 18, margin: '0 0 12px' }}>Mis citas</h3>
@@ -238,7 +242,7 @@ export default function BookVetAppointment() {
         ) : apptsQ.isError ? (
           <LoadError title="No hemos podido cargar tus citas." onRetry={() => apptsQ.refetch()} />
         ) : appts.length === 0 ? (
-          <div style={{ color: MPL.faint, fontSize: 14 }}>Aún no tienes citas. Pide una arriba 👆</div>
+          <div style={{ color: MPL.faint, fontSize: 14 }}>Aún no tienes citas.</div>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {appts.map(a => {

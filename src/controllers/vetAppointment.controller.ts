@@ -5,6 +5,7 @@ import { VetAppointment } from '../models/vetAppointment.model';
 import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { isFamilyMember } from '../utils/animalAccess';
+import { availability, slotTaken, MAX_DIAS } from '../utils/vetAgenda';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { sendPushToUser } from '../utils/push';
@@ -74,6 +75,18 @@ export async function listVets(req: Request, res: Response) {
       emergency24h: !!v.profile?.vet?.emergency24h,
     })),
   });
+}
+
+// GET /api/vets/:id/availability?desde=AAAA-MM-DD&dias=N — huecos libres del vet
+// (días de su agenda, horas que no han pasado y que nadie ha pedido), en hora de
+// España. Es lo que pinta el calendario de «Citas»: verde = hay hueco.
+export async function vetAvailability(req: Request, res: Response) {
+  if (!Types.ObjectId.isValid(String(req.params.id))) return res.status(404).json({ error: 'vet_not_found' });
+  const vet: any = await User.findOne({ _id: req.params.id, role: 'vet', deletedAt: null }).select('_id profile.vet.agenda').lean();
+  if (!vet) return res.status(404).json({ error: 'vet_not_found' });
+  const desde = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.desde || '')) ? String(req.query.desde) : '0000-00-00';
+  const dias = Number(req.query.dias) || 42;
+  res.json(await availability(vet, desde, Math.min(dias, MAX_DIAS)));
 }
 
 // --- Feed iCal de la agenda del vet -----------------------------------------
@@ -157,7 +170,7 @@ export async function createAppointment(req: Request, res: Response) {
   const { vetId, animalCode, reason, requestedAt, serviceName } = req.body || {};
 
   if (!vetId || !Types.ObjectId.isValid(String(vetId))) return res.status(400).json({ error: 'invalid_vet' });
-  const vet: any = await User.findOne({ _id: vetId, role: 'vet', deletedAt: null }).select('_id profile.vet.serviceCatalog').lean();
+  const vet: any = await User.findOne({ _id: vetId, role: 'vet', deletedAt: null }).select('_id profile.vet.serviceCatalog profile.vet.agenda').lean();
   if (!vet) return res.status(404).json({ error: 'vet_not_found' });
 
   const cleanReason = typeof reason === 'string' ? reason.trim() : '';
@@ -178,6 +191,8 @@ export async function createAppointment(req: Request, res: Response) {
   const when = requestedAt ? new Date(requestedAt) : null;
   if (!when || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
   if (when.getTime() < Date.now() - 60_000) return res.status(400).json({ error: 'date_in_past' });
+  // El mismo hueco no se da dos veces: si otra familia lo acaba de pedir, que elija otro.
+  if (await slotTaken(String(vetId), when)) return res.status(409).json({ error: 'slot_taken' });
 
   // Animal opcional: si se da el código, debe ser una mascota del solicitante
   // (dueño del animal) o, si agenda una protectora, un animal de su protectora.

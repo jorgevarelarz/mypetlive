@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { normalizeAgenda } from '../utils/vetAgenda';
 import crypto from 'crypto';
 import { User } from '../models/user.model';
 import getRequestLogger from '../utils/requestLogger';
@@ -153,6 +154,7 @@ function sanitizeProfile(input: any): Record<string, any> {
     if (typeof input.vet.licenseNumber === 'string') v.licenseNumber = input.vet.licenseNumber.trim();
     if (typeof input.vet.schedule === 'string') v.schedule = input.vet.schedule.trim().slice(0, 300);
     if (input.vet.emergency24h !== undefined) v.emergency24h = !!input.vet.emergency24h;
+    if (input.vet.agenda !== undefined) v.agenda = normalizeAgenda(input.vet.agenda) || undefined;
     const toCleanArray = (val: any) =>
       Array.isArray(val) ? val.map((s: any) => String(s).trim()).filter(Boolean).slice(0, 20) : undefined;
     const specialties = toCleanArray(input.vet.specialties);

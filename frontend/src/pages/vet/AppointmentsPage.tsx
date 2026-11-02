@@ -7,6 +7,8 @@ import AppointmentsCalendar from '../../components/vet/AppointmentsCalendar';
 import ConnectCalendar from '../../components/vet/ConnectCalendar';
 import VetAppointmentsPanel from '../../components/vet/VetAppointmentsPanel';
 import BookVetAppointment from '../../components/vet/BookVetAppointment';
+import ReservarCita from '../../components/vet/ReservarCita';
+import { M } from '../../components/pet/maqueta';
 import AdoptionVisitsPanel from '../../components/vet/AdoptionVisitsPanel';
 import { MPL_FONT_DISPLAY, MPL } from '../../styles/mypetlive';
 
@@ -44,6 +46,27 @@ export default function AppointmentsPage() {
     return () => clearInterval(timer);
   }, [target]);
 
+  // La familia reserva con el calendario de huecos (maqueta «Citas», 2 nov 2026).
+  if (user?.role === 'tenant') {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12, padding: '4px 0 20px', maxWidth: 520, margin: '0 auto', fontFamily: M.letra, color: M.tinta }}>
+        <style>{`.mpl-highlight { outline: 3px solid ${MPL.coral}; outline-offset: 3px; transition: outline-color .6s; }`}</style>
+        <header style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 112px', alignItems: 'center', gap: 8, padding: '0 2px' }}>
+          <div>
+            <h1 style={{ margin: 0, fontFamily: M.titulos, fontSize: 30, lineHeight: '34px', fontWeight: 800, color: '#17352D' }}>Citas</h1>
+            <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: '21px', color: '#4A524D' }}>
+              Gestiona las visitas veterinarias de tu mascota: reserva, consulta y recibe recordatorios.
+            </p>
+          </div>
+          <img src="/ilustraciones/citas-calendario.png" alt="" aria-hidden style={{ width: 112, height: 'auto', display: 'block' }} />
+        </header>
+        <ReservarCita />
+        <BookVetAppointment soloLista />
+        <AdoptionVisitsPanel role="tenant" />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 18, padding: '24px 16px', maxWidth: 900, margin: '0 auto' }}>
       <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -64,7 +87,7 @@ export default function AppointmentsPage() {
         .mpl-highlight { outline: 3px solid ${MPL.coral}; outline-offset: 3px; transition: outline-color .6s; }
       `}</style>
 
-      {!isVet && (user?.role === 'tenant' || user?.role === 'landlord') && <AdoptionVisitsPanel role={user.role} />}
+      {!isVet && user?.role === 'landlord' && <AdoptionVisitsPanel role="landlord" />}
 
       <AppointmentsCalendar
         appointments={appointments}

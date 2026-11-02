@@ -271,6 +271,12 @@ const profileSchema = new Schema(
             default: [],
           },
           schedule: { type: String, trim: true, maxlength: 300 }, // horario en texto libre
+          // Agenda que entiende la reserva: días (1 = lunes … 7 = domingo) y horas «HH:MM»
+          // en que acepta citas desde MyPetLive. Sin ella se usa la de por defecto
+          // (utils/vetAgenda.ts: de lunes a viernes, mañana y tarde).
+          agenda: {
+            type: new Schema({ dias: { type: [Number], default: undefined }, horas: { type: [String], default: undefined } }, { _id: false }),
+          },
           emergency24h: { type: Boolean, default: false },
         },
         { _id: false },
