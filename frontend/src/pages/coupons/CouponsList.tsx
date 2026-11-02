@@ -10,6 +10,7 @@ import SelectProtectoraModal from '../../components/protectora/SelectProtectoraM
 import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
+import { CalcoCupCategorias, CalcoCupExplorar, CalcoCupPatitas, CalcoCupProtectora, CalcoCupTicket } from '../../components/icons/calcados';
 import { isNativeApp } from '../../utils/native';
 import { useAuth } from '../../context/AuthContext';
 
@@ -98,11 +99,11 @@ export default function CouponsList() {
     <div style={{ fontFamily: MPL_FONT_BODY, background: MPL.bg, color: MPL.ink, minHeight: '100vh' }}>
       <style>{`
         .coupon-wrap{max-width:1120px;margin:0 auto;padding:36px 32px 64px;}
-        .coupon-hero{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:stretch;margin-bottom:32px;}
+        .coupon-hero{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:26px;align-items:start;margin-bottom:20px;}
         .coupon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
         .coupon-card{transition:transform .18s ease, box-shadow .18s ease;}
         .coupon-card:hover{transform:translateY(-3px);box-shadow:0 1px 3px rgba(31,55,40,.06),0 18px 38px -24px rgba(31,55,40,.32)!important;}
-        @media (max-width: 920px){.coupon-hero{grid-template-columns:1fr}.coupon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.coupon-wrap{padding:26px 16px 48px}}
+        @media (max-width: 920px){.coupon-hero{grid-template-columns:minmax(0,1fr)}.coupon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.coupon-wrap{padding:26px 16px 48px}}
         @media (max-width: 620px){.coupon-wrap{padding:22px 20px 96px!important}.coupon-tabs{display:none!important}.coupon-hero{gap:16px!important}.coupon-hero h1{font-size:24px!important}.coupon-hero p{font-size:13.5px!important}.coupon-grid{grid-template-columns:1fr}.ticket-feature{padding:14px!important;border-radius:16px!important;gap:13px!important;flex-wrap:wrap!important}.ticket-feature > div:nth-child(2){width:52px!important;height:52px!important}.ticket-feature h2{font-size:20px!important}.ticket-feature button{flex:1 1 100%!important}.coupon-card{border-radius:15px!important}.coupon-card > div:first-child{padding:14px!important}.coupon-card > div:last-child{padding:12px 14px!important}}
       `}</style>
 
@@ -116,38 +117,49 @@ export default function CouponsList() {
           ))}
         </div>
 
+        {/* Maqueta «Cupones y ofertas» (2 nov 2026), a tamaño normal de iPhone. */}
         <section className="coupon-hero">
-          <div>
-            <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 38, fontWeight: 800, margin: '0 0 8px' }}>Cupones y ofertas</h1>
-            <p style={{ fontSize: 16, lineHeight: 1.55, color: MPL.muted, margin: 0, maxWidth: 520 }}>
-              Beneficios de partners locales para cuidar de tu mascota. Cada cupón usado genera <strong style={{ color: MPL.goldDark }}>Patitas</strong> para la protectora que elijas.
-            </p>
-            <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, background: MPL.olive100, color: MPL.oliveDark, borderRadius: 999, padding: '9px 14px', fontSize: 13, fontWeight: 800 }}>
-              {preferredProtectora ? `Protectora: ${preferredProtectora.name}` : 'Elige protectora beneficiaria'}
-              <button type="button" onClick={() => setSelectorOpen(true)} style={{ border: 0, background: 'none', color: MPL.teal, font: 'inherit', fontWeight: 800, cursor: 'pointer', padding: 0 }}>
-                {preferredProtectora ? 'Cambiar' : 'Elegir'}
-              </button>
+          <div style={{ display: 'grid', gap: 14, minWidth: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 140px', alignItems: 'center', gap: 6 }}>
+              <div>
+                <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, lineHeight: '34px', fontWeight: 800, color: '#14231F', margin: '0 0 8px' }}>Cupones y ofertas</h1>
+                <p style={{ fontSize: 15, lineHeight: '21px', color: '#4A524D', margin: 0 }}>
+                  Beneficios de partners locales para cuidar de tu mascota. Cada cupón usado genera <strong style={{ color: '#A86A08' }}>Patitas</strong> para la protectora que elijas.
+                </p>
+              </div>
+              <img src="/ilustraciones/cupones-cabecera.png" alt="" aria-hidden style={{ width: 140, height: 'auto', display: 'block' }} />
             </div>
+            <button type="button" onClick={() => setSelectorOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, width: '100%', height: 56, padding: '0 16px', border: 0, borderRadius: 18, background: '#EBF3DF', color: '#17352D', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
+              <CalcoCupProtectora size={26} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {preferredProtectora ? preferredProtectora.name : 'Elige protectora beneficiaria'}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#0E5F5B', fontSize: 16.5, fontWeight: 800 }}>
+                {preferredProtectora ? 'Cambiar' : 'Elegir'}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E5F5B" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m9 6 6 6-6 6" /></svg>
+              </span>
+            </button>
           </div>
 
-          <div style={{ background: MPL.teal, borderRadius: 22, padding: 24, color: '#fff', position: 'relative', overflow: 'hidden' }}>
-            <span style={{ position: 'absolute', right: -26, bottom: -30, color: 'rgba(255,255,255,.08)' }}><PawMark size={150} /></span>
-            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <PawMark size={22} color="#F6D78A" />
-                  <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{totalPatitas || 0}</span>
+          <div style={{ background: '#035650', borderRadius: 22, padding: '20px 18px', color: '#fff', position: 'relative', overflow: 'hidden', alignSelf: 'start' }}>
+            <span aria-hidden style={{ position: 'absolute', right: -18, bottom: -26, color: 'rgba(255,255,255,.08)' }}><PawMark size={120} /></span>
+            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', gap: 12, alignItems: 'start' }}>
+              {[
+                { icono: <CalcoCupPatitas size={24} />, n: totalPatitas || 0, label: 'Patitas potenciales' },
+                null,
+                { icono: <CalcoCupTicket size={22} color="#FFFFFF" />, n: activeCoupons.length, label: 'Cupones activos' },
+                null,
+                { icono: <CalcoCupCategorias size={23} color="#FFFFFF" />, n: 3, label: 'Categorías' },
+              ].map((x, i) => x ? (
+                <div key={i} style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    {x.icono}
+                    <span style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{x.n}</span>
+                  </div>
+                  <div style={{ fontSize: 14.5, lineHeight: '19px', color: 'rgba(255,255,255,.92)', marginTop: 8 }}>{x.label}</div>
                 </div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', marginTop: 5 }}>Patitas potenciales</div>
-              </div>
-              <div>
-                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{activeCoupons.length}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', marginTop: 5 }}>cupones activos</div>
-              </div>
-              <div>
-                <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, lineHeight: 1 }}>3</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', marginTop: 5 }}>categorías</div>
-              </div>
+              ) : <span key={i} aria-hidden style={{ alignSelf: 'stretch', background: 'rgba(255,255,255,.22)' }} />)}
             </div>
           </div>
         </section>
@@ -174,7 +186,14 @@ export default function CouponsList() {
         {isLoading ? (
           <div style={{ color: MPL.muted }}>Cargando cupones...</div>
         ) : activeCoupons.length === 0 ? (
-          <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, padding: 24, color: MPL.muted }}>Aún no hay cupones activos.</div>
+          <div style={{ display: 'grid', justifyItems: 'center', gap: 14, textAlign: 'center', background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, padding: '22px 20px 24px', boxShadow: '0 8px 22px -16px rgba(60,45,30,.3)' }}>
+            <img src="/ilustraciones/cupones-vacio.png" alt="" aria-hidden style={{ width: 140, height: 'auto' }} />
+            <div style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 21, fontWeight: 800, color: '#14231F' }}>Aún no hay cupones activos.</div>
+            <a href="/tienda" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 50, padding: '0 24px', border: '1.5px solid #1C6B3A', borderRadius: 16, color: '#1C6B3A', fontSize: 16.5, fontWeight: 800, textDecoration: 'none' }}>
+              <CalcoCupExplorar size={21} />
+              Explorar ofertas
+            </a>
+          </div>
         ) : (
           <div className="coupon-grid">
             {activeCoupons.map(coupon => {
@@ -225,10 +244,11 @@ export default function CouponsList() {
           </div>
         )}
 
-        <section style={{ marginTop: 32, background: MPL.panel, border: `1px solid ${MPL.border}`, borderRadius: 18, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <PawMark size={30} color={MPL.gold} />
-          <p style={{ fontSize: 14, lineHeight: 1.55, color: '#5d6450', margin: 0 }}>
-            Cada compra validada reparte valor de forma transparente: tú ahorras, el partner gana un cliente y una parte se convierte en <strong style={{ color: MPL.goldDark }}>Patitas para tu protectora</strong>.
+        <section style={{ marginTop: 18, background: '#FDF3E1', borderRadius: 22, padding: 18, display: 'grid', gridTemplateColumns: '96px 1px minmax(0, 1fr)', alignItems: 'center', gap: 16 }}>
+          <img src="/ilustraciones/cupones-bolsa.png" alt="" aria-hidden style={{ width: 96, height: 'auto' }} />
+          <span aria-hidden style={{ alignSelf: 'stretch', background: '#EADCC4' }} />
+          <p style={{ fontSize: 15, lineHeight: '21px', color: '#3D4340', margin: 0 }}>
+            Cada compra validada reparte valor de forma transparente: tú ahorras, el partner gana un cliente y una parte se convierte en <strong style={{ color: '#A86A08' }}>Patitas para tu protectora.</strong>
           </p>
         </section>
       </main>

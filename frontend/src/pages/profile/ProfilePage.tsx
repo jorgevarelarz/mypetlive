@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CalcoPerAdoptar, CalcoPerCamara, CalcoPerDatos, CalcoPerEmail, CalcoPerGuardar, CalcoPerNombre, CalcoPerSubir, CalcoPerTelefono } from '../../components/icons/calcados';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -16,30 +17,41 @@ import DeleteAccountPanel from '../../components/account/DeleteAccountPanel';
 import { openPaymentPage } from '../../utils/native';
 
 const inputStyle: React.CSSProperties = {
-  border: `1.5px solid ${MPL.border}`,
-  borderRadius: 12,
-  padding: '11px 13px',
+  minHeight: 52,
+  border: '1px solid #DCD6CB',
+  borderRadius: 14,
+  padding: '12px 16px',
   font: 'inherit',
+  fontSize: 16,
+  fontWeight: 400,
+  color: '#14231F',
   width: '100%',
   boxSizing: 'border-box',
   background: '#fff',
 };
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+// Maqueta «Perfil y cuenta» (2 nov 2026), a tamaño normal de iPhone. Vale para
+// todos los perfiles: la familia, la protectora, la tienda y el veterinario.
+function Field({ label, children, hint, icono, extra }: { label: string; children: React.ReactNode; hint?: string; icono?: React.ReactNode; extra?: string }) {
   return (
-    <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
-      {label}
+    <label style={{ display: 'grid', gap: 8, fontWeight: 800, fontSize: 16, color: '#1E2A27' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {icono}{label}{extra && <span style={{ fontWeight: 500 }}>{extra}</span>}
+      </span>
       {children}
-      {hint && <span style={{ color: MPL.faint, fontSize: 12, fontWeight: 600 }}>{hint}</span>}
+      {hint && <span style={{ color: '#5E6460', fontSize: 13.5, lineHeight: '19px', fontWeight: 400 }}>{hint}</span>}
     </label>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children, icono }: { title: string; children: React.ReactNode; icono?: React.ReactNode }) {
   return (
-    <div style={{ background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18, padding: 22 }}>
-      <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 20, margin: '0 0 16px' }}>{title}</h2>
-      <div style={{ display: 'grid', gap: 14 }}>{children}</div>
+    <div style={{ background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 24, padding: '18px 18px 20px', boxShadow: '0 8px 22px -16px rgba(60,45,30,.3)' }}>
+      <h2 style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: MPL_FONT_DISPLAY, fontSize: 22, fontWeight: 800, color: '#17352D', margin: '0 0 18px' }}>
+        {icono && <span style={{ width: 52, height: 52, borderRadius: 14, background: '#DDEEE8', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icono}</span>}
+        {title}
+      </h2>
+      <div style={{ display: 'grid', gap: 16 }}>{children}</div>
     </div>
   );
 }
@@ -347,12 +359,15 @@ export default function ProfilePage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 24, padding: 'clamp(14px, 4vw, 24px)' }}>
-      <header>
-        <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 32, fontWeight: 800, margin: 0 }}>Perfil y cuenta</h1>
-        <p style={{ color: MPL.muted, margin: '6px 0 0' }}>
-          {isOrg ? 'Completa tu información para operar en MyPetLive.' : 'Solo lo básico. Lo demás te lo pedimos cuando haga falta.'}
-        </p>
+    <div style={{ display: 'grid', gap: 20, padding: 'clamp(4px, 2vw, 24px) 0', position: 'relative' }}>
+      <header style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', alignItems: 'end', gap: 4, maxWidth: 720, marginBottom: -26 }}>
+        <div style={{ paddingBottom: 34 }}>
+          <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 30, lineHeight: '34px', fontWeight: 800, color: '#14231F', margin: 0 }}>Perfil y cuenta</h1>
+          <p style={{ color: '#4A524D', fontSize: 15, lineHeight: '21px', margin: '6px 0 0' }}>
+            {isOrg ? 'Completa tu información para operar en MyPetLive.' : 'Solo lo básico. Lo demás te lo pedimos cuando haga falta.'}
+          </p>
+        </div>
+        <img src="/ilustraciones/perfil-cabecera.png" alt="" aria-hidden style={{ width: 150, height: 'auto', display: 'block', position: 'relative', zIndex: 0 }} />
       </header>
 
       {/* La columna lateral solo existe para la ficha del veterinario; sin ella
@@ -360,18 +375,26 @@ export default function ProfilePage() {
       <section className={role === 'vet' ? 'profile-grid' : undefined} style={role === 'vet' ? undefined : { display: 'grid', gap: 16, maxWidth: 720 }}>
         <div style={{ display: 'grid', gap: 16 }}>
           {/* Foto + identidad */}
-          <Card title={isOrg ? 'Identidad' : 'Datos personales'}>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <div style={{ width: 76, height: 76, borderRadius: '50%', overflow: 'hidden', background: MPL.teal100, color: MPL.tealDark, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MPL_FONT_DISPLAY, fontSize: 30, fontWeight: 800, flex: 'none' }}>
-                {form.avatarUrl ? (
-                  <img src={form.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  initials
-                )}
-              </div>
+          <div style={{ position: 'relative', zIndex: 1 }}>
+          <Card title={isOrg ? 'Identidad' : 'Datos personales'} icono={<CalcoPerDatos size={24} />}>
+            <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Cambiar la foto"
+                style={{ position: 'relative', width: 96, height: 96, padding: 0, border: 0, borderRadius: '50%', background: '#DCEFEA', color: '#0E5F5B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MPL_FONT_DISPLAY, fontSize: 40, fontWeight: 800, flex: 'none', cursor: 'pointer' }}>
+                <span style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {form.avatarUrl ? (
+                    <img src={form.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    initials
+                  )}
+                </span>
+                <span aria-hidden style={{ position: 'absolute', right: -4, bottom: -2, width: 34, height: 34, borderRadius: '50%', background: '#0E5F5B', border: '2px solid #FEFEFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CalcoPerCamara size={15} color="#FFFFFF" />
+                </span>
+              </button>
               <div style={{ display: 'grid', gap: 6 }}>
                 <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => onPickPhoto(e.target.files?.[0])} />
-                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ background: '#fff', border: `1.5px solid ${MPL.border}`, borderRadius: 11, padding: '9px 14px', font: 'inherit', fontWeight: 800, cursor: 'pointer', color: MPL.ink }}>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 48, background: '#fff', border: '1.5px solid #B9CBC4', borderRadius: 14, padding: '0 18px', font: 'inherit', fontSize: 16, fontWeight: 800, cursor: 'pointer', color: '#14231F' }}>
+                  <CalcoPerSubir size={20} />
                   {uploading ? 'Subiendo…' : form.avatarUrl ? 'Cambiar foto' : 'Subir foto'}
                 </button>
                 {form.avatarUrl && (
@@ -391,14 +414,14 @@ export default function ProfilePage() {
             {/* Una persona tiene un solo nombre que rellenar. Nombre, apellidos y
                 «nombre público» eran tres casillas para lo mismo; firstName y
                 lastName siguen en el formulario y se guardan como estaban. */}
-            <Field label={isOrg ? 'Nombre público / de cuenta' : 'Nombre'} hint={isOrg ? 'Cómo se te identifica en la plataforma' : undefined}>
-              <input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} />
+            <Field label={isOrg ? 'Nombre público / de cuenta' : 'Nombre'} icono={<CalcoPerNombre size={20} />} hint={isOrg ? 'Cómo se te identifica en la plataforma' : undefined}>
+              <input value={form.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder="Tu nombre" />
             </Field>
-            <Field label="Email" hint="Es la dirección con la que inicias sesión. Si la cambias, te enviaremos un correo a la dirección nueva: hasta que lo confirmes ahí, seguirás entrando con la actual.">
-              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={inputStyle} />
+            <Field label="Email" icono={<CalcoPerEmail size={17} />} hint="Es la dirección con la que inicias sesión. Si la cambias, te enviaremos un correo a la nueva dirección para confirmarla; hasta entonces seguirás entrando con la actual.">
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={{ ...inputStyle, fontWeight: 700 }} />
             </Field>
-            <Field label={isOrg ? 'Teléfono' : 'Teléfono (opcional)'} hint={isOrg ? undefined : 'Para que te localicen si alguien encuentra a tu mascota perdida.'}>
-              <input value={form.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="+34 ___ ___ ___" />
+            <Field label="Teléfono" extra={isOrg ? undefined : ' (opcional)'} icono={<CalcoPerTelefono size={20} />} hint={isOrg ? undefined : 'Para que te localicen si alguien encuentra a tu mascota perdida.'}>
+              <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} style={inputStyle} placeholder="+34 600 000 000" />
             </Field>
 
             {isOrg && (
@@ -418,8 +441,12 @@ export default function ProfilePage() {
                 comprar. Vivienda y ocupación no las lee nadie y ya no se piden
                 (lo que hubiera guardado se conserva). */}
             {isPerson && (
-              <details style={{ borderTop: `1px solid ${MPL.border}`, paddingTop: 12 }} open={Boolean(form.age || form.address.city || form.bio)}>
-                <summary style={{ cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>Si vas a adoptar (opcional)</summary>
+              <details className="perfil-adoptar" style={{ borderTop: '1px solid #ECE8E0', paddingTop: 16 }} open={Boolean(form.age || form.address.city || form.bio)}>
+                <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 54, padding: '0 16px', borderRadius: 14, background: '#EEF5EF', fontWeight: 800, fontSize: 16, color: '#14231F' }}>
+                  <CalcoPerAdoptar size={22} />
+                  <span style={{ flex: 1 }}>Si vas a adoptar <span style={{ fontWeight: 500 }}>(opcional)</span></span>
+                  <svg className="perfil-adoptar-flecha" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14231F" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
+                </summary>
                 <p style={{ color: MPL.faint, fontSize: 12.5, margin: '6px 0 12px' }}>
                   La protectora lo verá cuando le envíes una solicitud.
                 </p>
@@ -439,6 +466,7 @@ export default function ProfilePage() {
               </details>
             )}
           </Card>
+          </div>
 
           {/* Dirección: la de una persona se pide en el carrito, al comprar. */}
           {isOrg && (
@@ -614,8 +642,9 @@ export default function ProfilePage() {
             // Guardar mientras la foto sube descartaba la foto en silencio: el
             // PATCH sale con el avatarUrl viejo. Mismo arreglo que en /pet.
             disabled={saveMutation.isPending || uploading || !form.email.trim()}
-            style={{ justifySelf: 'start', background: MPL.coral, color: '#fff', border: 0, borderRadius: 13, padding: '13px 22px', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: saveMutation.isPending || uploading ? .7 : 1 }}
+            style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: 'min(100%, 300px)', height: 54, background: '#0E5F5B', color: '#fff', border: 0, borderRadius: 14, padding: '0 22px', font: 'inherit', fontSize: 17, fontWeight: 800, cursor: 'pointer', opacity: saveMutation.isPending || uploading ? .7 : 1 }}
           >
+            <CalcoPerGuardar size={20} color="#FFFFFF" />
             {uploading ? 'Subiendo foto…' : saveMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
           </button>
         </div>
@@ -668,6 +697,9 @@ export default function ProfilePage() {
       )}
 
       <DeleteAccountPanel />
+      {/* Huellas y colina de la maqueta, abajo a la derecha (debajo de los botones, sin taparlos). */}
+      <img src="/ilustraciones/perfil-pie.png" alt="" aria-hidden style={{ justifySelf: 'end', width: 130, height: 'auto', marginTop: -24, marginRight: -12, pointerEvents: 'none' }} />
+      <style>{`.perfil-adoptar > summary::-webkit-details-marker{display:none}.perfil-adoptar[open] .perfil-adoptar-flecha{transform:rotate(180deg)}`}</style>
     </div>
   );
 }

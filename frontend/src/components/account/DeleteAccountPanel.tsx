@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { CalcoPerBorrar } from '../icons/calcados';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -90,8 +91,10 @@ export default function DeleteAccountPanel({ startOpen = false, onClose }: { sta
 
   return (
     <>
+      {/* Maqueta de «Perfil y cuenta» (2 nov 2026): borde naranja y papelera calcada. */}
       <button type="button" onClick={() => setOpen(true)}
-        style={{ justifySelf: 'start', background: '#fff', color: MPL.coralDark, border: `1.5px solid ${MPL.coralDark}`, borderRadius: 13, padding: '11px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+        style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: 'min(100%, 300px)', height: 52, background: '#fff', color: '#D13A08', border: '1.5px solid #D9603A', borderRadius: 14, padding: '0 20px', font: 'inherit', fontSize: 17, fontWeight: 800, cursor: 'pointer' }}>
+        <CalcoPerBorrar size={20} />
         Borrar mi cuenta
       </button>
       {open && createPortal(
