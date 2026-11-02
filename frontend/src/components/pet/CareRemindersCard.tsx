@@ -4,6 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { getAnimalCare, updateCareReminders, type CareReminders } from '../../api/animals';
 import { usesLitter, usesWalks } from '../../styles/mypetlive';
+import { Sparkles } from 'lucide-react';
+import { PET_COLORS } from './petArt';
+import { CalcoAviso, CalcoCuenco, CalcoPerroDorado } from '../icons/calcados';
+import { M } from './maqueta';
 
 // Avisos de comida, paseo y arena. Cada mascota tiene los suyos.
 //
@@ -77,26 +81,34 @@ export default function CareRemindersCard({ animalId, species, petName }: Props)
   if (!animalId || careQ.isLoading) return null;
 
   return (
-    <div className="border rounded-2xl p-4" style={CARD}>
-      <div className="font-semibold" style={{ color: INK }}>⏰ Avisos de cuidado</div>
-      <p className="text-sm" style={{ color: MUTED, margin: '4px 0 0' }}>
-        {petName || 'Tu mascota'} te avisará en el móvil. Con su propio estilo.
-      </p>
-      <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+    // Maqueta: campana de 20, título de 13,5 y dos tarjetas de 44 de alto lado a lado.
+    <div style={{ borderRadius: 14, background: M.tarjeta, boxShadow: M.sombra, border: '1px solid #F1EBE2', padding: '8px 10px 10px 10px', fontFamily: M.letra, letterSpacing: 0, color: M.tinta }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr', columnGap: 10, alignItems: 'start', paddingLeft: 5 }}>
+        <CalcoAviso size={20} />
+        <div>
+          <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 13.5, lineHeight: '15px', fontWeight: 700, color: M.tinta }}>Avisos de cuidado</h2>
+          <p style={{ color: '#3D4340', margin: '2px 0 0', fontSize: 10, lineHeight: '12px' }}>
+            {petName || 'Tu mascota'} te avisará en el móvil. Con su propio estilo.
+          </p>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: kinds.length > 1 ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 7, marginTop: 9 }}>
         {kinds.map(kind => (
           <button
             key={kind}
             type="button"
             onClick={() => setEditing(kind)}
-            className="border text-left"
-            style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 14, borderColor: '#E7E1D5', background: '#FBFAF6', padding: '12px 14px' }}
+            className="text-left"
+            style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) auto', alignItems: 'center', columnGap: 4, minHeight: 44, borderRadius: 10, border: '1px solid #F0EAE1', background: '#F9F5EF', padding: '4px 8px 4px 9px', minWidth: 0, cursor: 'pointer', font: 'inherit', fontFamily: M.letra }}
           >
-            <span aria-hidden style={{ fontSize: 22 }}>{LABEL[kind].icon}</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span className="font-semibold" style={{ display: 'block', color: INK }}>{LABEL[kind].title}</span>
-              <span className="text-sm" style={{ display: 'block', color: MUTED }}>{summary(kind, saved)}</span>
+            <span aria-hidden style={{ display: 'inline-flex', justifyContent: 'center' }}>
+              {kind === 'feed' ? <CalcoCuenco size={16} /> : kind === 'walk' ? <CalcoPerroDorado size={20} /> : <Sparkles size={16} color={PET_COLORS.gold} />}
             </span>
-            <span className="text-sm font-semibold" style={{ color: TEAL }}>Cambiar</span>
+            <span style={{ minWidth: 0, paddingLeft: 4 }}>
+              <span style={{ display: 'block', color: M.tinta, fontWeight: 700, fontSize: 10.5, lineHeight: '12px' }}>{LABEL[kind].title}</span>
+              <span style={{ display: 'block', color: '#4A504C', fontSize: 8.5, lineHeight: '10.5px', marginTop: 2 }}>{summary(kind, saved)}</span>
+            </span>
+            <span style={{ color: M.verdeBoton, fontSize: 9, fontWeight: 700 }}>Cambiar</span>
           </button>
         ))}
       </div>

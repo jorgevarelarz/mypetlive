@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { BookOpen, Camera, CheckCircle2, MapPin, Pencil, Share2 } from 'lucide-react';
+import { Camera, Cat, CheckCircle2 } from 'lucide-react';
+import { PawGlyph, PET_COLORS, Sparkle } from '../../components/pet/petArt';
+import { CalcoAdoptar, CalcoCalendarioBlanco, CalcoCarrito, CalcoCompartir, CalcoCorazonBlanco, CalcoDestellosFoto, CalcoEditar, CalcoEtiqueta, CalcoMas, CalcoPasaporte, CalcoPerdido, CalcoPerroBlanco, CalcoSalud } from '../../components/icons/calcados';
+import { M } from '../../components/pet/maqueta';
 import PetSwitcher from '../../components/pet/PetSwitcher';
 import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
 import { ageFromBirthDate, petAge } from '../../utils/age';
@@ -703,8 +706,8 @@ export default function PetPage() {
   const inMemory = Boolean(featuredAnimal.memorial?.active);
 
   return (
-    <div className="p-4 grid gap-4" style={{ color: '#3F4A3C' }}>
-      <div className="flex flex-wrap items-center gap-3">
+    <div style={{ color: M.tinta, fontFamily: M.letra, letterSpacing: 0, display: 'grid', gap: 10, padding: '11px 0 16px', maxWidth: 480, margin: '-24px auto 0', boxSizing: 'border-box' }}>
+      <div className="flex flex-wrap items-center gap-3" style={{ marginBottom: 3 }}>
         {showChips && (
           <PetSwitcher
             pets={petItems.map(item => item.animal).filter(Boolean)}
@@ -712,21 +715,16 @@ export default function PetPage() {
             onSelect={setSelectedPetId}
           />
         )}
-        {/* flex-wrap: por debajo de 380 px los dos botones no caben en una línea. */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="text-sm" onClick={() => setRegisterOpen(true)}>
-            ➕ Añadir otra mascota
+        {/* Maqueta del 2 nov 2026: dos botones de 28 de alto, 170 de ancho, 15 entre ellos. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, width: '100%', padding: '0 5px' }}>
+          <button type="button" onClick={() => setRegisterOpen(true)} style={TOP_BUTTON}>
+            <CalcoMas size={13} /> Añadir otra mascota
           </button>
-          <button
-            type="button"
-            onClick={() => nav('/animals')}
-            className="text-sm"
-            style={{ color: '#3F4A3C', textDecoration: 'underline', textUnderlineOffset: 3 }}
-          >
-            🐾 Adoptar otra mascota
+          <button type="button" onClick={() => nav('/animals')} style={TOP_BUTTON}>
+            <CalcoAdoptar size={15} /> Adoptar otra mascota
           </button>
-          <RehomeEntry />
         </div>
+        <RehomeEntry />
       </div>
 
       {inMemory && canEdit ? (
@@ -735,8 +733,8 @@ export default function PetPage() {
       <>
       {/* Ficha tipo carnet: la foto con sus datos encima y debajo cuatro
           accesos. Antes eran botones con emojis repartidos en tres filas. */}
-      <div className="border rounded-2xl overflow-hidden" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-        <div className="relative" style={{ aspectRatio: '4 / 3', background: '#F1ECE4' }}>
+      <div style={{ borderRadius: 16, overflow: 'hidden', background: M.tarjeta, boxShadow: M.sombra }}>
+        <div className="relative" style={{ aspectRatio: '366 / 142', background: '#F1ECE4' }}>
           {image ? (
             <img src={toAbsoluteUrl(image)} alt={featuredAnimal.name} className="absolute inset-0 h-full w-full object-cover" />
           ) : canEdit ? (
@@ -752,30 +750,47 @@ export default function PetPage() {
             </button>
           ) : null}
           <div
-            className="absolute inset-x-0 bottom-0 px-4 pb-3 pt-10"
-            style={{ background: image ? 'linear-gradient(to top, rgba(20,28,20,.72), rgba(20,28,20,0))' : 'transparent', color: image ? '#FFFFFF' : '#3F4A3C', pointerEvents: 'none' }}
+            className="absolute inset-0"
+            style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 12px 12px 17px', background: image ? 'linear-gradient(90deg, rgba(10,14,10,.62) 0%, rgba(10,14,10,.25) 45%, rgba(10,14,10,0) 70%)' : 'transparent', color: image ? '#FFFFFF' : M.tinta, pointerEvents: 'none' }}
           >
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-2xl font-extrabold" style={{ fontFamily: '"Bricolage Grotesque", sans-serif', margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+              <h1 style={{ fontFamily: M.titulos, margin: 0, fontSize: 26, lineHeight: 1, fontWeight: 800 }}>
                 {featuredAnimal.name || 'Mi mascota'}
               </h1>
-              {code && <span className="text-xs font-bold tracking-wide" style={{ opacity: 0.85 }}>{code}</span>}
+              <CalcoDestellosFoto size={17} style={{ marginLeft: 5, marginTop: -11 }} />
             </div>
-            <div className="text-sm font-semibold" style={{ opacity: 0.9 }}>
-              {[speciesLabel(featuredAnimal.species) || 'Animal', petAge(featuredAnimal), mood ? moodLabel(mood) : ''].filter(Boolean).join(' · ')}
+            {code && (
+              <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 5, height: 16, padding: '0 7px 0 6px', borderRadius: 8, border: `1px solid ${image ? 'rgba(255,255,255,.9)' : M.borde}`, fontSize: 9.5, fontWeight: 600, letterSpacing: '.02em' }}>
+                <CalcoEtiqueta size={10} color={image ? '#FFFFFF' : M.tinta} /> {code}
+              </span>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11.5, fontWeight: 600, lineHeight: '13px' }}>
+              {featuredAnimal.species === 'cat' || featuredAnimal.species === 'gato' ? <Cat size={13} /> : featuredAnimal.species === 'dog' || featuredAnimal.species === 'perro' ? <CalcoPerroBlanco size={12} color={image ? '#FFFFFF' : M.tinta} /> : <PawGlyph size={12} />}
+              {speciesLabel(featuredAnimal.species) || 'Animal'}
+              {petAge(featuredAnimal) && (
+                <>
+                  <span aria-hidden style={{ margin: '0 4px' }}>•</span>
+                  <CalcoCalendarioBlanco size={13} color={image ? '#FFFFFF' : M.tinta} /> {petAge(featuredAnimal)}
+                </>
+              )}
             </div>
+            {mood && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontSize: 11.5, fontWeight: 600, lineHeight: '13px' }}>
+                <CalcoCorazonBlanco size={13} color={image ? '#FFFFFF' : M.tinta} /> {moodLabel(mood)}
+              </div>
+            )}
           </div>
         </div>
         {(petCode || canEdit) && (
-          <div className="grid grid-cols-4" style={{ borderTop: '1px solid #E7E1D5' }}>
+          <div className="grid grid-cols-4" style={{ height: 54, alignItems: 'center' }}>
             {canEdit && (
-              <CardAction icon={<Pencil size={20} />} label="Editar" onClick={openEdit} />
+              <CardAction icon={<CalcoEditar size={19} />} label="Editar" onClick={openEdit} first />
             )}
             {petCode && (
-              <CardAction icon={<BookOpen size={20} />} label="Pasaporte" onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)} />
+              <CardAction icon={<CalcoPasaporte size={17} />} label="Pasaporte" onClick={() => nav(`/p/${encodeURIComponent(petCode)}`)} />
             )}
             {petCode && (
-              <CardAction icon={<Share2 size={20} />} label="Compartir" onClick={handleSharePassport} />
+              <CardAction icon={<CalcoCompartir size={19} />} label="Compartir" onClick={handleSharePassport} />
             )}
             {/* «Se ha perdido» activa lo que enseña la chapa a quien la escanea. */}
             {canEdit && (
@@ -788,7 +803,7 @@ export default function PetPage() {
                   disabled={foundMutation.isPending}
                 />
               ) : (
-                <CardAction icon={<MapPin size={20} />} label="Perdido" color="#C0512F" onClick={openLost} />
+                <CardAction icon={<CalcoPerdido size={20} />} label="Perdido" color="#B4472A" onClick={openLost} halo />
               )
             )}
           </div>
@@ -865,13 +880,14 @@ export default function PetPage() {
       )}
 
 
-      <div className="border rounded-2xl p-4" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
+      <div style={{ ...CARD, padding: '7px 10px 4px 14px' }}>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Historial de salud</h2>
+          <h2 style={SECTION_TITLE}>
+            <CalcoSalud size={21} /> Historial de salud
+          </h2>
           <button
             type="button"
-            className="text-sm font-semibold underline"
-            style={{ color: '#2E6B4F' }}
+            style={{ flexShrink: 0, height: 20, padding: '0 11px', borderRadius: 10, border: `1px solid ${M.verde}`, background: '#FFFFFF', color: M.verdeBoton, fontWeight: 600, fontSize: 10, cursor: 'pointer' }}
             onClick={() => { setHealthOpen(v => !v); setHealthError(null); }}
           >
             {healthOpen ? 'Cancelar' : 'Apuntar'}
@@ -935,16 +951,22 @@ export default function PetPage() {
         )}
 
         {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 ? (
-          <ul className="mt-3 space-y-2">
-            {featuredAnimal.healthHistory.map((entry: any, idx: number) => (
-              <li key={idx} className="text-sm" style={{ color: '#3F4A3C' }}>
-                <span className="text-xs" style={{ color: '#7A8273' }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
-                <div>{healthCategoryLabel(entry.type)}{entry.notes ? ` · ${entry.notes}` : ''}</div>
-                {entry.nextDueAt && (
-                  <div className="text-xs" style={{ color: '#7A8273' }}>
-                    Próxima: {new Date(entry.nextDueAt).toLocaleDateString()}
-                  </div>
-                )}
+          // Línea de tiempo: un punto por entrada unidos por una raya; la próxima a la derecha.
+          // Línea de tiempo de la maqueta: punto a la izquierda; fecha encima; lo hecho y, a la derecha, la próxima.
+          <ul style={{ listStyle: 'none', margin: '3px 0 0', padding: 0 }}>
+            {featuredAnimal.healthHistory.map((entry: any, idx: number, all: any[]) => (
+              <li key={idx} style={{ position: 'relative', display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', columnGap: 0, padding: '4px 0 3px', borderTop: idx ? '1px solid #EDE7DE' : 0 }}>
+                <span aria-hidden style={{ position: 'relative', gridRow: '1 / 3' }}>
+                  {idx < all.length - 1 && <span style={{ position: 'absolute', left: 6.5, top: 17, bottom: -14, width: 1.5, background: '#B9D3CF' }} />}
+                  <span style={{ position: 'absolute', left: 0, top: 9, width: 10, height: 10, borderRadius: 999, background: M.verdeBoton, boxShadow: '0 0 0 2px #FFFFFF, 0 0 0 3.5px #B9D3CF' }} />
+                </span>
+                <span style={{ gridColumn: '2 / 4', fontSize: 8.5, lineHeight: '10px', color: M.gris }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
+                <span style={{ minWidth: 0, fontSize: 10, lineHeight: '13px', color: M.tinta, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <strong style={{ fontWeight: 700 }}>{healthCategoryLabel(entry.type)}</strong>{entry.notes ? ` · ${entry.notes}` : ''}
+                </span>
+                <span style={{ fontSize: 8.5, lineHeight: '13px', color: M.gris, whiteSpace: 'nowrap', paddingLeft: 8, paddingRight: 2 }}>
+                  {entry.nextDueAt ? `Próxima: ${new Date(entry.nextDueAt).toLocaleDateString()}` : ''}
+                </span>
               </li>
             ))}
           </ul>
@@ -961,8 +983,13 @@ export default function PetPage() {
           pasaporte sirva de algo el día que el animal se pierde, y hasta ahora
           la app no la mencionaba en ninguna parte. */}
       {petCodeActual && (
-        <div className="border rounded-2xl p-4 grid gap-3" style={{ borderColor: '#E7E1D5', background: '#FFFFFF' }}>
-          <h2 className="text-lg font-semibold">La chapa de {featuredAnimal.name}</h2>
+        <div style={{ ...CARD, background: '#FEFAF7', overflow: 'hidden', display: 'grid', gridTemplateColumns: chapa ? '1fr' : '123px minmax(0, 1fr)', alignItems: 'stretch', minHeight: 102 }}>
+          {!chapa && (
+            // Recorte exacto de la maqueta: la chapa, su mancha verde y los destellos.
+            <img src="/ilustraciones/chapa-maqueta.png" alt="" aria-hidden style={{ width: 123, height: 'auto', display: 'block', alignSelf: 'end' }} />
+          )}
+          <div style={{ display: 'grid', gap: 6, alignContent: 'start', padding: chapa ? 14 : '9px 12px 10px 4px' }}>
+          <h2 style={{ ...SECTION_TITLE, fontSize: 12 }}>La chapa de {featuredAnimal.name}</h2>
           {chapa ? (
             // Vinculada: quien la escanee llega a su pasaporte.
             <div className="flex items-center gap-4">
@@ -1003,8 +1030,8 @@ export default function PetPage() {
             </div>
           ) : (
             // Sin chapa: se ofrece pedirla. Con el pedido pagado aparece el registro.
-            <div className="grid gap-3">
-              <p className="text-sm" style={{ color: '#3F4A3C', margin: 0 }}>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <p style={{ color: '#3A3F3C', margin: 0, fontSize: 9.5, lineHeight: '12.5px' }}>
                 No tienes chapa de {featuredAnimal.name}. Pide la tuya ya: con ella, quien se la encuentre
                 y la escanee llega a su pasaporte y puede avisarte.
               </p>
@@ -1012,14 +1039,15 @@ export default function PetPage() {
                 <button
                   type="button"
                   onClick={() => nav(`/tienda/${tagEligQ.data!.productId}`)}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold justify-self-start"
-                  style={{ background: '#C0512F', color: '#FFFFFF' }}
+                  className="justify-self-start"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: 148, height: 25, padding: 0, borderRadius: 9, border: 0, background: '#C24A2B', color: '#FFFFFF', fontWeight: 700, fontSize: 10.5, whiteSpace: 'nowrap', cursor: 'pointer', marginTop: 2 }}
                 >
-                  Pedir chapa{tagEligQ.data?.priceEur ? ` · ${tagEligQ.data.priceEur.toLocaleString('es-ES')} €` : ''}
+                  <CalcoCarrito size={13} /> Pedir chapa{tagEligQ.data?.priceEur ? ` · ${tagEligQ.data.priceEur.toLocaleString('es-ES')} €` : ''}
                 </button>
               )}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -1098,7 +1126,7 @@ export default function PetPage() {
         <button
           type="button"
           onClick={() => setFarewellOpen(true)}
-          style={{ justifySelf: 'center', padding: '8px 0', border: 0, background: 'none', color: '#6B7464', fontSize: 14, textDecoration: 'underline', textUnderlineOffset: 3 }}
+          style={{ justifySelf: 'center', padding: '2px 0', border: 0, background: 'none', color: '#5E6460', fontSize: 9.5, textDecoration: 'underline', textUnderlineOffset: 2 }}
         >
           {featuredAnimal.name} ha fallecido
         </button>
@@ -1458,17 +1486,31 @@ function PetFormModal({ form, onChange, onUpload, onSubmit, onClose, submitting,
 }
 
 // Acceso de la ficha tipo carnet: icono y texto, todos del mismo tamaño.
-function CardAction({ icon, label, onClick, color = '#1F6F6F', disabled }: { icon: React.ReactNode; label: string; onClick: () => void; color?: string; disabled?: boolean }) {
+function CardAction({ icon, label, onClick, color = M.verde, disabled, halo, first }: { icon: React.ReactNode; label: string; onClick: () => void; color?: string; disabled?: boolean; halo?: boolean; first?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex flex-col items-center justify-center gap-1"
-      style={{ padding: '12px 4px', border: 0, background: '#FFFFFF', color, font: 'inherit', fontSize: 12.5, fontWeight: 700, minWidth: 0, cursor: 'pointer' }}
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, height: 54, padding: 0, border: 0, background: 'transparent', color, font: 'inherit', fontSize: 10.5, fontWeight: 700, minWidth: 0, cursor: 'pointer' }}
     >
-      {icon}
+      {!first && <span aria-hidden style={{ position: 'absolute', left: 0, top: 14, bottom: 14, width: 1, background: '#E6DFD4' }} />}
+      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 999, background: halo ? '#FBEAE4' : 'transparent' }}>{icon}</span>
       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{label}</span>
     </button>
   );
 }
+
+const CARD: React.CSSProperties = { borderRadius: 14, background: M.tarjeta, boxShadow: M.sombra, border: '1px solid #F1EBE2' };
+
+const TOP_BUTTON: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 0,
+  height: 28, padding: '0 6px', borderRadius: 13, border: '1px solid #EFE9E0',
+  background: '#FFFFFF', color: M.tinta, fontSize: 10.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden',
+  boxShadow: '0 2px 6px -3px rgba(60,45,30,.22)', cursor: 'pointer',
+};
+
+const SECTION_TITLE: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 9, margin: 0, whiteSpace: 'nowrap',
+  fontFamily: M.titulos, fontSize: 13.5, fontWeight: 700, color: M.tinta,
+};

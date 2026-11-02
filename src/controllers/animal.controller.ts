@@ -14,6 +14,7 @@ import { speciesFilter, speciesVariants } from '../utils/species';
 import { ageFromBirthDate, parseBirthDate } from '../utils/age';
 import { canPublishAnimals } from '../utils/shelterVerification';
 import { canManageAnimal } from '../utils/animalAccess';
+import { distanciaKm, geolocalizar, type Lugar } from '../utils/geo';
 
 const allowedStatuses = ['borrador', 'publicado', 'reservado', 'preadoptado', 'adoptado', 'no_disponible', 'archivado'];
 
@@ -691,6 +692,18 @@ export async function search(req: Request, res: Response) {
     filter.$or = [{ name: rx }, { breed: rx }, { species: rx }, { description: rx }, { city: rx }];
   }
 
+  // «Más cerca»: si sabemos desde dónde busca, ordena por distancia a cada animal.
+  // Sin ubicación conocida sigue el orden normal y `origen: null` le dice a la web
+  // que puede pedirla.
+  if (sort === 'distance') {
+    const origen = await origenBusqueda(req);
+    if (origen) {
+      const resultado = await buscarPorCercania(filter, origen, page, limit);
+      const visibles = isAdmin || isOwnerView ? resultado.items : resultado.items.map(stripInternalFields);
+      return res.json({ items: visibles, page, limit, total: resultado.total, origen: { etiqueta: origen.etiqueta, fuente: origen.fuente } });
+    }
+  }
+
   const sortField = sort === 'name' ? 'name' : sort === 'age' ? 'ageGroup' : 'createdAt';
   const sortDir = dir === 'asc' ? 1 : -1;
 
@@ -718,7 +731,83 @@ export async function search(req: Request, res: Response) {
     }
   }
 
-  res.json({ items: sanitized, page, limit, total });
+  res.json({ items: sanitized, page, limit, total, ...(sort === 'distance' ? { origen: null } : {}) });
+}
+
+type Origen = Lugar & { fuente: 'ubicacion' | 'texto' | 'perfil' };
+
+/**
+ * Desde dónde busca: coordenadas del navegador (`lat`/`lng`, redondeadas a ~1 km y
+ * solo dentro de España), un código postal o municipio escrito (`near`) o, si ha
+ * iniciado sesión, la dirección de su perfil. Nada de esto se guarda.
+ */
+async function origenBusqueda(req: Request): Promise<Origen | null> {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (req.query.lat !== undefined && Number.isFinite(lat) && Number.isFinite(lng) && lat > 27 && lat < 44.5 && lng > -19 && lng < 5) {
+    return { lat: Math.round(lat * 100) / 100, lng: Math.round(lng * 100) / 100, etiqueta: 'tu ubicación', fuente: 'ubicacion' };
+  }
+  const cerca = typeof req.query.near === 'string' ? req.query.near.trim().slice(0, 80) : '';
+  if (cerca) {
+    const lugar = geolocalizar(cerca);
+    return lugar ? { ...lugar, fuente: 'texto' } : null;
+  }
+  const user: any = (req as any).user;
+  const id = user?._id || user?.id;
+  if (id && Types.ObjectId.isValid(String(id))) {
+    const yo: any = await User.findById(id).select('profile.address').lean();
+    const lugar = geolocalizar(yo?.profile?.address?.city, yo?.profile?.address?.postalCode);
+    if (lugar) return { ...lugar, fuente: 'perfil' };
+  }
+  return null;
+}
+
+/** Tope de animales que se ordenan en memoria: el catálogo publicado es mucho menor. */
+const MAX_CERCANIA = 3000;
+
+/**
+ * Ordena por distancia. El lugar de cada animal sale de su ciudad y, si no se reconoce,
+ * de la dirección de quien lo da: código postal en las protectoras y solo el municipio
+ * en los particulares, para no acercar más de la cuenta dónde vive alguien. Los que no
+ * tienen lugar reconocible van al final, del más reciente al más antiguo.
+ */
+async function buscarPorCercania(filter: any, origen: Lugar, page: number, limit: number) {
+  const candidatos: any[] = await Animal.find(filter)
+    .select('_id city shelter createdByRole createdAt')
+    .sort({ createdAt: -1 })
+    .limit(MAX_CERCANIA)
+    .lean();
+  const duenos = [...new Set(candidatos.map(a => String(a.shelter || '')).filter(Boolean))];
+  const gente: any[] = duenos.length ? await User.find({ _id: { $in: duenos } }).select('profile.address').lean() : [];
+  const direccion = new Map(gente.map(u => [String(u._id), u.profile?.address || {}]));
+
+  const conDistancia = candidatos.map((a, orden) => {
+    let lugar = geolocalizar(a.city);
+    if (!lugar) {
+      const dir: any = direccion.get(String(a.shelter || '')) || {};
+      lugar = geolocalizar(dir.city, a.createdByRole === 'protectora' ? dir.postalCode : null);
+    }
+    return { id: String(a._id), orden, km: lugar ? distanciaKm(origen, lugar) : null };
+  });
+  conDistancia.sort((x, y) => {
+    if (x.km === null && y.km === null) return x.orden - y.orden;
+    if (x.km === null) return 1;
+    if (y.km === null) return -1;
+    return x.km - y.km || x.orden - y.orden;
+  });
+
+  const pagina = conDistancia.slice((page - 1) * limit, page * limit);
+  const docs: any[] = pagina.length ? await Animal.find({ _id: { $in: pagina.map(p => p.id) } }).lean() : [];
+  const porId = new Map(docs.map(d => [String(d._id), d]));
+  const items = pagina
+    .map(p => {
+      const doc = porId.get(p.id);
+      if (!doc) return null;
+      // Kilómetros enteros (mínimo 1): suficiente para elegir y no delata calles.
+      return { ...doc, distanceKm: p.km === null ? null : Math.max(1, Math.round(p.km)) };
+    })
+    .filter(Boolean);
+  return { items, total: candidatos.length };
 }
 
 export async function updateStatus(req: Request, res: Response) {

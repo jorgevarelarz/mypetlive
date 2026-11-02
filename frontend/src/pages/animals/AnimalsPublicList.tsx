@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bell, Cat, ChevronLeft, ChevronRight, Dog, Heart, Rabbit, Search, SlidersHorizontal, Turtle, X } from 'lucide-react';
+import { Bell, Cat, ChevronLeft, ChevronRight, Dog, Heart, LocateFixed, MapPin, Rabbit, Search, SlidersHorizontal, Turtle, X } from 'lucide-react';
 import { createAnimalAlert, searchAnimals, type AnimalAlertFilters } from '../../api/animals';
 import SkeletonGrid from '../../components/ui/SkeletonGrid';
 import ErrorCard from '../../components/ui/ErrorCard';
@@ -89,8 +89,53 @@ export default function AnimalsPublicList() {
   const goodWithChildren = sp.get('goodWithChildren') === 'true' || undefined;
   const goodWithDogs = sp.get('goodWithDogs') === 'true' || undefined;
   const goodWithCats = sp.get('goodWithCats') === 'true' || undefined;
-  const sort = (sp.get('sort') as 'createdAt' | 'name' | 'age' | null) || 'createdAt';
-  const dir = (sp.get('dir') as 'asc' | 'desc' | null) || (sort === 'name' ? 'asc' : 'desc');
+  // Por defecto, los más cercanos primero. El servidor usa la ubicación que le demos
+  // (coordenadas del móvil o un código postal/municipio) o la dirección del perfil; si
+  // no sabe dónde está, devuelve `origen: null` y aquí se la pedimos.
+  const sort = (sp.get('sort') as 'createdAt' | 'name' | 'age' | 'distance' | null) || 'distance';
+  const dir = (sp.get('dir') as 'asc' | 'desc' | null) || (sort === 'name' || sort === 'distance' ? 'asc' : 'desc');
+  const near = sp.get('near') || undefined;
+  const lat = sp.get('lat') ? Number(sp.get('lat')) : undefined;
+  const lng = sp.get('lng') ? Number(sp.get('lng')) : undefined;
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const [placeDraft, setPlaceDraft] = useState('');
+  const [locating, setLocating] = useState(false);
+
+  const setPlace = (place: { near?: string; lat?: number; lng?: number }) => {
+    const next = new URLSearchParams(sp);
+    ['near', 'lat', 'lng'].forEach(key => next.delete(key));
+    if (place.near) next.set('near', place.near);
+    if (place.lat !== undefined && place.lng !== undefined) {
+      next.set('lat', place.lat.toFixed(2));
+      next.set('lng', place.lng.toFixed(2));
+    }
+    next.set('sort', 'distance');
+    next.set('dir', 'asc');
+    next.set('page', '1');
+    setSp(next);
+    setPlaceOpen(false);
+  };
+
+  const useMyLocation = () => {
+    if (!('geolocation' in navigator)) {
+      toast.error('Este dispositivo no nos da la ubicación. Escribe tu código postal o tu ciudad.');
+      setPlaceOpen(true);
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLocating(false);
+        setPlace({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        setLocating(false);
+        toast.error('No hemos podido saber dónde estás. Escribe tu código postal o tu ciudad.');
+        setPlaceOpen(true);
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 600_000 },
+    );
+  };
 
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(sp);
@@ -120,7 +165,13 @@ export default function AnimalsPublicList() {
   }, [queryDraft, q]);
 
   const clearFilters = () => {
-    setSp({ page: '1', limit: String(limit) }, { replace: false });
+    // El sitio desde el que busca no es un filtro: se conserva.
+    const keep: Record<string, string> = { page: '1', limit: String(limit) };
+    for (const key of ['near', 'lat', 'lng']) {
+      const value = sp.get(key);
+      if (value) keep[key] = value;
+    }
+    setSp(keep, { replace: false });
   };
 
   const setFilterPage = (p: number) => {
@@ -130,14 +181,15 @@ export default function AnimalsPublicList() {
   };
 
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: ['animals-public', { q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }],
-    queryFn: () => searchAnimals({ q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit }),
+    queryKey: ['animals-public', { q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit, near, lat, lng, user: user?._id || null }],
+    queryFn: () => searchAnimals({ q, species, size, sex, city, ageGroup, goodWithChildren, goodWithDogs, goodWithCats, sort, dir, page, limit, near, lat, lng }),
     placeholderData: keepPreviousData,
     staleTime: 20_000,
   });
 
   const items = data?.items || [];
   const total = data?.total || 0;
+  const origin = data?.origen;
   const pages = Math.max(1, Math.ceil(total / limit));
   // Cada filtro activo lleva su clave: el chip tiene X y la X quita ESE filtro.
   const activeFilters = [
@@ -302,6 +354,7 @@ export default function AnimalsPublicList() {
                 }}
                 style={{ height: 46, border: 0, outline: 0, background: 'transparent', color: MPL.ink, font: 'inherit', fontWeight: 700 }}
               >
+                <option value="distance:asc">Más cerca</option>
                 <option value="createdAt:desc">Más recientes</option>
                 <option value="name:asc">Nombre A-Z</option>
                 <option value="age:asc">Menor edad</option>
@@ -313,6 +366,49 @@ export default function AnimalsPublicList() {
               Filtros{activeFilters.length ? ` (${activeFilters.length})` : ''}
             </button>
           </div>
+
+          {sort === 'distance' && data && (
+            <div className="catalog-place" style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 14.5, color: MPL.muted }}>
+              {origin && !placeOpen ? (
+                <>
+                  <MapPin size={17} color={MPL.teal} />
+                  <span>
+                    Primero los más cerca de <strong style={{ color: MPL.ink }}>{origin.fuente === 'ubicacion' ? 'tu ubicación' : origin.etiqueta.replace(/ \(.*\)$/, '')}</strong>
+                  </span>
+                  <button type="button" onClick={() => { setPlaceDraft(''); setPlaceOpen(true); }} style={{ border: 0, background: 'transparent', color: MPL.teal, fontWeight: 800, font: 'inherit', cursor: 'pointer', padding: 0 }}>
+                    Cambiar
+                  </button>
+                </>
+              ) : (
+                <>
+                  {!origin && <span style={{ width: '100%', color: MPL.ink, fontWeight: 700 }}>¿Dónde estás? Te enseñamos primero los animales que tienes más cerca.</span>}
+                  <button type="button" onClick={useMyLocation} disabled={locating} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1.5px solid ${MPL.teal}`, background: '#fff', color: MPL.tealDark, borderRadius: 12, padding: '0 14px', height: 40, font: 'inherit', fontWeight: 800, cursor: locating ? 'wait' : 'pointer' }}>
+                    <LocateFixed size={16} /> {locating ? 'Buscando…' : 'Usar mi ubicación'}
+                  </button>
+                  <form
+                    onSubmit={event => {
+                      event.preventDefault();
+                      const value = placeDraft.trim();
+                      if (value) setPlace({ near: value });
+                    }}
+                    style={{ display: 'flex', gap: 8, flex: '1 1 220px' }}
+                  >
+                    <input
+                      aria-label="Código postal o ciudad"
+                      placeholder="o tu código postal / ciudad"
+                      value={placeDraft}
+                      onChange={event => setPlaceDraft(event.target.value)}
+                      style={{ flex: 1, minWidth: 0, height: 40, border: `1.5px solid ${MPL.border}`, borderRadius: 12, padding: '0 12px', font: 'inherit', color: MPL.ink, background: '#fff' }}
+                    />
+                    <button type="submit" style={{ border: 0, background: MPL.teal, color: '#fff', borderRadius: 12, padding: '0 14px', height: 40, font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
+                      Ver
+                    </button>
+                  </form>
+                  {near && !origin && <span style={{ width: '100%', color: MPL.coral, fontSize: 13.5 }}>No reconocemos «{near}». Prueba con el código postal.</span>}
+                </>
+              )}
+            </div>
+          )}
         </header>
 
         <div className="catalog-grid" style={{ padding: '0 32px 56px' }}>
@@ -475,7 +571,8 @@ export default function AnimalsPublicList() {
                     const id = String(a._id || a.id);
                     const image = Array.isArray(a.images) ? a.images[0] : null;
                     const personality = Array.isArray(a.personality) ? a.personality.slice(0, 2) : [];
-                    const meta = [speciesLabel(a.species), sizeLabel(a.size), a.age, a.city].filter(Boolean).join(' · ');
+                    const distance = typeof a.distanceKm === 'number' ? `a ${a.distanceKm} km` : null;
+                    const meta = [speciesLabel(a.species), sizeLabel(a.size), a.age, a.city, distance].filter(Boolean).join(' · ');
                     const favorite = favorites.isFavorite(id);
                     return (
                       <article key={id} className="catalog-card" style={{ position: 'relative', background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 20, overflow: 'hidden', boxShadow: '0 1px 3px rgba(31,55,40,.06),0 8px 24px -16px rgba(31,55,40,.18)' }}>

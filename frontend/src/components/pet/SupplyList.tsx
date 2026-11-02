@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { upsertAnimalSupply, type CareSupply, type SupplyUnit } from '../../api/animals';
 import { describeSupply, formatQuantity, FOOD_UNITS, LITTER_UNITS } from '../../utils/supplies';
 import { Link } from 'react-router-dom';
+import { CalcoDespensa } from '../icons/calcados';
 
 type Kind = 'food' | 'litter';
 
@@ -55,21 +56,22 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
   const tracked = rows.filter(r => r.supply.usesLeft !== null);
 
   return (
-    <div style={{ borderTop: '1px solid #E7E1D5', paddingTop: 12 }}>
+    <div style={{ marginTop: 9, padding: '0 7px 0 5px', display: 'grid', gridTemplateColumns: '21px minmax(0, 1fr)', columnGap: 10, minWidth: 0 }}>
+      <CalcoDespensa size={17} style={{ marginTop: 1 }} />
+      <div style={{ minWidth: 0 }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">Despensa</h3>
+        <h3 style={{ margin: 0, fontSize: 11, lineHeight: '13px', fontWeight: 700, color: '#1E2A27' }}>Despensa</h3>
         <button
           type="button"
           onClick={() => setEditing({ kind: 'food' })}
-          className="text-xs font-semibold"
-          style={{ color: '#1F6F6F', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{ color: '#1F6F6F', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10.5, lineHeight: '13px', fontWeight: 700 }}
         >
           + Añadir producto
         </button>
       </div>
 
       {tracked.length === 0 ? (
-        <p className="text-xs" style={{ color: MUTED, marginTop: 6 }}>
+        <p style={{ color: '#4A504C', marginTop: 1, fontSize: 9, lineHeight: '11px' }}>
           {rows.length === 0
             // A un perro no se le nombra la arena. `showLitter` ya decidía qué
             // filas y qué botones se pintan (`usesLitter(species)`), pero este
@@ -153,6 +155,7 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
           onSave={payload => save.mutate(payload)}
         />
       )}
+      </div>
     </div>
   );
 }

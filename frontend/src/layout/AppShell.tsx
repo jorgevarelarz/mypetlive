@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Home, PawPrint, Heart, Ticket, Gift, User, Users, FileText,
-  Settings, ClipboardList, Circle, Menu, X, QrCode, RefreshCw, LogOut, MessageCircle, CalendarDays, HouseHeart,
+  Settings, ClipboardList, Circle, X, RefreshCw, LogOut, MessageCircle, CalendarDays, HouseHeart,
 } from 'lucide-react';
+import { IconoCodigoQr, IconoMenu } from '../components/icons/mplIcons';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
@@ -179,7 +180,7 @@ function Header() {
               onClick={openQr}
               aria-label="Mostrar mi código QR"
             >
-              <QrCode size={21} strokeWidth={2.2} />
+              <IconoCodigoQr size={23} strokeWidth={1.9} color="currentColor" />
             </button>
           )}
           {!user ? (
@@ -217,7 +218,7 @@ function Header() {
             aria-controls="mobile-menu"
             aria-label="Abrir menú"
           >
-            <Menu size={22} strokeWidth={2.2} />
+            <IconoMenu size={24} strokeWidth={1.9} color="currentColor" />
           </button>}
         </div>
       </div>
@@ -456,12 +457,13 @@ export default function AppShell() {
           <LegalLinks />
         </>
       ) : (
+        // En móvil, 12 de margen a cada lado (el de las maquetas del 2 nov 2026).
         // En móvil el margen de arriba va dentro de <main>, que es lo que se
         // desplaza: en el contenedor (overflow hidden) dejaba una franja fija
         // de 24px bajo la cabecera que cortaba el contenido al bajar.
-        <div className="app-shell-body mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 md:py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
+        <div className="app-shell-body mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 md:py-6 flex gap-6 h-[calc(100vh-56px)] overflow-hidden">
           <SideNav />
-          <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-2 pt-6 pb-24 md:pt-0 md:pb-0">
+          <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden md:pr-2 pt-6 pb-24 md:pt-0 md:pb-0">
             {!pathname.startsWith('/mensajes') && !pathname.startsWith('/contratos') && !pathname.startsWith('/acogida') && !pathname.startsWith('/buscar-casa/encontrado') && <div className="mpl-crumbs"><Breadcrumbs /></div>}
             <Outlet />
           </main>

@@ -24,15 +24,23 @@ export type AnimalSearchParams = {
   status?: AnimalStatus;
   shelter?: string;
   code?: string;
-  sort?: 'createdAt' | 'name' | 'age';
+  sort?: 'createdAt' | 'name' | 'age' | 'distance';
   dir?: 'asc' | 'desc';
   page?: number;
   limit?: number;
+  /** Con sort=distance: código postal o municipio desde el que se busca. */
+  near?: string;
+  /** Con sort=distance: coordenadas del navegador (el servidor las redondea a ~1 km). */
+  lat?: number;
+  lng?: number;
 };
+
+/** Desde dónde ordenó el servidor por cercanía; null si no lo sabe (hay que pedirlo). */
+export type AnimalSearchOrigin = { etiqueta: string; fuente: 'ubicacion' | 'texto' | 'perfil' } | null;
 
 export async function searchAnimals(params: AnimalSearchParams = {}) {
   const { data } = await client.get('/api/animals', { params });
-  return data as { items: any[]; page: number; limit: number; total: number };
+  return data as { items: any[]; page: number; limit: number; total: number; origen?: AnimalSearchOrigin };
 }
 
 // El servidor topa `limit` en 100 (`Math.min(100, …)` en animal.controller.search),

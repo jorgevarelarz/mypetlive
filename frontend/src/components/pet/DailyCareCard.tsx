@@ -1,6 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Footprints, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { CalcoCalendarioHuella, CalcoCheck, CalcoComida, CalcoComidaTachada, CalcoHuellaDeco, CalcoPaseo, CalcoPasos } from '../icons/calcados';
+import { M } from './maqueta';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import {
@@ -26,6 +28,8 @@ type Props = {
   onMarked?: () => void;
   /** La despensa se gestiona en «Mi mascota»; en el inicio se oculta. */
   showPantry?: boolean;
+  /** Versión del inicio: dos líneas de estado y los botones en una fila (maqueta del 2 nov 2026). */
+  compact?: boolean;
 };
 
 const CARD: React.CSSProperties = { borderColor: '#E7E1D5', background: '#FFFFFF' };
@@ -60,7 +64,7 @@ function entryDetail(entry?: CareEntry) {
   return parts.join(' · ');
 }
 
-export default function DailyCareCard({ animalId, species, onMarked, showPantry = true }: Props) {
+export default function DailyCareCard({ animalId, species, onMarked, showPantry = true, compact = false }: Props) {
   const queryClient = useQueryClient();
   const { data, refetch } = useQuery({
     queryKey: ['animal-care', animalId],
@@ -141,57 +145,86 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
   const lastFeed = lastOf('feed');
   const lastLitter = lastOf('litter');
   const lastWalk = lastOf('walk');
+  const today = (entry?: CareEntry | null) => !!entry && new Date(entry.createdAt).toDateString() === new Date().toDateString();
+  const fedToday = today(lastFeed);
+  const walkedToday = today(lastWalk);
+  const headline = fedToday && (!showWalk || walkedToday)
+    ? 'Hoy ya está todo apuntado.'
+    : !fedToday && showWalk && !walkedToday
+      ? 'Aún no registramos una comida ni un paseo hoy.'
+      : !fedToday
+        ? 'Aún no registramos una comida hoy.'
+        : 'Aún no registramos un paseo hoy.';
 
   return (
-    <div className="border rounded-2xl p-4 grid gap-3" style={CARD}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">Cuidado diario</h2>
-        {!!summary && (summary.feedings > 0 || summary.walks > 0 || summary.litterChanges > 0) && (
-          <span className="text-xs" style={{ color: MUTED }}>Esta semana</span>
-        )}
-      </div>
-
-      <CareLine
-        icon={<UtensilsCrossed size={18} />}
-        title={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'}
-        detail={entryDetail(lastFeed)}
-        actor={lastFeed?.actorName}
-        aside={summary?.feedings ? `${summary.feedings} comida${summary.feedings === 1 ? '' : 's'}` : undefined}
-      />
-
-      {showWalk && (
-        <CareLine
-          icon={<Footprints size={18} />}
-          title={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'}
-          detail={entryDetail(lastWalk)}
-          actor={lastWalk?.actorName}
-          aside={
-            summary?.walks
-              ? `${summary.walks} paseo${summary.walks === 1 ? '' : 's'}${summary.walkKm ? ` · ${summary.walkKm} km` : ''}`
-              : undefined
-          }
-        />
+    <div style={compact
+      ? { position: 'relative', borderRadius: 16, background: M.tarjeta, boxShadow: M.sombra, border: '1px solid #F1EBE2', padding: '10px 15px 12px 20px', fontFamily: M.letra, letterSpacing: 0, color: M.tinta }
+      : { position: 'relative', overflow: 'hidden', borderRadius: 14, background: M.tarjeta, boxShadow: M.sombra, border: '1px solid #F1EBE2', padding: '9px 10px 10px 10px', fontFamily: M.letra, letterSpacing: 0, color: M.tinta }}>
+      {compact ? (
+        // Inicio (maqueta): calendario de 25, título de 16,5, dos líneas de 11,5 y botones de 34 de alto.
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+            <CalcoCalendarioHuella size={25} />
+            <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 16.5, fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
+          </div>
+          <div style={{ display: 'grid', gap: 9, margin: '10px 0 0 12px' }}>
+            <CompactLine icon={<CalcoComidaTachada size={16} />} text={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'} />
+            {showWalk && <CompactLine icon={<CalcoPasos size={16} />} text={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'} />}
+            {showLitter && <CompactLine icon={<Sparkles size={15} color={M.verde} />} text={lastLitter ? `Arena cambiada ${since(lastLitter.createdAt)}` : 'Aún no registramos un cambio de arena'} />}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (showWalk ? 1 : 0) + (showLitter ? 1 : 0)}, minmax(0, 1fr))`, gap: 12, marginTop: 11, marginLeft: -10 }}>
+            <button type="button" onClick={() => setSheet('feed')} style={{ ...compactButton, background: M.verdeBoton, color: '#FFFFFF', borderColor: M.verdeBoton, boxShadow: '0 4px 10px -6px rgba(14,95,91,.6)' }}>Marcar comida</button>
+            {showWalk && <button type="button" onClick={() => setSheet('walk')} style={compactButton}>Marcar paseo</button>}
+            {showLitter && <button type="button" onClick={() => setSheet('litter')} style={compactButton}>Cambiar arena</button>}
+          </div>
+        </>
+      ) : (
+        // Mi mascota (maqueta): calendario de 25, título de 13,5, caja interior con una fila de 38 por cuidado.
+        <>
+          <CalcoHuellaDeco size={31} style={{ position: 'absolute', top: 11, right: 10 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 44px 0 4px' }}>
+            <CalcoCalendarioHuella size={25} />
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 13.5, lineHeight: '15px', fontWeight: 700, color: M.tinta }}>Cuidado diario</h2>
+              <div style={{ fontSize: 10, lineHeight: '12px', color: '#3D4340', marginTop: 2 }}>{headline}</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 10, borderRadius: 12, background: '#FFFFFF', border: '1px solid #EFE9E0', boxShadow: '0 2px 6px -4px rgba(60,45,30,.2)', minWidth: 0 }}>
+            <CareLine
+              icon={<CalcoComida size={17} />}
+              label="Comida"
+              title={lastFeed ? `Comió ${since(lastFeed.createdAt)}` : 'Aún no registramos una comida'}
+              detail={entryDetail(lastFeed)}
+              actor={lastFeed?.actorName}
+              aside={summary?.feedings ? `${summary.feedings} esta semana` : undefined}
+              action={{ label: 'Marcar comida', primary: true, onClick: () => setSheet('feed') }}
+              first
+            />
+            {showWalk && (
+              <CareLine
+                icon={<CalcoPaseo size={22} />}
+                label="Paseo"
+                title={lastWalk ? `Paseó ${since(lastWalk.createdAt)}` : 'Aún no registramos un paseo'}
+                detail={entryDetail(lastWalk)}
+                actor={lastWalk?.actorName}
+                aside={summary?.walks ? `${summary.walks} esta semana${summary.walkKm ? ` · ${summary.walkKm} km` : ''}` : undefined}
+                action={{ label: 'Marcar paseo', onClick: () => setSheet('walk') }}
+              />
+            )}
+            {showLitter && (
+              <CareLine
+                icon={<Sparkles size={16} color={M.verde} />}
+                label="Arena"
+                title={lastLitter ? `Cambiada ${since(lastLitter.createdAt)}` : 'Aún no registramos un cambio de arena'}
+                detail={entryDetail(lastLitter)}
+                actor={lastLitter?.actorName}
+                aside={summary?.litterChanges ? `${summary.litterChanges} esta semana` : undefined}
+                action={{ label: 'Cambiar arena', onClick: () => setSheet('litter') }}
+              />
+            )}
+          </div>
+        </>
       )}
-
-      {showLitter && (
-        <CareLine
-          icon={<Sparkles size={18} />}
-          title={
-            lastLitter
-              ? `Arena cambiada ${since(lastLitter.createdAt)}`
-              : 'Aún no registramos un cambio de arena'
-          }
-          detail={entryDetail(lastLitter)}
-          actor={lastLitter?.actorName}
-          aside={summary?.litterChanges ? `${summary.litterChanges} cambio${summary.litterChanges === 1 ? '' : 's'}` : undefined}
-        />
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setSheet('feed')} style={btnPrimary}>Marcar comida</button>
-        {showWalk && <button type="button" onClick={() => setSheet('walk')} style={btnGhost}>Marcar paseo</button>}
-        {showLitter && <button type="button" onClick={() => setSheet('litter')} style={btnGhost}>Cambiar arena</button>}
-      </div>
 
       {showPantry && (
         <SupplyList
@@ -330,18 +363,45 @@ export default function DailyCareCard({ animalId, species, onMarked, showPantry 
   );
 }
 
-function CareLine({ icon, title, detail, actor, aside }: { icon: React.ReactNode; title: string; detail?: string | null; actor?: string; aside?: string }) {
+type CareAction = { label: string; primary?: boolean; onClick: () => void };
+
+const compactButton: React.CSSProperties = {
+  height: 34, borderRadius: 12, border: '1px solid #CFC9BF', background: '#FFFFFF', color: M.tinta,
+  fontFamily: M.letra, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', padding: '0 6px',
+};
+
+function CompactLine({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-start gap-2">
-        <span aria-hidden style={{ display: 'inline-flex', color: '#1F6F6F', paddingTop: 2 }}>{icon}</span>
-        <div>
-          <div className="text-sm">{title}</div>
-          {!!detail && <div className="text-sm" style={{ color: MUTED }}>{detail}</div>}
-          {!!actor && <div className="text-xs" style={{ color: MUTED }}>marcado por {actor}</div>}
-        </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, lineHeight: '16px', color: '#2F3532' }}>
+      <span aria-hidden style={{ display: 'inline-flex', width: 17, justifyContent: 'center' }}>{icon}</span>
+      <span style={{ minWidth: 0 }}>{text}</span>
+    </div>
+  );
+}
+
+// Fila de la maqueta: círculo de 28 con el icono, nombre (11) y estado (9), y botón de 120 × 25 a la derecha.
+function CareLine({ icon, label, title, detail, actor, aside, action, first }: { icon: React.ReactNode; label: string; title: string; detail?: string | null; actor?: string; aside?: string; action: CareAction; first?: boolean }) {
+  const extra = [detail || '', actor ? `marcado por ${actor}` : '', aside || ''].filter(Boolean).join(' · ');
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', alignItems: 'center', columnGap: 10, minHeight: 38, padding: '4px 9px 4px 8px', borderTop: first ? 0 : '1px solid #EDE7DE' }}>
+      <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 999, background: '#F5F1EB' }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, lineHeight: '13px', fontWeight: 700, color: M.tinta }}>{label}</div>
+        <div style={{ fontSize: 9, lineHeight: '11px', color: '#4A504C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        {!!extra && <div style={{ fontSize: 8.5, lineHeight: '10px', color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{extra}</div>}
       </div>
-      {!!aside && <span className="text-xs whitespace-nowrap" style={{ color: MUTED }}>{aside}</span>}
+      <button
+        type="button"
+        onClick={action.onClick}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: 120, height: 25, padding: 0, borderRadius: 8,
+          border: `1px solid ${action.primary ? M.verdeBoton : '#8FB7B2'}`, background: action.primary ? M.verdeBoton : '#FFFFFF',
+          color: action.primary ? '#FFFFFF' : M.verdeBoton, fontFamily: M.letra, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer',
+          boxShadow: action.primary ? '0 3px 8px -5px rgba(14,95,91,.7)' : 'none',
+        }}
+      >
+        <CalcoCheck size={8} color={action.primary ? '#FFFFFF' : M.verdeBoton} /> {action.label}
+      </button>
     </div>
   );
 }

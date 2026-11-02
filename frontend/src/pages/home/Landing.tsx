@@ -290,7 +290,7 @@ export default function Landing() {
         {/* FOOTER */}
         <footer className="lp-footer" style={{ background: C.ink, color: '#E6E0D2' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 32px 32px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 32, paddingBottom: 40, borderBottom: '1px solid rgba(255,255,255,.12)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 32, paddingBottom: 40, borderBottom: '1px solid rgba(255,255,255,.12)' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
                   <span style={{ color: '#fff', display: 'inline-flex' }}><Paw size={24} /></span>
@@ -309,12 +309,6 @@ export default function Landing() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'rgba(230,224,210,.7)' }}>
                   <button onClick={() => openAuth({ mode: 'login', message: 'Accede con la cuenta profesional activada por MyPetLive.' })} style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', color: 'rgba(230,224,210,.7)', textAlign: 'left', padding: 0 }}>Panel</button>
                   <Link to="/donate">Donaciones</Link>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 14 }}>Marca</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, color: 'rgba(230,224,210,.7)' }}>
-                  <Link to="/sistema">Sistema de diseño</Link>
                 </div>
               </div>
             </div>

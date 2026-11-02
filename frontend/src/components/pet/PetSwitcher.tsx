@@ -1,13 +1,15 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
-import { MPL, PawMark } from '../../styles/mypetlive';
+import { PawMark } from '../../styles/mypetlive';
+import { M } from './maqueta';
 import { toAbsoluteUrl } from '../../utils/media';
 
 type Pet = { _id?: string; id?: string; name?: string; images?: string[]; memorial?: { active?: boolean } | null };
 
 /**
- * Fila de mascotas para cambiar de una a otra (inicio y «Mi mascota»): foto
- * redonda y nombre, la elegida con aro. Al final, «+» para añadir otra.
+ * Fila de mascotas para cambiar de una a otra (inicio y «Mi mascota»), con el estilo de las
+ * maquetas del 2 nov 2026: píldoras de 30 de alto con la foto redonda y el nombre; la elegida en
+ * verde. Si no caben, la fila se desliza de lado. Al final, «+» para añadir otra.
  */
 export default function PetSwitcher({
   pets,
@@ -20,12 +22,14 @@ export default function PetSwitcher({
   onSelect: (id: string) => void;
   onAdd?: () => void;
 }) {
-  const circle: React.CSSProperties = {
-    width: 56, height: 56, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', background: MPL.teal100, color: MPL.teal,
-  };
+  const pill = (active: boolean): React.CSSProperties => ({
+    flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, height: 30, padding: '0 12px 0 4px', borderRadius: 15,
+    border: `1px solid ${active ? '#9CC4BE' : '#EFE9E0'}`, background: active ? '#DDEDE8' : '#FFFFFF',
+    color: active ? M.verdeBoton : M.tinta, fontFamily: M.letra, fontSize: 11, fontWeight: active ? 700 : 500, letterSpacing: 0,
+    boxShadow: active ? 'none' : '0 2px 6px -3px rgba(60,45,30,.22)', cursor: 'pointer', whiteSpace: 'nowrap',
+  });
   return (
-    <div role="tablist" aria-label="Tus mascotas" style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '4px 2px 6px' }}>
+    <div role="tablist" aria-label="Tus mascotas" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '2px 5px 2px', width: '100%', scrollbarWidth: 'none' }}>
       {pets.map(pet => {
         const id = String(pet._id || pet.id || '');
         if (!id) return null;
@@ -41,32 +45,25 @@ export default function PetSwitcher({
             aria-selected={active}
             aria-label={inMemory ? `${pet.name || 'Mascota'}, en su memoria` : undefined}
             onClick={() => onSelect(id)}
-            style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 64, flexShrink: 0, font: 'inherit' }}
+            style={pill(active)}
           >
-            <span style={{ ...circle, boxShadow: active ? `0 0 0 3px ${MPL.bg}, 0 0 0 5px ${MPL.teal}` : 'none' }}>
+            <span style={{ width: 22, height: 22, borderRadius: 999, overflow: 'hidden', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#E4EFEC', color: M.verde }}>
               {img ? (
                 <img src={toAbsoluteUrl(img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: inMemory ? 'grayscale(0.7)' : undefined, opacity: inMemory ? 0.85 : 1 }} />
               ) : (
-                <PawMark size={24} />
+                <PawMark size={12} />
               )}
             </span>
-            <span style={{ fontSize: 12.5, fontWeight: active ? 800 : 600, color: active ? MPL.ink : MPL.muted, maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {pet.name || 'Mascota'}
-            </span>
+            <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{pet.name || 'Mascota'}</span>
           </button>
         );
       })}
       {onAdd && (
-        <button
-          type="button"
-          onClick={onAdd}
-          aria-label="Añadir otra mascota"
-          style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 64, flexShrink: 0, font: 'inherit' }}
-        >
-          <span style={{ ...circle, background: '#fff', border: `1.5px dashed ${MPL.border}`, color: MPL.muted }}>
-            <Plus size={22} />
+        <button type="button" onClick={onAdd} aria-label="Añadir otra mascota" style={{ ...pill(false), padding: '0 12px 0 6px', border: '1px dashed #D8D0C3', boxShadow: 'none' }}>
+          <span style={{ width: 20, height: 20, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: M.gris }}>
+            <Plus size={14} />
           </span>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: MPL.muted }}>Añadir</span>
+          Añadir
         </button>
       )}
     </div>
