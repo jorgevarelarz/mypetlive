@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { IconoInicio } from './icons/mplIcons';
-import { CalcoNavBuscar, CalcoNavCupones, CalcoNavInicio, CalcoNavMensajes, CalcoNavPerfil } from './icons/calcados';
+import { CalcoNavBuscar, CalcoNavCupones, CalcoNavInicio, CalcoNavMensajes, CalcoNavPerfil, CalcoNavPAdopciones, CalcoNavPBuscar, CalcoNavPCitas, CalcoNavPInicio, CalcoNavPPerfil } from './icons/calcados';
+import { useAuth } from '../context/AuthContext';
 import { M } from './pet/maqueta';
 import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { MPL, MPL_FONT_BODY } from '../styles/mypetlive';
@@ -15,7 +16,41 @@ const items = [
   { label: 'Perfil', to: '/profile', icon: CalcoNavPerfil },
 ];
 
+// Protectora (maqueta del panel «Amigo Fiel»): sin píldora; la activa en verde y en negrita.
+const itemsProtectora = [
+  { label: 'Inicio', to: '/landlord', icon: CalcoNavPInicio },
+  { label: 'Animales', to: '/landlord/animals', icon: CalcoNavPBuscar },
+  { label: 'Adopciones', to: '/landlord/adoptions', icon: CalcoNavPAdopciones },
+  { label: 'Citas', to: '/citas', icon: CalcoNavPCitas },
+  { label: 'Perfil', to: '/profile', icon: CalcoNavPPerfil },
+];
+
+function BarraProtectora({ pathname }: { pathname: string }) {
+  return (
+    <nav aria-label="Navegación móvil" className="mpl-mobile-bottom" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 35, display: 'none', justifyContent: 'space-around', alignItems: 'center', padding: '8px 6px calc(10px + env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid #EEE8DF', fontFamily: M.letra, letterSpacing: 0 }}>
+      <style>{`@media (max-width: 720px){.mpl-mobile-bottom{display:flex!important}}`}</style>
+      {itemsProtectora.map(item => {
+        const activa = item.to === '/landlord' ? pathname === '/landlord' : pathname.startsWith(item.to);
+        const Icon = item.icon;
+        return (
+          <NavLink key={item.to} to={item.to} end={item.to === '/landlord'} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 60, textDecoration: 'none', color: activa ? '#067164' : '#555553', fontSize: 10, fontWeight: activa ? 700 : 500 }}>
+            <Icon size={19} color={activa ? '#067164' : '#666566'} />
+            {item.label}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function MobileBottomNav() {
+  const { user } = useAuth();
+  const { pathname: ruta } = useLocation();
+  if (user?.role === 'landlord') return <BarraProtectora pathname={ruta} />;
+  return <BarraAdoptante />;
+}
+
+function BarraAdoptante() {
   const unread = useUnreadMessages();
   // El inicio con sesión vive en /home y «Mi mascota» cuelga de él: «Inicio» se marca en los dos.
   const { pathname } = useLocation();

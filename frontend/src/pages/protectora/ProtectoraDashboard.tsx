@@ -10,6 +10,7 @@ import { getPatitasBalance } from '../../api/patitas';
 import { getShelterMetrics, downloadShelterMetricsCsv } from '../../api/metrics';
 import { getMyVerification } from '../../api/verification';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
+import PanelMovil from '../../components/protectora/PanelMovil';
 
 const OPEN_ADOPTION_STATES = ['recibida', 'cuestionario_pendiente', 'en_revision', 'info_adicional', 'cita_propuesta', 'preaprobada'];
 
@@ -152,7 +153,21 @@ export default function ProtectoraDashboard() {
   };
 
   return (
-    <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink }}>
+    <>
+    {/* Móvil: el panel de la maqueta «Amigo Fiel» (2 nov 2026). Ordenador: este tablero. */}
+    <style>{`.panel-movil{display:none} @media (max-width: 720px){.panel-movil{display:block}.panel-escritorio{display:none}}`}</style>
+    <div className="panel-movil">
+      <PanelMovil
+        shelterId={shelterId}
+        orgName={(user as any)?.profile?.orgName || user?.name || 'Tu protectora'}
+        publicados={publishedQ.data?.total}
+        solicitudesAbiertas={openAdoptions}
+        patitas={patitasQ.data?.patitas}
+        adopciones={adoptions}
+        cannotPublishYet={cannotPublishYet}
+      />
+    </div>
+    <div className="panel-escritorio" style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink }}>
       <style>{`
         .shelter-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;}
         .shelter-kanban{display:grid;grid-template-columns:repeat(6,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px;}
@@ -374,5 +389,6 @@ export default function ProtectoraDashboard() {
         </Link>
       </section>
     </div>
+    </>
   );
 }

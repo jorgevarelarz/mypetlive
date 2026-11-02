@@ -141,6 +141,12 @@ function Header() {
   const { openAuth } = useAuthModal();
   const unread = useUnreadMessages();
   const [menuOpen, setMenuOpen] = useState(false);
+  // El panel de la protectora en el móvil abre el mismo QR con «Compartir mi QR».
+  useEffect(() => {
+    const abrir = () => setQrOpen(true);
+    window.addEventListener('mpl:abrir-qr', abrir);
+    return () => window.removeEventListener('mpl:abrir-qr', abrir);
+  }, []);
   const [qrOpen, setQrOpen] = useState(false);
   const [myCode, setMyCode] = useState<{ token: string; code: string } | null>(null);
   const [loadingCode, setLoadingCode] = useState(false);
@@ -519,7 +525,7 @@ export default function AppShell() {
   // Los textos legales tienen que ser alcanzables desde cualquier página
   // pública, no solo desde la portada.
   const isPublicAnimalPage = isPublicCatalog || hasAnimalDetailCta || isFavoritesPage;
-  const showMobileBottomNav = user?.role === 'tenant' && !isPublicAnimalPage;
+  const showMobileBottomNav = (user?.role === 'tenant' || user?.role === 'landlord') && !isPublicAnimalPage;
 
   return (
     <div className="min-h-screen" style={{ background: '#F6F3EC', color: '#3F4A3C' }}>
