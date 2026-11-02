@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["CDR8TRU744.es.mypetlive.app"],
+        "components": [
+          { "/": "/compartir/*", "comment": "Invitación a compartir una mascota: abre la app si está instalada" }
+        ]
+      }
+    ]
+  }
+}

@@ -72,6 +72,7 @@ import StoreOrdersPage from "./pages/partners/StoreOrdersPage";
 import TpvGuidePage from "./pages/developers/TpvGuidePage";
 import PetPage from "./pages/pet/PetPage";
 import AcceptPetInvite from "./pages/pet/AcceptPetInvite";
+import NativeLinkListener from "./components/NativeLinkListener";
 import PatitasPage from "./pages/patitas/PatitasPage";
 import AppointmentsPage from "./pages/vet/AppointmentsPage";
 import Favorites from "./pages/Favorites";
@@ -100,6 +101,7 @@ export default function AppRoutes() {
         <BrowserRouter>
           <HashScroll />
           <NativeBackListener />
+          <NativeLinkListener />
           <NotificationsPrompt />
           <Routes>
             <Route path="/" element={<HomeGate />} />

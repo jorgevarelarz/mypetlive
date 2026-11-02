@@ -18,6 +18,12 @@ Options -Indexes
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
 
+  # Enlaces universales de iOS: Apple lo pide como JSON aunque no lleve extensión.
+  <Files "apple-app-site-association">
+    ForceType application/json
+    Header set Cache-Control "public, max-age=3600"
+  </Files>
+
   <FilesMatch "\.(?:png|jpe?g|gif|svg|webp|ico|woff2?)$">
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>

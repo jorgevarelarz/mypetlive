@@ -31,6 +31,18 @@ async function api(method, path, data) {
 const bundle = (await api("GET", `/bundleIds?filter[identifier]=${BUNDLE_ID}`)).data.find((b) => b.attributes.identifier === BUNDLE_ID);
 if (!bundle) throw new Error(`No existe el App ID ${BUNDLE_ID} en developer.apple.com`);
 
+// Enlaces universales (2 nov 2026): el App ID necesita la capacidad Associated
+// Domains, o el perfil no la lleva y la firma falla con el entitlement nuevo.
+const caps = (await api("GET", `/bundleIds/${bundle.id}/bundleIdCapabilities`)).data.map((c) => c.attributes.capabilityType);
+if (!caps.includes("ASSOCIATED_DOMAINS")) {
+  await api("POST", "/bundleIdCapabilities", {
+    type: "bundleIdCapabilities",
+    attributes: { capabilityType: "ASSOCIATED_DOMAINS" },
+    relationships: { bundleId: { data: { type: "bundleIds", id: bundle.id } } },
+  });
+  console.log("Capacidad Associated Domains activada en el App ID");
+}
+
 const existing = (await api("GET", `/bundleIds/${bundle.id}/profiles?limit=50`)).data;
 let profile = null;
 for (const p of existing.filter((p) => p.attributes.name === PROFILE_NAME)) {
@@ -38,7 +50,8 @@ for (const p of existing.filter((p) => p.attributes.name === PROFILE_NAME)) {
   // Un perfil anterior a activar las notificaciones no las lleva: se rehace
   // y lo mismo con Sign in with Apple (activado el 21 oct 2026).
   const contenido = Buffer.from(p.attributes.profileContent ?? "", "base64").toString("latin1");
-  const conPush = contenido.includes("aps-environment") && contenido.includes("com.apple.developer.applesignin");
+  // …y lo mismo con los enlaces universales (Associated Domains, 2 nov 2026).
+  const conPush = contenido.includes("aps-environment") && contenido.includes("com.apple.developer.applesignin") && contenido.includes("com.apple.developer.associated-domains");
   if (p.attributes.profileState === "ACTIVE" && certs.includes(DIST_CERT_ID) && conPush) profile = p;
   else await api("DELETE", `/profiles/${p.id}`);
 }
