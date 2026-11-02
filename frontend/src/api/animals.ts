@@ -129,7 +129,8 @@ export async function getAnimalByCode(code: string) {
   return data;
 }
 
-export type AnimalTimelineItem = { at: string; type: string; title: string; detail?: string };
+/** `kind`: en las entradas de salud, el tipo (vaccine, deworming…), para su icono. */
+export type AnimalTimelineItem = { at: string; type: string; kind?: string; title: string; detail?: string };
 
 export type AnimalPassport = {
   code: string;
@@ -142,6 +143,8 @@ export type AnimalPassport = {
   size?: string;
   images: string[];
   personality: string[];
+  /** El carácter que eligió la familia («carinoso»…). */
+  mood?: string | null;
   status?: string;
   isPersonalPet?: boolean;
   // Solo para animales de protectora: de dónde viene. En una mascota de familia

@@ -189,8 +189,18 @@ export async function getByCode(req: Request, res: Response) {
 
 // Construye la línea de tiempo unificada del pasaporte (eventos de ciclo de vida + salud/vet).
 // `full` (dueño/admin) incluye nombres de las familias; el público recibe versión redactada.
+const HEALTH_TITLES: Record<string, string> = {
+  vaccine: 'Vacuna',
+  deworming: 'Desparasitación',
+  checkup: 'Revisión',
+  test: 'Prueba',
+  surgery: 'Intervención',
+  other: 'Cuidado de salud',
+  visit: 'Visita veterinaria',
+};
+
 function buildTimeline(animal: any, events: any[], full: boolean) {
-  const items: { at: any; type: string; title: string; detail?: string }[] = [];
+  const items: { at: any; type: string; kind?: string; title: string; detail?: string }[] = [];
   const hasCreated = events.some(e => e.type === 'created');
   if (!hasCreated) {
     items.push({ at: animal.createdAt, type: 'created', title: 'Dado de alta', detail: animal.createdByRole === 'tenant' ? 'por su familia' : undefined });
@@ -224,7 +234,9 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
     items.push({ at: e.createdAt, type: e.type, title, detail });
   }
   for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: v.note });
-  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', title: h.type || 'Hito de salud', detail: h.notes });
+  // El tipo se guarda en inglés (es la clave del registro); el pasaporte lo enseña
+  // en castellano. `kind` lleva la clave para que la web ponga su icono.
+  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: h.notes });
   return items
     .filter(i => i.at)
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -422,8 +434,11 @@ export async function getPassport(req: Request, res: Response) {
     name: animal.name,
     species: animal.species,
     breed: animal.breed,
-    age: animal.age,
+    // Con fecha de nacimiento la edad se calcula al momento: sube sola con cada cumpleaños.
+    age: animal.birthDate ? ageFromBirthDate(animal.birthDate) : animal.age,
     ageGroup: animal.ageGroup,
+    // El carácter que eligió la familia («Cariñoso»): sale como etiqueta en el pasaporte.
+    mood: animal.mood || null,
     sex: animal.sex,
     size: animal.size,
     images: animal.images || [],
