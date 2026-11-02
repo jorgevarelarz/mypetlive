@@ -16,5 +16,8 @@ COPY --from=builder /app/package.json ./package.json
 # Los textos legales se leen en runtime desde process.cwd()/legal. Sin esta
 # copia la imagen no los tiene y /api/legal/terms responde 404.
 COPY --from=builder /app/legal ./legal
+# Datos que el código lee de disco (src/data/geo-es.json, «Más cerca»): tsc no
+# copia los .json, y sin esto la API no reconoce ningún código postal ni municipio.
+COPY --from=builder /app/src/data ./dist/data
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

@@ -26,6 +26,10 @@ deploy_api() {
   # dependencia nueva (sharp, oct 2026) no entra en la imagen y la API no arranca.
   echo "==> Backend: rsync package.json + package-lock.json"
   rsync -az "$ROOT/package.json" "$ROOT/package-lock.json" "$HOST:$REMOTE_APP/" || exit 1
+  # El Dockerfile también: si cambia (p. ej. para copiar src/data, nov 2026) y no
+  # se sube, la imagen se construye con el viejo.
+  echo "==> Backend: rsync Dockerfile.api"
+  rsync -az "$ROOT/Dockerfile.api" "$HOST:$REMOTE_APP/" || exit 1
   echo "==> Backend: rebuild + recreate del contenedor api"
   ssh "$HOST" "cd $REMOTE_APP && docker compose -f docker-compose.deploy.yml build api && docker compose -f docker-compose.deploy.yml up -d --force-recreate api" || exit 1
   echo "==> Backend: health check"
