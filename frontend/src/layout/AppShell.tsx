@@ -5,6 +5,9 @@ import {
   Settings, ClipboardList, Circle, X, RefreshCw, LogOut, MessageCircle, CalendarDays, HouseHeart,
 } from 'lucide-react';
 import { IconoCodigoQr, IconoMenu } from '../components/icons/mplIcons';
+import { ShoppingBag, Package } from 'lucide-react';
+import { CalcoMenuAjustes, CalcoMenuAnimales, CalcoMenuCerrar, CalcoMenuCitas, CalcoMenuCuestionario, CalcoMenuFlecha, CalcoMenuInicio, CalcoMenuMensajes, CalcoMenuPerfil, CalcoMenuSalir, CalcoMenuSolicitudes, CalcoMenuVerificacion, CalcoNavBuscar } from '../components/icons/calcados';
+import { M } from '../components/pet/maqueta';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
@@ -46,6 +49,58 @@ function useSideItems(role?: string): NavItem[] {
 // Rutas "home" de cada rol: solo se marcan activas en coincidencia exacta (no en sus hijas)
 const INDEX_PATHS = new Set(['/home', '/landlord', '/admin', '/partner', '/pro']);
 
+const GRIS_MENU = '#596551';
+type IconoCajon = (p: { size?: number; color?: string }) => React.ReactElement;
+const lucideCajon = (I: React.ComponentType<any>): IconoCajon => ({ size = 20, color = GRIS_MENU }) => <I size={size} color={color} strokeWidth={1.9} />;
+const iconoCajon: Record<string, IconoCajon> = {
+  '/home': CalcoMenuInicio, '/landlord': CalcoMenuInicio, '/admin': CalcoMenuInicio, '/partner': CalcoMenuInicio, '/pro': CalcoMenuInicio,
+  '/mensajes': CalcoMenuMensajes,
+  '/landlord/animals': CalcoMenuAnimales, '/admin/animals': CalcoMenuAnimales, '/pet': CalcoMenuAnimales,
+  '/animals': CalcoNavBuscar,
+  '/landlord/adoptions': CalcoMenuSolicitudes, '/adoptions/mine': CalcoMenuSolicitudes, '/admin/adoptions': CalcoMenuSolicitudes,
+  '/landlord/questionnaire': CalcoMenuCuestionario,
+  '/citas': CalcoMenuCitas,
+  '/landlord/verificacion': CalcoMenuVerificacion, '/admin/verifications': CalcoMenuVerificacion,
+  '/profile': CalcoMenuPerfil,
+  '/ajustes': CalcoMenuAjustes, '/admin/settings': CalcoMenuAjustes,
+  '/tienda': lucideCajon(ShoppingBag), '/mis-pedidos': lucideCajon(Package), '/coupons': lucideCajon(Ticket), '/donate': lucideCajon(Gift),
+  '/buscar-casa': lucideCajon(HouseHeart), '/admin/users': lucideCajon(Users), '/admin/reports': lucideCajon(FileText),
+};
+const CUENTA = new Set(['/landlord/verificacion', '/profile', '/ajustes', '/admin/settings']);
+
+// Fila del cajón con las medidas de la maqueta del menú (2 nov 2026): 42 de alto, icono de 20 y texto de 13,5;
+// la pantalla actual en una píldora verde de 45 con el icono en su recuadro.
+function FilaCajon({ to, label, badge, activa }: { to: string; label: string; badge?: React.ReactNode; activa: boolean }) {
+  const Icono = iconoCajon[to] || lucideCajon(Circle);
+  return (
+    <Link
+      to={to}
+      style={activa
+        ? { display: 'flex', alignItems: 'center', gap: 9, height: 45, padding: '0 10px 0 8px', borderRadius: 14, background: '#D4E9E8', color: '#0E5F5B', textDecoration: 'none', margin: '4px 0' }
+        : { display: 'flex', alignItems: 'center', gap: 18, height: 42, padding: '0 10px 0 13px', borderRadius: 12, color: '#2F3532', textDecoration: 'none' }}
+    >
+      {activa ? (
+        <span style={{ width: 34, height: 34, borderRadius: 10, background: '#DDF0EE', border: '1px solid #C8E3DF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icono size={18} color="#06655B" />
+        </span>
+      ) : (
+        <span style={{ width: 22, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}><Icono size={21} color={GRIS_MENU} /></span>
+      )}
+      <span style={{ flex: 1, minWidth: 0, fontSize: activa ? 15.5 : 14.5, fontWeight: activa ? 700 : 600, color: activa ? '#0E5F5B' : '#2B2F2D', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      {badge}
+    </Link>
+  );
+}
+
+function TituloCajon({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 4px 6px 7px' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.02em', textTransform: 'uppercase', color: '#6B7068', whiteSpace: 'nowrap' }}>{children}</span>
+      <span style={{ flex: 1, height: 1, background: '#E3DED6' }} />
+    </div>
+  );
+}
+
 function NavRow({ to, label, badge }: { to: string; label: string; badge?: React.ReactNode }) {
   const Icon = iconFor[to] || Circle;
   return (
@@ -81,6 +136,7 @@ const labelFor: Record<string, string> = {
 };
 
 function Header() {
+  const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const { openAuth } = useAuthModal();
   const unread = useUnreadMessages();
@@ -241,7 +297,7 @@ function Header() {
         // En la app el cajón empieza bajo la barra de estado (ver .safe-top en index.css).
         className="lg:hidden fixed top-0 bottom-0 left-0 z-50 flex flex-col transition-transform duration-200"
         style={{
-          width: 280,
+          width: 283,
           maxWidth: '84vw',
           background: '#FFFFFF',
           borderRight: `1px solid ${MPL.border}`,
@@ -252,58 +308,75 @@ function Header() {
         aria-modal="true"
         aria-label="Menú"
       >
-        <div className="flex items-center justify-between" style={{ padding: '12px 14px', borderBottom: `1px solid ${MPL.border}` }}>
-          <Link to={roleHome} aria-label="MyPetLive — inicio" onClick={() => setMenuOpen(false)}><Brand size={18} /></Link>
-          <button
-            className="inline-flex items-center justify-center"
-            style={{ padding: 8, borderRadius: 10 }}
-            onClick={() => setMenuOpen(false)}
-            aria-label="Cerrar menú"
-          >
-            <X size={20} strokeWidth={2.2} />
-          </button>
-        </div>
-        {role && <div className="text-xs uppercase tracking-wide" style={{ color: MPL.faint, padding: '12px 16px 0' }}>{labelFor[role] || role}</div>}
-        <nav className="grid gap-1.5 p-3 overflow-y-auto" onClick={() => setMenuOpen(false)}>
-          {drawerItems.map((item: NavItem) => {
-            const target = resolvePath(item);
-            const badge =
-              target === '/mensajes' && unread > 0 ? (
-                <span
-                  className="inline-flex items-center justify-center rounded-full text-[10px] px-2 py-0.5"
-                  style={{ background: MPL.teal, color: '#fff' }}
-                >
-                  {unread}
-                </span>
-              ) : undefined;
-            return <NavRow key={target} to={target} label={item.label} badge={badge} />;
-          })}
-        </nav>
-        {user && role && (
-          <div className="mt-auto p-3">
-            <div style={{ background: MPL.bg, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 11 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 11, background: MPL.teal, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-                <PawMark size={17} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: MPL.ink }}>
-                  {user.name || labelFor[role] || 'Cuenta'}
-                </div>
-                <div style={{ fontSize: 11.5, color: MPL.faint }}>{labelFor[role] || role}</div>
-              </div>
-            </div>
-            {/* En móvil era el único sitio sin forma de cerrar sesión. */}
+        {/* Cajón con las medidas de la maqueta del menú (2 nov 2026): logo y cerrar, dibujo, secciones,
+            tarjeta de la protectora y «Cerrar sesión». */}
+        <div style={{ flexShrink: 0, fontFamily: M.letra, letterSpacing: 0 }}>
+          <div className="flex items-center justify-between" style={{ padding: '17px 14px 0 16px' }}>
+            <Link to={roleHome} aria-label="MyPetLive — inicio" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+              <img src="/ilustraciones/logo-tile.png" alt="" style={{ width: 30, height: 31, display: 'block' }} />
+              <span style={{ fontSize: 18.5, fontWeight: 700, color: '#0E5F5B' }}>MyPet<span style={{ color: '#D2552F' }}>Live</span></span>
+            </Link>
             <button
               type="button"
-              onClick={() => { setMenuOpen(false); logout(); }}
-              className="flex items-center gap-3 w-full"
-              style={{ marginTop: 8, padding: '11px 12px', borderRadius: 12, border: 0, background: 'transparent', font: 'inherit', fontSize: 14.5, fontWeight: 800, color: MPL.muted, cursor: 'pointer' }}
+              className="inline-flex items-center justify-center"
+              style={{ width: 36, height: 36, padding: 0, borderRadius: 10, border: '1px solid #E6E1D8', background: '#FFFFFF', boxShadow: '0 2px 6px -4px rgba(60,45,30,.3)', cursor: 'pointer' }}
+              onClick={() => setMenuOpen(false)}
+              aria-label="Cerrar menú"
             >
-              <LogOut size={18} strokeWidth={2} />
-              Cerrar sesión
+              <CalcoMenuCerrar size={15} />
             </button>
           </div>
-        )}
+          <img src="/ilustraciones/menu-cabecera.png" alt="" aria-hidden style={{ display: 'block', width: '100%', height: 'auto', marginTop: 5 }} />
+        </div>
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 12px 14px 14px', fontFamily: M.letra, letterSpacing: 0 }} onClick={() => setMenuOpen(false)}>
+          {(() => {
+            const conBadge = (item: NavItem) => {
+              const target = resolvePath(item);
+              return target === '/mensajes' && unread > 0 ? (
+                <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999, background: '#0E5F5B', color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>
+              ) : undefined;
+            };
+            const activa = (target: string) => pathname === target || (target !== '/' && pathname.startsWith(target + '/'));
+            const [primera, ...resto] = drawerItems;
+            const experiencia = resto.filter(item => !CUENTA.has(resolvePath(item)));
+            const cuenta = resto.filter(item => CUENTA.has(resolvePath(item)));
+            const fila = (item: NavItem) => <FilaCajon key={resolvePath(item)} to={resolvePath(item)} label={item.label} badge={conBadge(item)} activa={activa(resolvePath(item))} />;
+            return (
+              <>
+                {primera && fila(primera)}
+                {experiencia.length > 0 && <TituloCajon>Mi experiencia</TituloCajon>}
+                {experiencia.map(fila)}
+                {cuenta.length > 0 && <TituloCajon>Cuenta y seguridad</TituloCajon>}
+                {cuenta.map(fila)}
+              </>
+            );
+          })()}
+          {user && role !== 'admin' && (
+            <Link to="/donate" style={{ display: 'grid', gridTemplateColumns: '92px 1px minmax(0, 1fr) 14px', alignItems: 'center', columnGap: 12, minHeight: 83, margin: '30px 0 0 -2px', padding: '0 12px 0 8px', borderRadius: 14, background: '#EEF3E6', textDecoration: 'none' }}>
+              <img src="/ilustraciones/menu-protectora.png" alt="" aria-hidden style={{ width: 92, height: 'auto', display: 'block' }} />
+              <span aria-hidden style={{ width: 1, height: 52, background: '#D5DCCB' }} />
+              <span>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1E2A27' }}>Protectora</span>
+                <span style={{ display: 'block', fontSize: 10.5, lineHeight: '14px', color: '#3D4340', marginTop: 2 }}>Dona Patitas y apoya su gran labor.</span>
+              </span>
+              <CalcoMenuFlecha size={12} />
+            </Link>
+          )}
+          {user && (
+            <>
+              <div style={{ height: 1, background: '#E3DED6', margin: '20px 6px 6px' }} />
+              {/* En móvil era el único sitio sin forma de cerrar sesión. */}
+              <button
+                type="button"
+                onClick={() => { setMenuOpen(false); logout(); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 18, width: '100%', height: 42, padding: '0 10px 0 11px', borderRadius: 12, border: 0, background: 'transparent', fontFamily: M.letra, fontSize: 14.5, fontWeight: 600, color: '#3D4340', cursor: 'pointer' }}
+              >
+                <CalcoMenuSalir size={19} />
+                Cerrar sesión
+              </button>
+            </>
+          )}
+        </nav>
       </aside>
 
       {/* Modal del QR de identificación (código Patitas del usuario) */}

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, HeartHandshake, PawPrint } from 'lucide-react';
+import { CalcoBienvCorazonMano, CalcoBienvFlecha, CalcoBienvHuellas } from '../../components/icons/calcados';
+import { M } from '../../components/pet/maqueta';
 import { searchAnimals } from '../../api/animals';
 import { toAbsoluteUrl } from '../../utils/media';
 import MobileBottomNav from '../../components/MobileBottomNav';
@@ -18,18 +19,18 @@ const PATHS = [
   {
     key: 'mascota',
     to: '/register?redirect=/pet',
-    icon: PawPrint,
-    tint: MPL.teal100,
-    color: MPL.teal,
+    icon: CalcoBienvHuellas,
+    tint: '#DDEDEA',
+    dibujo: '/ilustraciones/bienv-perro-gato.png',
     title: 'Ya tengo mascota',
     desc: 'Su ficha, vacunas, cuidados del día y modo perdido.',
   },
   {
     key: 'adoptar',
     to: '/animals',
-    icon: HeartHandshake,
-    tint: MPL.coral100,
-    color: MPL.coral,
+    icon: CalcoBienvCorazonMano,
+    tint: '#FDE5DD',
+    dibujo: '/ilustraciones/bienv-cachorro.png',
     title: 'Quiero adoptar',
     desc: 'Animales de protectoras verificadas, sin crear cuenta.',
   },
@@ -48,11 +49,12 @@ export default function AppWelcome() {
     <div style={{ fontFamily: MPL_FONT_BODY, color: MPL.ink, background: MPL.bg, minHeight: '100vh', paddingBottom: 90 }}>
       <PublicHeader />
 
-      <section style={{ padding: '16px 20px 4px' }}>
-        <h1 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 28, lineHeight: 1.05, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 6px' }}>
+      {/* Medidas de la maqueta «¿Por dónde empezamos?» (2 nov 2026), iPhone de 390. */}
+      <section style={{ padding: '18px 12px 4px', fontFamily: M.letra, letterSpacing: 0 }}>
+        <h1 style={{ fontFamily: M.titulos, fontSize: 28.5, lineHeight: '32px', fontWeight: 700, color: '#26302B', margin: '0 8px 7px' }}>
           ¿Por dónde empezamos?
         </h1>
-        <p style={{ fontSize: 15, lineHeight: 1.45, color: MPL.muted, margin: '0 0 16px' }}>
+        <p style={{ fontSize: 13.5, lineHeight: '20px', color: '#5A5F5B', margin: '0 8px 30px' }}>
           Lleva al día los cuidados de tu mascota o encuentra a la que está por llegar.
         </p>
 
@@ -64,20 +66,21 @@ export default function AppWelcome() {
                 key={p.key}
                 to={p.to}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                  background: '#fff', border: `1px solid ${MPL.border}`, borderRadius: 18,
-                  color: MPL.ink, textDecoration: 'none',
-                  boxShadow: '0 1px 3px rgba(31,55,40,.05)',
+                  position: 'relative', display: 'grid', gridTemplateColumns: '51px minmax(0, 1fr)', alignItems: 'center', columnGap: 9,
+                  minHeight: 119, padding: '0 124px 0 10px', overflow: 'hidden',
+                  background: '#FFFFFF', border: '1px solid #EEE8DF', borderRadius: 18,
+                  color: M.tinta, textDecoration: 'none', boxShadow: M.sombra,
                 }}
               >
-                <span style={{ width: 48, height: 48, borderRadius: 14, background: p.tint, color: p.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-                  <Icon size={24} strokeWidth={2.2} />
+                <span style={{ width: 51, height: 51, borderRadius: 12, background: p.tint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={27} />
                 </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontFamily: MPL_FONT_DISPLAY, fontSize: 19, fontWeight: 800, marginBottom: 3 }}>{p.title}</span>
-                  <span style={{ display: 'block', fontSize: 13.5, lineHeight: 1.45, color: MPL.muted }}>{p.desc}</span>
+                <span style={{ minWidth: 0, position: 'relative', zIndex: 1 }}>
+                  <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 16.5, lineHeight: '20px', fontWeight: 700, color: '#26302B', marginBottom: 6 }}>{p.title}</span>
+                  <span style={{ display: 'block', fontSize: 11, lineHeight: '15px', color: '#4F5551' }}>{p.desc}</span>
                 </span>
-                <ChevronRight size={20} color={MPL.faint} style={{ flex: 'none' }} />
+                <img src={p.dibujo} alt="" aria-hidden style={{ position: 'absolute', right: 20, bottom: 1, width: p.key === 'mascota' ? 104 : 111, height: 'auto', display: 'block' }} />
+                <CalcoBienvFlecha size={12} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)' }} />
               </Link>
             );
           })}
