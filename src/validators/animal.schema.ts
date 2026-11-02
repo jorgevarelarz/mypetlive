@@ -65,6 +65,9 @@ export const personalPetUpdateSchema = z.object({
   size: z.enum(['small', 'medium', 'large']).nullable().optional(),
   mood: moodEnum.nullable().optional(),
   images: z.array(petImage).max(20).optional(),
+  // «Sus datos de salud» en Cuidados (2 nov 2026). `null` borra el dato.
+  weightKg: z.number().positive().max(200).nullable().optional(),
+  bodyCondition: z.enum(['muy_delgado', 'delgado', 'bueno', 'sobrepeso', 'obesidad']).nullable().optional(),
 });
 
 export const animalStatusSchema = z.object({

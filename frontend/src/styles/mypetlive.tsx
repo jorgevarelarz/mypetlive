@@ -152,6 +152,7 @@ export const healthCategoryLabel = (value?: string) => {
     visit: 'Visita / consulta',
     vaccine: 'Vacuna',
     deworming: 'Desparasitación',
+    medication: 'Medicación',
     checkup: 'Revisión',
     surgery: 'Cirugía',
     test: 'Prueba / analítica',

@@ -147,4 +147,34 @@ describe('Corregir el historial de salud', () => {
     expect(byNote['Vieja familia']._id).toBeTruthy();
     expect(await ensureHealthEntryIds()).toBe(0);
   });
+
+  it('medicación es un tipo más del historial, con su título en el pasaporte', async () => {
+    const { pet } = await petWithVaccine();
+    await request(app).post(`/api/animals/${pet.code}/health`).set(H(ownerId)).send({ category: 'medication', note: 'Antibiótico 7 días' }).expect(201);
+    const pass = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
+    const med = pass.body.timeline.find((t: any) => t.kind === 'medication');
+    expect(med).toMatchObject({ title: 'Medicación', detail: 'Antibiótico 7 días' });
+  });
 });
+
+describe('Sus datos de salud', () => {
+  it('la familia apunta el peso y la condición; el peso lleva su fecha y se puede quitar', async () => {
+    const { pet } = await petWithVaccine();
+    await request(app).put(`/api/animals/mine/${pet._id}`).set(H(ownerId)).send({ weightKg: 24.5, bodyCondition: 'bueno' }).expect(200);
+    let doc = await Animal.findById(pet._id).lean();
+    expect(doc).toMatchObject({ weightKg: 24.5, bodyCondition: 'bueno' });
+    expect(doc.weightAt).toBeTruthy();
+    await request(app).put(`/api/animals/mine/${pet._id}`).set(H(ownerId)).send({ weightKg: null, bodyCondition: null }).expect(200);
+    doc = await Animal.findById(pet._id).lean();
+    expect(doc.weightKg).toBeUndefined();
+    expect(doc.bodyCondition).toBeNull();
+  });
+
+  it('no acepta pesos ni condiciones imposibles', async () => {
+    const { pet } = await petWithVaccine();
+    await request(app).put(`/api/animals/mine/${pet._id}`).set(H(ownerId)).send({ weightKg: -3 }).expect(400);
+    await request(app).put(`/api/animals/mine/${pet._id}`).set(H(ownerId)).send({ weightKg: 900 }).expect(400);
+    await request(app).put(`/api/animals/mine/${pet._id}`).set(H(ownerId)).send({ bodyCondition: 'gordito' }).expect(400);
+  });
+});
+

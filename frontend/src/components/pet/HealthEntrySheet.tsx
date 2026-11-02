@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { deleteHealthRecord, updateHealthRecord, type HealthCategory } from '../../api/animals';
+import { addHealthRecord, deleteHealthRecord, updateHealthRecord, type HealthCategory } from '../../api/animals';
 import { healthCategoryLabel } from '../../styles/mypetlive';
 import { M } from './maqueta';
 
@@ -10,19 +10,28 @@ import { M } from './maqueta';
 // tocar la entrada en «Mi mascota». Lo que apuntó la clínica solo se enseña: la
 // familia no puede cambiarlo (el servidor tampoco lo deja, error `vet_record`).
 
-const OPCIONES: HealthCategory[] = ['vaccine', 'deworming', 'checkup', 'test', 'surgery', 'other'];
+const OPCIONES: HealthCategory[] = ['vaccine', 'deworming', 'medication', 'checkup', 'test', 'surgery', 'other'];
+// Lo que el servidor programa solo si no se pone fecha (ver DEFAULT_REPEAT_MONTHS).
+const REPITE: Partial<Record<HealthCategory, string>> = { vaccine: 'Si lo dejas vacío, te avisaremos dentro de un año.', deworming: 'Si lo dejas vacío, te avisaremos dentro de tres meses.' };
 const aFecha = (v?: string | Date | null) => (v ? new Date(v).toISOString().slice(0, 10) : '');
 const CAMPO: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 46, borderRadius: 12, border: '1px solid #E4DED3', padding: '0 12px', font: 'inherit', fontSize: 16, background: '#fff', color: M.tinta };
 
 type Entrada = { _id?: string; type: string; notes?: string; date?: string; nextDueAt?: string | null; byRole?: string };
 
-export default function HealthEntrySheet({ code, entry, petName, onClose, onChanged }: {
+/**
+ * Sin `entry` es «apuntar uno nuevo» (desde «Registra un cuidado», con `tipoInicial`);
+ * con `entry`, corregirlo o borrarlo.
+ */
+export default function HealthEntrySheet({ code, entry: entrada, petName, onClose, onChanged, tipoInicial }: {
   code: string;
-  entry: Entrada;
+  entry?: Entrada | null;
   petName: string;
   onClose: () => void;
   onChanged: () => void;
+  tipoInicial?: HealthCategory;
 }) {
+  const nueva = !entrada;
+  const entry: Entrada = entrada || { type: tipoInicial || 'vaccine', date: new Date().toISOString() };
   const deClinica = entry.byRole === 'vet';
   const [tipo, setTipo] = React.useState<HealthCategory>((OPCIONES.includes(entry.type as HealthCategory) ? entry.type : 'other') as HealthCategory);
   const [nota, setNota] = React.useState(entry.notes || '');
@@ -43,6 +52,17 @@ export default function HealthEntrySheet({ code, entry, petName, onClose, onChan
     } as Record<string, string>)[code] || 'No se ha podido guardar. Inténtalo de nuevo.';
   };
 
+  const crear = useMutation({
+    mutationFn: () => addHealthRecord(code, {
+      category: tipo,
+      note: nota.trim(),
+      date: fecha ? new Date(`${fecha}T12:00:00`).toISOString() : undefined,
+      // Vacío: que decida el servidor (vacuna al año, desparasitación a los 3 meses); lo demás, sin aviso.
+      nextDueAt: proxima ? new Date(`${proxima}T09:00:00`).toISOString() : (REPITE[tipo] ? undefined : null),
+    }),
+    onSuccess: res => { toast.success(res.nextDueAt ? 'Apuntado. Te avisaremos cuando toque.' : 'Apuntado en el pasaporte'); onChanged(); onClose(); },
+    onError: (e: any) => setError(mensaje(e)),
+  });
   const guardar = useMutation({
     mutationFn: () => updateHealthRecord(code, String(entry._id), {
       category: tipo,
@@ -58,7 +78,7 @@ export default function HealthEntrySheet({ code, entry, petName, onClose, onChan
     onSuccess: () => { toast.success('Borrado del pasaporte'); onChanged(); onClose(); },
     onError: (e: any) => setError(mensaje(e)),
   });
-  const ocupado = guardar.isPending || borrar.isPending;
+  const ocupado = guardar.isPending || borrar.isPending || crear.isPending;
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Corregir entrada de salud" onClick={onClose}
@@ -67,7 +87,7 @@ export default function HealthEntrySheet({ code, entry, petName, onClose, onChan
         style={{ width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', boxSizing: 'border-box', background: '#FFFDFA', borderRadius: '24px 24px 0 0', padding: '14px 18px calc(18px + env(safe-area-inset-bottom))', fontFamily: M.letra, color: M.tinta }}>
         <span aria-hidden style={{ display: 'block', width: 44, height: 5, borderRadius: 99, background: '#D9D6CF', margin: '0 auto 14px' }} />
         <h2 style={{ margin: '0 0 4px', fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>
-          {deClinica ? healthCategoryLabel(entry.type) : 'Corregir'}
+          {deClinica ? healthCategoryLabel(entry.type) : nueva ? 'Apuntar un cuidado' : 'Corregir'}
         </h2>
         {deClinica ? (
           <>
@@ -88,7 +108,7 @@ export default function HealthEntrySheet({ code, entry, petName, onClose, onChan
             </label>
             <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340' }}>
               Detalle
-              <input value={nota} maxLength={500} onChange={e => setNota(e.target.value)} style={CAMPO} />
+              <input value={nota} maxLength={500} onChange={e => setNota(e.target.value)} style={CAMPO} placeholder={tipo === 'vaccine' ? 'Rabia, polivalente…' : tipo === 'deworming' ? 'Interna, pipeta…' : tipo === 'medication' ? 'Antibiótico 7 días, antiinflamatorio…' : 'Qué le habéis hecho'} />
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
@@ -101,19 +121,19 @@ export default function HealthEntrySheet({ code, entry, petName, onClose, onChan
               </label>
             </div>
             <span style={{ fontSize: 13, color: M.gris, marginTop: -4 }}>
-              {proxima ? 'Te avisaremos una semana antes.' : 'Sin próxima fecha no te avisaremos.'}
+              {proxima ? 'Te avisaremos una semana antes.' : nueva && REPITE[tipo] ? REPITE[tipo] : 'Sin próxima fecha no te avisaremos.'}
               {proxima && <button type="button" onClick={() => setProxima('')} style={{ marginLeft: 8, border: 0, background: 'none', padding: 0, color: M.verdeBoton, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Quitar aviso</button>}
             </span>
             {error && <p style={{ margin: 0, fontSize: 14, color: '#B3261E' }}>{error}</p>}
-            <button type="button" disabled={ocupado || !nota.trim()} onClick={() => { setError(null); guardar.mutate(); }}
+            <button type="button" disabled={ocupado || !nota.trim()} onClick={() => { setError(null); (nueva ? crear : guardar).mutate(); }}
               style={{ height: 52, borderRadius: 14, border: 0, background: M.verdeBoton, color: '#fff', font: 'inherit', fontSize: 16.5, fontWeight: 800, opacity: ocupado || !nota.trim() ? 0.6 : 1 }}>
-              {guardar.isPending ? 'Guardando…' : 'Guardar cambios'}
+              {guardar.isPending || crear.isPending ? 'Guardando…' : nueva ? 'Apuntar en el pasaporte' : 'Guardar cambios'}
             </button>
-            <button type="button" disabled={ocupado}
+            {!nueva && <button type="button" disabled={ocupado}
               onClick={() => { if (window.confirm(`¿Borrar «${healthCategoryLabel(entry.type)}${entry.notes ? ` · ${entry.notes}` : ''}» del pasaporte de ${petName}? También se cancela su aviso.`)) { setError(null); borrar.mutate(); } }}
               style={{ height: 48, borderRadius: 14, border: '1.5px solid #E8C4B8', background: '#fff', color: '#B3261E', font: 'inherit', fontSize: 16, fontWeight: 700 }}>
               {borrar.isPending ? 'Borrando…' : 'Borrar'}
-            </button>
+            </button>}
             <button type="button" onClick={onClose} disabled={ocupado} style={{ height: 44, border: 0, background: 'none', color: M.gris, font: 'inherit', fontSize: 15 }}>Cancelar</button>
           </div>
         )}

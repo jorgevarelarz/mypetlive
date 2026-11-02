@@ -285,6 +285,10 @@ const animalSchema = new Schema(
     images: { type: [String], default: [] },
     vetHistory: { type: [vetEntrySchema], default: [] },
     healthHistory: { type: [healthEntrySchema], default: [] },
+    // «Sus datos de salud» (Cuidados, 2 nov 2026): lo apunta la familia.
+    weightKg: { type: Number, min: 0, max: 200 },
+    weightAt: { type: Date },
+    bodyCondition: { type: String, enum: ['muy_delgado', 'delgado', 'bueno', 'sobrepeso', 'obesidad', null], default: null },
     likes: { type: [String], default: [] },
     environment: { type: [String], default: [] },
     mood: { type: String, enum: ['relajado', 'timido', 'energico', 'en_adaptacion', 'carinoso', 'independiente', null], default: null },

@@ -908,114 +908,32 @@ export default function PetPage() {
       )}
 
 
-      <div style={{ ...CARD, padding: '10px 12px 6px 14px' }}>
-        <div className="flex items-center justify-between gap-3">
-          <h2 style={SECTION_TITLE}>
-            <CalcoSalud size={25} /> Historial de salud
-          </h2>
-          <button
-            type="button"
-            style={{ flexShrink: 0, height: 28, padding: '0 14px', borderRadius: 14, border: `1px solid ${M.verde}`, background: '#FFFFFF', color: M.verdeBoton, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-            onClick={() => { setHealthOpen(v => !v); setHealthError(null); }}
-          >
-            {healthOpen ? 'Cancelar' : 'Apuntar'}
+      {/* Salud: el detalle vive en «Cuidados» (maqueta del 2 nov 2026); aquí, el resumen. */}
+      {(() => {
+        const ahora = Date.now();
+        const salud: any[] = Array.isArray(featuredAnimal.healthHistory) ? featuredAnimal.healthHistory : [];
+        const proxima = salud.filter(e => e.nextDueAt).sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime())
+          .find(e => new Date(e.nextDueAt).getTime() > ahora - 365 * 86_400_000);
+        const vencidas = salud.filter(e => e.nextDueAt && new Date(e.nextDueAt).getTime() < ahora).length;
+        const texto = !salud.length
+          ? 'Apunta sus vacunas y te avisamos de las siguientes.'
+          : vencidas
+            ? `${vencidas} ${vencidas === 1 ? 'cosa pendiente' : 'cosas pendientes'}`
+            : proxima
+              ? `Todo en orden · próxima: ${healthCategoryLabel(proxima.type).toLowerCase()} el ${new Date(proxima.nextDueAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '')}`
+              : 'Todo en orden';
+        return (
+          <button type="button" onClick={() => nav(`/cuidados?mascota=${featuredAnimal._id || featuredAnimal.id}`)}
+            style={{ ...CARD, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 14px', border: 0, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: M.tinta, width: '100%' }}>
+            <CalcoSalud size={28} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 17, fontWeight: 700 }}>Cuidados y salud</span>
+              <span style={{ display: 'block', fontSize: 14, color: vencidas ? '#B4472A' : M.gris, marginTop: 2 }}>{texto}</span>
+            </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={M.tinta} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m9 6 6 6-6 6" /></svg>
           </button>
-        </div>
-
-        {healthOpen && (
-          <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: '#F7F5EF' }}>
-            <label className="block text-sm">
-              <span style={{ color: '#3F4A3C' }}>¿Qué le habéis hecho?</span>
-              <select
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: '#E7E1D5' }}
-                value={healthForm.category}
-                onChange={e => setHealthForm(f => ({ ...f, category: e.target.value as HealthCategory }))}
-              >
-                {HEALTH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              <span style={{ color: '#3F4A3C' }}>Detalle</span>
-              <input
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: '#E7E1D5' }}
-                placeholder="Trivalente, pipeta, revisión…"
-                value={healthForm.note}
-                onChange={e => setHealthForm(f => ({ ...f, note: e.target.value }))}
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span style={{ color: '#3F4A3C' }}>¿Cuándo toca la próxima?</span>
-              <input
-                type="date"
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: '#E7E1D5' }}
-                value={healthForm.nextDueAt}
-                min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
-                onChange={e => setHealthForm(f => ({ ...f, nextDueAt: e.target.value }))}
-              />
-              <span className="mt-1 block text-xs" style={{ color: '#7A8273' }}>
-                {healthForm.nextDueAt
-                  ? 'Te avisaremos por correo una semana antes.'
-                  : DEFAULT_REPEAT_HINT[healthForm.category] || 'Sin fecha no enviaremos ningún aviso.'}
-              </span>
-            </label>
-
-            {healthError && <p className="text-sm" style={{ color: '#B3261E' }}>{healthError}</p>}
-
-            <button
-              type="button"
-              className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              style={{ background: '#2E6B4F' }}
-              disabled={healthMutation.isPending || !healthForm.note.trim()}
-              onClick={() => healthMutation.mutate()}
-            >
-              {healthMutation.isPending ? 'Guardando…' : 'Apuntar en el pasaporte'}
-            </button>
-          </div>
-        )}
-
-        {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 ? (
-          // Línea de tiempo: un punto por entrada unidos por una raya; la próxima a la derecha.
-          // Línea de tiempo de la maqueta: punto a la izquierda; fecha encima; lo hecho y, a la derecha, la próxima.
-          <>
-          <ul style={{ listStyle: 'none', margin: '3px 0 0', padding: 0 }}>
-            {featuredAnimal.healthHistory.map((entry: any, idx: number, all: any[]) => (
-              // Tocar una entrada abre «Corregir» (o, si la apuntó la clínica, solo la enseña).
-              <li key={entry._id || idx} role={canEdit && entry._id ? 'button' : undefined} tabIndex={canEdit && entry._id ? 0 : undefined}
-                aria-label={canEdit && entry._id ? `Corregir ${healthCategoryLabel(entry.type)}` : undefined}
-                onClick={canEdit && entry._id ? () => setHealthEditing(entry) : undefined}
-                onKeyDown={canEdit && entry._id ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHealthEditing(entry); } }) : undefined}
-                style={{ position: 'relative', display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', columnGap: 0, padding: '4px 0 3px', borderTop: idx ? '1px solid #EDE7DE' : 0, cursor: canEdit && entry._id ? 'pointer' : 'default' }}>
-                <span aria-hidden style={{ position: 'relative', gridRow: '1 / 3' }}>
-                  {idx < all.length - 1 && <span style={{ position: 'absolute', left: 6.5, top: 17, bottom: -14, width: 1.5, background: '#B9D3CF' }} />}
-                  <span style={{ position: 'absolute', left: 0, top: 13, width: 11, height: 11, borderRadius: 999, background: M.verdeBoton, boxShadow: '0 0 0 2px #FFFFFF, 0 0 0 3.5px #B9D3CF' }} />
-                </span>
-                <span style={{ gridColumn: '2 / 4', fontSize: 11, lineHeight: '14px', color: M.gris }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
-                <span style={{ minWidth: 0, fontSize: 13, lineHeight: '17px', color: M.tinta }}>
-                  <strong style={{ fontWeight: 700 }}>{healthCategoryLabel(entry.type)}</strong>{entry.notes ? ` · ${entry.notes}` : ''}
-                </span>
-                <span style={{ fontSize: 11, lineHeight: '17px', color: M.gris, whiteSpace: 'nowrap', paddingLeft: 8, paddingRight: 2, alignSelf: 'end' }}>
-                  {entry.nextDueAt ? `Próxima: ${new Date(entry.nextDueAt).toLocaleDateString()}` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {canEdit && (
-            <p style={{ margin: '4px 0 4px', fontSize: 12.5, color: M.gris }}>¿Algo mal apuntado? Toca la entrada para corregirla o borrarla.</p>
-          )}
-          </>
-        ) : (
-          !healthOpen && (
-            <p className="mt-2 text-sm" style={{ color: '#7A8273' }}>
-              Aquí van las vacunas y desparasitaciones. Si apuntas cuándo toca la próxima, te avisamos.
-            </p>
-          )
-        )}
-      </div>
+        );
+      })()}
 
       {/* La chapa. Es lo único físico que tiene MyPetLive y lo que hace que el
           pasaporte sirva de algo el día que el animal se pierde, y hasta ahora

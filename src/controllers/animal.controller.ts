@@ -192,6 +192,7 @@ export async function getByCode(req: Request, res: Response) {
 const HEALTH_TITLES: Record<string, string> = {
   vaccine: 'Vacuna',
   deworming: 'Desparasitación',
+  medication: 'Medicación',
   checkup: 'Revisión',
   test: 'Prueba',
   surgery: 'Intervención',
@@ -270,7 +271,7 @@ export async function getTimeline(req: Request, res: Response) {
 
 // Categorías de registro clínico. 'visit' va a vetHistory (cuenta como visita
 // veterinaria); el resto a healthHistory (hitos de salud). Alimentan el pasaporte.
-const HEALTH_CATEGORIES = ['visit', 'vaccine', 'deworming', 'surgery', 'checkup', 'test', 'other'] as const;
+const HEALTH_CATEGORIES = ['visit', 'vaccine', 'deworming', 'medication', 'surgery', 'checkup', 'test', 'other'] as const;
 type HealthCategory = (typeof HEALTH_CATEGORIES)[number];
 
 // Cada cuánto toca repetir, cuando quien apunta no dice otra cosa. Solo para lo
@@ -1020,8 +1021,10 @@ export async function updateMine(req: Request, res: Response) {
   // `personalPetUpdateSchema` ya ha dejado en el cuerpo solo campos editables.
   for (const [field, value] of Object.entries(req.body as Record<string, unknown>)) {
     if (field === 'birthDate') continue;
-    animal[field] = value;
+    animal[field] = value === null && field === 'weightKg' ? undefined : value;
   }
+  // Fecha del peso: para decir «24,5 kg · hace 3 meses» y saber cuándo pesarla otra vez.
+  if ((req.body as any).weightKg !== undefined) animal.weightAt = (req.body as any).weightKg === null ? undefined : new Date();
   if ((req.body as any).birthDate !== undefined) {
     const birthDate = parseBirthDate((req.body as any).birthDate);
     if (!birthDate) return res.status(400).json({ error: 'invalid_birth_date' });

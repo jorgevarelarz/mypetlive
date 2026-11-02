@@ -22,6 +22,7 @@ const FRONTEND_URL = () => process.env.FRONTEND_URL || 'https://mypetlive.es';
 const HEALTH_LABELS: Record<string, string> = {
   vaccine: 'la vacuna',
   deworming: 'la desparasitación',
+  medication: 'la medicación',
   checkup: 'la revisión',
   test: 'una prueba',
   surgery: 'una intervención',

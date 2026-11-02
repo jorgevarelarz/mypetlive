@@ -180,7 +180,10 @@ export async function getAnimalTimeline(code: string) {
   return data as { code: string; timeline: AnimalTimelineItem[] };
 }
 
-export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'surgery' | 'checkup' | 'test' | 'other';
+export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'medication' | 'surgery' | 'checkup' | 'test' | 'other';
+
+/** Condición corporal que apunta la familia en «Sus datos de salud». */
+export type BodyCondition = 'muy_delgado' | 'delgado' | 'bueno' | 'sobrepeso' | 'obesidad';
 
 /** Corrige una entrada de salud (la familia, lo suyo). `nextDueAt: null` quita el aviso. */
 export async function updateHealthRecord(
@@ -355,6 +358,8 @@ export type PersonalPetUpdate = {
   sex?: 'male' | 'female' | null;
   size?: 'small' | 'medium' | 'large' | null;
   images?: string[];
+  weightKg?: number | null;
+  bodyCondition?: BodyCondition | null;
 };
 
 // Edición de la ficha de una mascota propia (incluidas las fotos). Endpoint
