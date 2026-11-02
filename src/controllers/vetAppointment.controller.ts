@@ -5,7 +5,9 @@ import { VetAppointment } from '../models/vetAppointment.model';
 import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { isFamilyMember } from '../utils/animalAccess';
-import { availability, slotTaken, MAX_DIAS } from '../utils/vetAgenda';
+import { availability, slotTaken, slotReservable, MAX_DIAS } from '../utils/vetAgenda';
+import { SlotClaim, slotClaimId } from '../models/slotClaim.model';
+import { isFamilyPet } from '../utils/animalAccess';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
 import { sendPushToUser } from '../utils/push';
@@ -26,9 +28,11 @@ function actor(req: Request) {
   return { id: String(u._id || u.id || ''), role: u.role as string };
 }
 
-function fmtDate(d?: Date | string) {
+// Hora de España siempre (AUD-2, FAC-121): el servidor va en UTC y los correos y
+// avisos decían las 11:00 de una cita a las 12:00.
+export function fmtDate(d?: Date | string) {
   if (!d) return 'fecha por confirmar';
-  return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+  return new Date(d).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Madrid' });
 }
 
 // Notifica por email a la parte indicada y, si se pasa `push`, también a su
@@ -51,6 +55,9 @@ async function notify(
     logger.error({ err, to }, '[vet-appointments] fallo al enviar email');
   }
 }
+
+/** Citas activas a la vez por persona y clínica. */
+export const MAX_CITAS_PENDIENTES = 3;
 
 // GET /api/vets — directorio público de veterinarios (para que el dueño elija).
 export async function listVets(req: Request, res: Response) {
@@ -191,8 +198,19 @@ export async function createAppointment(req: Request, res: Response) {
   const when = requestedAt ? new Date(requestedAt) : null;
   if (!when || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'invalid_date' });
   if (when.getTime() < Date.now() - 60_000) return res.status(400).json({ error: 'date_in_past' });
+  // La familia solo puede pedir un hueco de verdad (AUD-2, FAC-120): en la agenda
+  // de la clínica, con 2 h de margen y dentro de la ventana. La protectora sigue
+  // proponiendo fecha y hora libres, como hasta ahora.
+  if (role === 'tenant' && !slotReservable(vet, when)) return res.status(400).json({ error: 'slot_not_available' });
   // El mismo hueco no se da dos veces: si otra familia lo acaba de pedir, que elija otro.
   if (await slotTaken(String(vetId), when)) return res.status(409).json({ error: 'slot_taken' });
+  // Tope de citas pendientes por persona y clínica (AUD-2, FAC-124): sin él, una
+  // sola cuenta podía pedir todos los huecos libres de un veterinario.
+  const pendientes = await VetAppointment.countDocuments({
+    userId, vetId, status: { $in: ['requested', 'confirmed', 'rescheduled'] },
+    $or: [{ scheduledAt: { $gte: new Date() } }, { scheduledAt: null, requestedAt: { $gte: new Date() } }],
+  });
+  if (pendientes >= MAX_CITAS_PENDIENTES) return res.status(429).json({ error: 'too_many_pending', max: MAX_CITAS_PENDIENTES });
 
   // Animal opcional: si se da el código, debe ser una mascota del solicitante
   // (dueño del animal) o, si agenda una protectora, un animal de su protectora.
@@ -204,7 +222,10 @@ export async function createAppointment(req: Request, res: Response) {
     if (!animal) return res.status(404).json({ error: 'animal_not_found' });
     const uid = String(userId);
     // También quien comparte la mascota: la lleva al veterinario quien puede.
-    const isOwner = String(animal.ownerId || '') === uid || String(animal.shelter || '') === uid || isFamilyMember({ _id: uid }, animal);
+    // En una mascota de familia, la protectora de origen ya no la gestiona (AUD-2, FAC-117).
+    const isOwner = String(animal.ownerId || '') === uid
+      || (!isFamilyPet(animal) && String(animal.shelter || '') === uid)
+      || isFamilyMember({ _id: uid }, animal);
     if (!isOwner && role !== 'admin') return res.status(403).json({ error: 'animal_not_owned' });
     animalId = String(animal._id);
     code = animal.code;
@@ -224,7 +245,17 @@ export async function createAppointment(req: Request, res: Response) {
     vetId, userId, animalId, animalCode: code, reason: cleanReason, service, requestedAt: when, status: 'requested',
     patitasCost, patitasReserved: patitasCost > 0, payoutStatus: patitasCost > 0 ? 'pending_payout' : 'none',
   };
+  // Reclamar el hueco antes de crear la cita: si otra petición lo acaba de coger,
+  // esta recibe 409 en vez de crear una segunda cita en la misma hora.
+  const claimId = slotClaimId(String(vetId), when);
+  try {
+    await SlotClaim.create({ _id: claimId });
+  } catch (err: any) {
+    if (err?.code === 11000) return res.status(409).json({ error: 'slot_taken' });
+    throw err;
+  }
   let appt;
+  try {
   if (patitasCost > 0) {
     appt = await withRequiredTxn(async session => {
       if (!(await lockPatitas(userId, patitasCost, session))) return null;
@@ -237,6 +268,10 @@ export async function createAppointment(req: Request, res: Response) {
     }
   } else {
     appt = await VetAppointment.create(payload);
+  }
+  } finally {
+    if (appt) await SlotClaim.updateOne({ _id: claimId }, { $set: { appointmentId: appt._id } });
+    else await SlotClaim.deleteOne({ _id: claimId });
   }
 
   // Abre la conversación con el veterinario: la cita sale en Mensajes de los dos.
@@ -322,6 +357,8 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
       }
       if (typeof vetNotes === 'string' && (isVet || isAdmin)) appt.vetNotes = vetNotes.trim().slice(0, 1000);
       if (status === 'cancelled' && typeof cancelReason === 'string') appt.cancelReason = cancelReason.trim().slice(0, 500);
+      // Cancelada o movida a otra hora: el hueco que reclamó vuelve a quedar libre.
+      if (status === 'cancelled' || status === 'rescheduled') await SlotClaim.deleteMany({ appointmentId: appt._id }, session ? { session } : {});
       appt.status = status;
       let patitasSettlementFailed = false;
       if (status === 'cancelled' && appt.patitasReserved && !appt.patitasPaid) {

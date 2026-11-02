@@ -10,6 +10,7 @@ import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
 import PetSwitcher from '../../components/pet/PetSwitcher';
 import HealthEntrySheet from '../../components/pet/HealthEntrySheet';
 import { M } from '../../components/pet/maqueta';
+import { useDialog } from '../../hooks/useDialog';
 import {
   CalcoCuiAlerta, CalcoCuiBtnDesparasitacion, CalcoCuiBtnMedicacion, CalcoCuiBtnVacuna, CalcoCuiCita, CalcoCuiCitaPequena,
   CalcoCuiCondicion, CalcoCuiConsejos, CalcoCuiDatos, CalcoCuiDesparasitacion, CalcoCuiHistorial, CalcoCuiPedir, CalcoCuiPeso,
@@ -34,11 +35,13 @@ const CONDICIONES: Array<{ valor: BodyCondition; texto: string }> = [
 const DIA = 86_400_000;
 
 const fechaCorta = (d?: string | Date | null) => (d ? new Date(d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '') : '');
+// Las citas van en hora de España (la de la clínica), esté donde esté el móvil (AUD-2).
 const fechaCita = (d: string | Date) => {
   const t = new Date(d);
-  const dia = t.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
-  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} · ${t.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+  const dia = t.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }).replace(/\./g, '');
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} · ${t.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}`;
 };
+const REINTENTAR: React.CSSProperties = { border: 0, background: 'none', padding: 0, color: '#0E5F5B', font: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' };
 const haceCuanto = (d?: string | null) => {
   if (!d) return '';
   const dias = Math.floor((Date.now() - new Date(d).getTime()) / DIA);
@@ -105,6 +108,13 @@ export default function CuidadosPage() {
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['my-pets'] });
 
   if (petsQ.isLoading) return <div style={{ padding: 20, color: GRIS }}>Cargando…</div>;
+  if (petsQ.isError) {
+    return (
+      <div style={{ padding: 20, fontFamily: M.letra, color: '#B3261E', fontSize: 15 }}>
+        No hemos podido cargar tus mascotas. <button type="button" onClick={() => petsQ.refetch()} style={REINTENTAR}>Reintentar</button>
+      </div>
+    );
+  }
   if (!pet) {
     return (
       <div style={{ display: 'grid', gap: 12, padding: '8px 4px', fontFamily: M.letra }}>
@@ -131,13 +141,18 @@ export default function CuidadosPage() {
   const vacunasPendientes = vacunas
     .filter(v => v.nextDueAt && new Date(v.nextDueAt).getTime() <= ahora + 30 * DIA)
     .sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime());
-  const desparas = salud.filter(e => e.type === 'deworming').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Cada desparasitación (interna, pipeta…) por separado: una pipeta reciente no
+  // tapa una interna vencida (AUD-2).
+  const desparas = ultimasPorCosa(salud, 'deworming').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const ultimaDesparas = desparas[0];
-  const desparasVencida = ultimaDesparas?.nextDueAt ? new Date(ultimaDesparas.nextDueAt).getTime() < ahora : false;
+  const desparasVencidas = desparas.filter(d => d.nextDueAt && new Date(d.nextDueAt).getTime() < ahora);
+  const desparasVencida = desparasVencidas.length > 0;
+  // Vacunas con aviso quitado: no se puede decir que estén «al día».
+  const vacunasSinFecha = vacunas.filter(v => !v.nextDueAt);
   const medicacion = ultimasPorCosa(salud, 'medication');
   const vencidas = [
     ...vacunas.filter(v => v.nextDueAt && new Date(v.nextDueAt).getTime() < ahora),
-    ...(desparasVencida ? [ultimaDesparas] : []),
+    ...desparasVencidas,
     ...medicacion.filter(m => m.nextDueAt && new Date(m.nextDueAt).getTime() < ahora),
   ];
   const sinNada = !salud.length;
@@ -181,8 +196,11 @@ export default function CuidadosPage() {
         </Link>
       </header>
 
-      <Fila icono={<CalcoCuiCita size={28} />} fondo="#E6F2EE" titulo="Próxima cita" to="/citas"
-        subtitulo={proximaCita ? (proximaCita.service?.name || proximaCita.reason) : 'Sin citas pedidas'}>
+      <Fila icono={<CalcoCuiCita size={28} />} fondo="#E6F2EE" titulo="Próxima cita" to={citasQ.isError ? undefined : '/citas'}
+        subtitulo={proximaCita ? (proximaCita.service?.name || proximaCita.reason) : citasQ.isLoading ? 'Cargando…' : citasQ.isError ? 'No hemos podido cargar tus citas' : 'Sin citas pedidas'}>
+        {citasQ.isError && (
+          <button type="button" onClick={() => citasQ.refetch()} style={{ ...REINTENTAR, marginTop: 6, fontSize: 14.5 }}>Reintentar</button>
+        )}
         {proximaCita && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 15.5, color: '#14231F' }}>
             <CalcoCuiCitaPequena size={17} /> {fechaCita(proximaCita.scheduledAt || proximaCita.requestedAt)}
@@ -192,11 +210,16 @@ export default function CuidadosPage() {
       </Fila>
 
       <Fila icono={<CalcoCuiVacunas size={30} />} fondo="#FDF1DC" titulo="Vacunas"
-        subtitulo={vacunasPendientes.length ? `${vacunasPendientes.length} ${vacunasPendientes.length === 1 ? 'pendiente' : 'pendientes'}` : vacunas.length ? 'Al día' : 'Sin vacunas apuntadas'}>
+        subtitulo={vacunasPendientes.length ? `${vacunasPendientes.length} ${vacunasPendientes.length === 1 ? 'pendiente' : 'pendientes'}` : vacunas.length === vacunasSinFecha.length && vacunas.length ? 'Sin próxima fecha' : vacunas.length ? 'Al día' : 'Sin vacunas apuntadas'}>
         {vacunasPendientes[0] && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, padding: '7px 10px', borderRadius: 10, background: '#FCEBDD', fontSize: 14, color: '#3D2A1E' }}>
             <CalcoCuiAlerta size={17} />
             <span><strong>{nombreCorto(vacunasPendientes[0].notes) || 'Vacuna'}</strong> · {new Date(vacunasPendientes[0].nextDueAt).getTime() < ahora ? 'Venció' : 'Vence'} el {fechaCorta(vacunasPendientes[0].nextDueAt)}</span>
+          </span>
+        )}
+        {!vacunasPendientes.length && vacunasSinFecha[0] && (
+          <span style={{ display: 'block', marginTop: 6, fontSize: 14.5, color: '#3D4340' }}>
+            {vacunasSinFecha.length === 1 ? `${nombreCorto(vacunasSinFecha[0].notes) || 'Vacuna'}: sin próxima fecha · última el ${fechaCorta(vacunasSinFecha[0].date)}` : `${vacunasSinFecha.length} vacunas sin próxima fecha`}
           </span>
         )}
       </Fila>
@@ -205,7 +228,7 @@ export default function CuidadosPage() {
         subtitulo={!ultimaDesparas ? 'Sin apuntar' : desparasVencida ? 'Pendiente' : 'Al día'}>
         {ultimaDesparas && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 15, color: '#3D4340' }}>
-            {desparasVencida ? <CalcoCuiAlerta size={17} /> : <Visto />} Última: {fechaCorta(ultimaDesparas.date)}
+            {desparasVencida ? <CalcoCuiAlerta size={17} /> : <Visto />} {desparasVencida ? `${nombreCorto(desparasVencidas[0].notes) || 'Pendiente'}: venció el ${fechaCorta(desparasVencidas[0].nextDueAt)}` : `Última: ${fechaCorta(ultimaDesparas.date)}`}
           </span>
         )}
       </Fila>
@@ -218,7 +241,7 @@ export default function CuidadosPage() {
         <span style={{ position: 'relative' }}>
           <span style={{ display: 'block', fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>Salud general</span>
           <span style={{ display: 'block', fontSize: 15.5, marginTop: 2 }}>
-            {sinNada ? 'Empieza apuntando sus vacunas' : vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? 'cosa pendiente' : 'cosas pendientes'}` : 'Todo en orden 🎉'}
+            {sinNada ? 'Empieza apuntando sus vacunas' : vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? 'cosa pendiente' : 'cosas pendientes'}` : 'Todo en orden'}
           </span>
         </span>
       </div>
@@ -259,7 +282,7 @@ export default function CuidadosPage() {
               return (
                 <li key={e._id || `${e.type}-${i}`} role={editable ? 'button' : undefined} tabIndex={editable ? 0 : undefined}
                   onClick={editable ? () => setApuntar({ entrada: e }) : undefined}
-                  onKeyDown={editable ? (ev => { if (ev.key === 'Enter') setApuntar({ entrada: e }); }) : undefined}
+                  onKeyDown={editable ? (ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setApuntar({ entrada: e }); } }) : undefined}
                   style={{ display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) 28px', columnGap: 12, alignItems: 'center', paddingBottom: 12, cursor: editable ? 'pointer' : 'default' }}>
                   <span aria-hidden style={{ position: 'relative', alignSelf: 'stretch' }}>
                     <span style={{ position: 'absolute', left: 3, top: 7, width: 12, height: 12, borderRadius: 999, background: '#0E6E62' }} />
@@ -339,17 +362,21 @@ function DatosSheet({ pet, onClose, onSaved }: { pet: any; onClose: () => void; 
   const [cond, setCond] = React.useState<BodyCondition | null>(pet.bodyCondition || null);
   const guardar = useMutation({
     mutationFn: () => {
-      const n = Number(peso.replace(',', '.'));
-      return updateMyPet(String(pet._id), { weightKg: peso.trim() ? n : null, bodyCondition: cond });
+      // El peso solo si ha cambiado: si no, el servidor lo fecharía hoy (AUD-2).
+      const n = peso.trim() ? Number(peso.replace(',', '.')) : null;
+      const cambios: Parameters<typeof updateMyPet>[1] = { bodyCondition: cond };
+      if (n !== (pet.weightKg ?? null)) cambios.weightKg = n;
+      return updateMyPet(String(pet._id), cambios);
     },
     onSuccess: () => { toast.success('Datos guardados'); onSaved(); onClose(); },
     onError: () => toast.error('Revisa el peso: tiene que ser un número entre 0 y 200 kg.'),
   });
+  const dialogo = useDialog<HTMLDivElement>(onClose);
   const pesoValido = !peso.trim() || (Number(peso.replace(',', '.')) > 0 && Number(peso.replace(',', '.')) <= 200);
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Sus datos de salud" onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(20,30,25,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()}
+      <div ref={dialogo} tabIndex={-1} onClick={e => e.stopPropagation()}
         style={{ width: '100%', maxWidth: 520, boxSizing: 'border-box', background: '#FFFDFA', borderRadius: '24px 24px 0 0', padding: '14px 18px calc(18px + env(safe-area-inset-bottom))', fontFamily: M.letra, color: M.tinta, display: 'grid', gap: 14 }}>
         <span aria-hidden style={{ width: 44, height: 5, borderRadius: 99, background: '#D9D6CF', margin: '0 auto' }} />
         <h2 style={{ margin: 0, fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>Datos de salud de {pet.name}</h2>

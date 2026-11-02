@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { citaCon } from './utils/citas';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -110,6 +111,7 @@ describe('Corregir el historial de salud', () => {
 
   it('lo que apuntó la clínica no lo cambia la familia; la clínica sí', async () => {
     const { pet } = await petWithVaccine();
+    await citaCon(vetId, pet);
     await request(app).post(`/api/animals/${pet.code}/health`).set(H(vetId, 'vet')).send({ category: 'vaccine', note: 'Polivalente' }).expect(201);
     const doc = await Animal.findById(pet._id).lean();
     const vetEntry = doc.healthHistory.find((h: any) => h.notes === 'Polivalente');
@@ -151,9 +153,13 @@ describe('Corregir el historial de salud', () => {
   it('medicación es un tipo más del historial, con su título en el pasaporte', async () => {
     const { pet } = await petWithVaccine();
     await request(app).post(`/api/animals/${pet.code}/health`).set(H(ownerId)).send({ category: 'medication', note: 'Antibiótico 7 días' }).expect(201);
+    // Público: el título sí, el detalle no (AUD-2: la medicación es dato de salud privado).
     const pass = await request(app).get(`/api/animals/passport/${pet.code}`).expect(200);
     const med = pass.body.timeline.find((t: any) => t.kind === 'medication');
-    expect(med).toMatchObject({ title: 'Medicación', detail: 'Antibiótico 7 días' });
+    expect(med).toMatchObject({ title: 'Medicación' });
+    expect(med.detail).toBeFalsy();
+    const propio = await request(app).get(`/api/animals/${pet.code}/timeline`).set(H(ownerId)).expect(200);
+    expect(propio.body.timeline.find((t: any) => t.kind === 'medication')).toMatchObject({ title: 'Medicación', detail: 'Antibiótico 7 días' });
   });
 });
 

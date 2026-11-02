@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import asyncHandler from '../utils/asyncHandler';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import { assertRole } from '../middleware/assertRole';
@@ -26,7 +27,15 @@ router.post('/vets/me/calendar-feed/rotate', ...assertRole('vet'), asyncHandler(
 router.get('/vets/calendar/:token.ics', asyncHandler(calendarFeedIcs));
 
 // Citas veterinarias.
-router.post('/vet-appointments', ...assertRole('tenant', 'landlord', 'admin'), asyncHandler(createAppointment));
+// Límite por persona (AUD-2, FAC-124): además del tope de citas pendientes del controlador.
+const citasLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.VET_APPT_HOURLY_LIMIT || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req.user?._id || req.user?.id || req.ip),
+});
+router.post('/vet-appointments', ...assertRole('tenant', 'landlord', 'admin'), citasLimiter, asyncHandler(createAppointment));
 router.get('/vet-appointments/mine', authenticate, asyncHandler(listMyAppointments));
 router.patch('/vet-appointments/:id/status', authenticate, asyncHandler(updateAppointmentStatus));
 

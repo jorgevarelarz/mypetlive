@@ -137,7 +137,11 @@ const labelFor: Record<string, string> = {
 
 // Exportada para las páginas públicas (catálogo, ficha, favoritos): con sesión
 // iniciada llevan esta misma cabecera y no la pública (ver PublicHeader).
-export function Header() {
+/**
+ * `sinMenuLateral`: la página no monta SideNav (las públicas, vía PublicHeader).
+ * Entonces la cabecera lleva también los enlaces de la cuenta (AUD-2).
+ */
+export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } = {}) {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const { openAuth } = useAuthModal();
@@ -160,7 +164,21 @@ export function Header() {
   // le repetía las nueve entradas; a protectoras y partners les deja los
   // enlaces públicos (Compañeros, Tienda…) que su menú no tiene.
   const sideTargets = new Set(drawerItems.map(resolvePath));
-  const headerItems = generalItems.filter(item => !sideTargets.has(resolvePath(item)));
+  const headerItems = sinMenuLateral
+    ? [...drawerItems, ...generalItems.filter(item => !sideTargets.has(resolvePath(item)))]
+    : generalItems.filter(item => !sideTargets.has(resolvePath(item)));
+  const botonMenu = React.useRef<HTMLButtonElement>(null);
+  const cajon = React.useRef<HTMLElement>(null);
+  const yaAbierto = React.useRef(false);
+  // Menú móvil: al abrir, el foco entra; al cerrar, vuelve al botón (AUD-2).
+  useEffect(() => {
+    if (menuOpen) {
+      yaAbierto.current = true;
+      cajon.current?.querySelector<HTMLElement>('a[href], button')?.focus();
+    } else if (yaAbierto.current) {
+      botonMenu.current?.focus();
+    }
+  }, [menuOpen]);
 
   const loadCode = async () => {
     setLoadingCode(true);
@@ -277,6 +295,7 @@ export function Header() {
           {(user || !isNativeApp()) && <button
             className="lg:hidden inline-flex items-center justify-center"
             style={{ width: 40, height: 40, padding: 0, flexShrink: 0, border: `1px solid ${MPL.border}`, borderRadius: 12, background: '#fff', color: MPL.ink }}
+            ref={botonMenu}
             onClick={() => setMenuOpen(true)}
             aria-expanded={menuOpen}
             aria-controls="mobile-menu"
@@ -312,8 +331,9 @@ export function Header() {
           transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
           boxShadow: menuOpen ? '0 10px 40px rgba(0,0,0,0.18)' : 'none',
         }}
-        role="dialog"
-        aria-modal="true"
+        ref={cajon}
+        // Cerrado: fuera del orden de Tab y del lector de pantalla (AUD-2).
+        {...(menuOpen ? { role: 'dialog', 'aria-modal': true } : { inert: true, 'aria-hidden': true })}
         aria-label="Menú"
       >
         {/* Cajón con las medidas de la maqueta del menú (2 nov 2026): logo y cerrar, dibujo, secciones,

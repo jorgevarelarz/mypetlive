@@ -98,6 +98,25 @@ async function ocupados(vetId: string, desde: Date, hasta: Date) {
   return set;
 }
 
+/**
+ * ¿Se puede pedir cita en ese instante? (AUD-2, FAC-120 y FAC-125) La misma regla
+ * que `availability`: dentro de la ventana (MAX_DIAS), con el margen de 2 h y, si
+ * la clínica ha publicado su agenda, en uno de sus días y horas. Si no la ha
+ * publicado, la familia propone (en punto o y media, de 8:00 a 20:30) y la
+ * clínica confirma o propone otra hora.
+ */
+export function slotReservable(vet: any, when: Date, now = new Date()): boolean {
+  const t = when.getTime();
+  if (Number.isNaN(t) || t < now.getTime() + MARGEN_MS) return false;
+  const hoy = madridParts(now).ymd;
+  const limite = madridToDate(nextYmd(hoy), '00:00').getTime() + (MAX_DIAS - 1) * 86_400_000;
+  if (t > limite) return false;
+  const p = madridParts(when);
+  const propia = normalizeAgenda(vet?.profile?.vet?.agenda);
+  if (propia) return propia.dias.includes(p.wd) && propia.horas.includes(p.hhmm);
+  return /^(0[89]|1\d|20):(00|30)$/.test(p.hhmm);
+}
+
 /** ¿Está libre ese instante en la agenda del vet? (para no dar dos veces el mismo hueco). */
 export async function slotTaken(vetId: string, when: Date) {
   const p = madridParts(when);

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { ClientSession } from 'mongoose';
 import { getJwtSecret } from '../config/jwt';
@@ -42,15 +43,19 @@ export function genRedeemCode(): string {
 const WALLET_TOKEN_TTL = '10m';
 
 // Token corto firmado que codifica la wallet de la protectora para el QR de canje.
+// Lleva un `jti` aleatorio: el canje lo apunta como usado (WalletUse) y no vale dos veces.
 export function signWalletToken(shelterId: string): string {
-  return jwt.sign({ shelterId, purpose: 'patitas-wallet' }, getJwtSecret(), { expiresIn: WALLET_TOKEN_TTL });
+  return jwt.sign({ shelterId, purpose: 'patitas-wallet', jti: crypto.randomUUID() }, getJwtSecret(), { expiresIn: WALLET_TOKEN_TTL });
 }
 
-export function verifyWalletToken(token: string): { shelterId: string } | null {
+export function verifyWalletToken(token: string): { shelterId: string; jti: string } | null {
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as any;
     if (decoded?.purpose !== 'patitas-wallet' || !decoded?.shelterId) return null;
-    return { shelterId: String(decoded.shelterId) };
+    // Los tokens emitidos antes del `jti` (como mucho 10 minutos tras el despliegue)
+    // se identifican por su huella: también valen una sola vez.
+    const jti = decoded.jti ? String(decoded.jti) : crypto.createHash('sha256').update(token).digest('hex');
+    return { shelterId: String(decoded.shelterId), jti };
   } catch {
     return null;
   }

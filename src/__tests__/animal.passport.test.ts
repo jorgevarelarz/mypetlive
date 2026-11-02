@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { citaCon } from './utils/citas';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -308,6 +309,7 @@ describe('Pasaporte del animal', () => {
 
   it('un veterinario añade visita e hito de salud y el pasaporte los refleja', async () => {
     const animal = await createAnimal({ name: 'Bobby' });
+    await citaCon(vetId, animal);
 
     const visit = await request(app)
       .post(`/api/animals/${animal.code}/health`)

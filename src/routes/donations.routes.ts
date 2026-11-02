@@ -73,8 +73,9 @@ r.post(
         transfer_data: { destination: shelter.stripeAccountId },
       },
       metadata: { donation: 'true', userId: String(userId || ''), animalId: String(animalId || ''), shelterId: String(shelterId) },
-      success_url: base + '/?donation=success',
-      cancel_url: base + '/?donation=cancel',
+      // Vuelve a /donations, que lee el estado y lo explica (AUD-2): «/» no lo leía.
+      success_url: base + '/donations?donation=success&session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: base + '/donations?donation=cancel',
     });
 
     await Donation.create({ userId: String(userId || ''), animalId, amount, currency: 'eur', status: 'pending', sessionId: session.id, shelterId: String(shelterId) });

@@ -409,18 +409,24 @@ export async function ensureHealthEntryIds() {
   const cursor = coll.find({ healthHistory: { $elemMatch: { $or: [{ _id: { $exists: false } }, { byRole: { $exists: false } }] } } }, { projection: { healthHistory: 1 } });
   const users = model('User').collection;
   let n = 0;
-  for await (const doc of cursor as any) {
-    const history = await Promise.all((doc.healthHistory || []).map(async (h: any) => {
-      const out = { ...h };
-      if (!out._id) out._id = new Types.ObjectId();
-      if (!out.byRole) {
-        const author: any = out.vetId ? await users.findOne({ _id: out.vetId }, { projection: { role: 1 } }) : null;
-        out.byRole = author?.role === 'vet' ? 'vet' : author?.role === 'admin' ? 'admin' : 'family';
-      }
-      return out;
-    }));
-    await coll.updateOne({ _id: doc._id }, { $set: { healthHistory: history } });
-    n += 1;
+  for await (const leido of cursor as any) {
+    // Escritura condicionada al array leído (AUD-2): si alguien apunta, corrige o
+    // borra entre medias, no casa, se vuelve a leer y se reintenta. Así no se pisa nada.
+    let doc = leido;
+    for (let intento = 0; intento < 5 && doc; intento += 1) {
+      const history = await Promise.all((doc.healthHistory || []).map(async (h: any) => {
+        const out = { ...h };
+        if (!out._id) out._id = new Types.ObjectId();
+        if (!out.byRole) {
+          const author: any = out.vetId ? await users.findOne({ _id: out.vetId }, { projection: { role: 1 } }) : null;
+          out.byRole = author?.role === 'vet' ? 'vet' : author?.role === 'admin' ? 'admin' : 'family';
+        }
+        return out;
+      }));
+      const r = await coll.updateOne({ _id: doc._id, healthHistory: doc.healthHistory }, { $set: { healthHistory: history } });
+      if (r.modifiedCount) { n += 1; break; }
+      doc = await coll.findOne({ _id: doc._id }, { projection: { healthHistory: 1 } });
+    }
   }
   return n;
 }

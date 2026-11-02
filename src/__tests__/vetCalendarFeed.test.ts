@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { startMongoMemoryServer } from './utils/mongoMemoryServer';
+import { hueco } from './utils/huecos';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -51,7 +52,7 @@ async function bookAppointment() {
   const res = await request(app)
     .post('/api/vet-appointments')
     .set(ownerH)
-    .send({ vetId, reason: 'Vacuna anual', requestedAt: new Date(Date.now() + 86400000).toISOString() })
+    .send({ vetId, reason: 'Vacuna anual', requestedAt: hueco(0).toISOString() })
     .expect(201);
   return res.body._id as string;
 }

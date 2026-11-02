@@ -52,6 +52,9 @@ function serializeCoupon(doc: any) {
     description: doc.description,
     discount: doc.discount,
     bonusPatitas: doc.bonusPatitas,
+    // Lo que de verdad concede el servidor al usarlo (AUD-2, FAC-122): la web
+    // prometía 40 cuando, sin bonus propio, se dan COUPON_PATITAS_REWARD_DEFAULT.
+    rewardPatitas: Number(doc.bonusPatitas) > 0 ? Math.round(Number(doc.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT,
     active: doc.active,
     sponsored: !!doc.sponsored,
     sponsorshipStatus: doc.sponsorshipStatus || 'none',

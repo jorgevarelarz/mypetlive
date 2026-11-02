@@ -14,6 +14,8 @@ export type Coupon = {
   sponsorshipStatus?: 'none' | 'pending' | 'active';
   targetAnimalCode?: string | null;
   bonusPatitas?: number | null;
+  /** Patitas que da de verdad (las suyas o las de por defecto del servidor). */
+  rewardPatitas?: number;
   expiresAt?: string | null;
   usedAt?: string | null;
 };

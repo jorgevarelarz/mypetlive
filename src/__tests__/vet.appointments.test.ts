@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
+import { hueco as huecoAgenda } from './utils/huecos';
 
 let app: any;
 let mongo: MongoMemoryReplSet | undefined;
@@ -36,7 +37,7 @@ const shelterH = { 'x-user-id': shelterId, 'x-user-role': 'landlord', 'x-user-ve
 // Cada cita, una hora distinta: desde que la reserva no da dos veces el mismo
 // hueco (slot_taken), dos citas al mismo minuto serían otra cosa que lo que se prueba.
 let hueco = 0;
-const future = () => new Date(Date.now() + 86_400_000 + (hueco++) * 3_600_000).toISOString();
+const future = () => huecoAgenda(hueco++).toISOString();
 
 beforeEach(async () => {
   if (mongoose.connection.readyState === 1 && mongoose.connection.db) {

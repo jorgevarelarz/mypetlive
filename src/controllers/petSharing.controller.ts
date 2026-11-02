@@ -68,12 +68,14 @@ export async function getFamily(req: Request, res: Response) {
     .select('name email profile.firstName')
     .lean();
   const byId = new Map(people.map(p => [String(p._id), p]));
+  const amOwner = isPrimaryOwner((req as any).user, animal);
+  // Los correos solo los ve el dueño (AUD-2): un miembro puede ser quien recibió
+  // un enlace reenviado, con cualquier cuenta.
   const person = (id: string) => {
     const p = byId.get(id);
-    return { userId: id, name: p?.name || 'Usuario', email: p?.email || undefined, isMe: id === me };
+    return { userId: id, name: p?.name || 'Usuario', email: amOwner || id === me ? p?.email || undefined : undefined, isMe: id === me };
   };
 
-  const amOwner = isPrimaryOwner((req as any).user, animal);
   const invites = amOwner
     ? await PetInvite.find({ animalId: animal._id, status: 'pending', expiresAt: { $gt: new Date() } })
       .select('email createdAt expiresAt')
@@ -114,7 +116,12 @@ export async function invite(req: Request, res: Response) {
     const inviteeId = String(invitee._id);
     if (inviteeId === String(familyOwnerId(animal))) return res.status(400).json({ error: 'cannot_invite_self' });
     if (memberIds.includes(inviteeId)) return res.status(409).json({ error: 'already_member' });
-    if (invitee.role !== 'tenant') return res.status(400).json({ error: 'invitee_not_family' });
+    // Cuenta de protectora, tienda o veterinario: no se crea ni se envía nada, pero
+    // se responde igual que si se hubiera enviado (AUD-2): si no, el dueño podría
+    // sondear qué correos son cuentas profesionales.
+    if (invitee.role !== 'tenant') {
+      return res.status(201).json({ id: String(new Types.ObjectId()), email, createdAt: new Date(), expiresAt: new Date(Date.now() + PET_INVITE_DAYS * 86_400_000) });
+    }
   }
 
   // Reenviar a quien ya tenía una pendiente la sustituye: el enlace viejo deja de valer.
@@ -251,12 +258,16 @@ export async function previewByToken(req: Request, res: Response) {
 
 /** Invitaciones pendientes a mi correo: así las ve en la app sin abrir el correo. */
 export async function listMine(req: Request, res: Response) {
-  const me: any = await User.findById(uidOf(req)).select('email').lean();
+  const me: any = await User.findById(uidOf(req)).select('email createdAt').lean();
   if (!me?.email) return res.json({ items: [] });
+  // Solo las enviadas DESPUÉS de crear la cuenta (AUD-2, FAC-118): el alta no
+  // verifica el correo, y si no, cualquiera podía registrarse con el de la persona
+  // invitada y aceptar sin haber visto el enlace. Las demás, con el enlace.
   const invites = await PetInvite.find({
     email: String(me.email).toLowerCase(),
     status: 'pending',
     expiresAt: { $gt: new Date() },
+    ...(me.createdAt ? { createdAt: { $gt: me.createdAt } } : {}),
   }).sort({ createdAt: -1 }).limit(10);
   const items = (await Promise.all(invites.map(previewOf))).filter(i => i.animal);
   res.json({ items });
@@ -272,8 +283,10 @@ async function resolveInvite(req: Request) {
   if (!Types.ObjectId.isValid(id)) return null;
   const invite = await PetInvite.findById(id);
   if (!invite) return null;
-  const me: any = await User.findById(uidOf(req)).select('email').lean();
+  const me: any = await User.findById(uidOf(req)).select('email createdAt').lean();
   if (!me?.email || String(me.email).toLowerCase() !== invite.email) return null;
+  // Por id solo si la cuenta ya existía cuando se invitó (ver listMine).
+  if (me.createdAt && new Date(me.createdAt).getTime() >= new Date(invite.createdAt).getTime()) return null;
   return invite;
 }
 
@@ -301,17 +314,28 @@ export async function accept(req: Request, res: Response) {
     return res.status(410).json({ error: 'invite_revoked' });
   }
 
+  // Atómico (AUD-2): primero se reclama la invitación (solo una petición lo
+  // consigue, y una revocación entre medias se respeta) y solo entonces se añade
+  // al miembro, con el tope en el propio filtro. Si eso falla, vuelve a pendiente.
+  const reclamada = await PetInvite.findOneAndUpdate(
+    { _id: invite._id, status: 'pending', expiresAt: { $gt: new Date() } },
+    { $set: { status: 'accepted', acceptedBy: new Types.ObjectId(me), respondedAt: new Date() } },
+    { new: true },
+  );
+  if (!reclamada) return res.status(410).json({ error: 'invite_accepted' });
   if (!familyMemberIds(animal).includes(me)) {
-    if (familyMemberIds(animal).length >= MAX_PET_MEMBERS) return res.status(409).json({ error: 'too_many_members', max: MAX_PET_MEMBERS });
-    await Animal.updateOne(
-      { _id: animal._id, 'members.userId': { $ne: new Types.ObjectId(me) } },
+    const añadido = await Animal.updateOne(
+      { _id: animal._id, 'members.userId': { $ne: new Types.ObjectId(me) }, [`members.${MAX_PET_MEMBERS - 1}`]: { $exists: false } },
       { $push: { members: { userId: new Types.ObjectId(me), addedAt: new Date(), invitedBy: invite.invitedBy } } },
     );
+    if (!añadido.modifiedCount) {
+      const yaEsta = await Animal.exists({ _id: animal._id, 'members.userId': new Types.ObjectId(me) });
+      if (!yaEsta) {
+        await PetInvite.updateOne({ _id: invite._id }, { $set: { status: 'pending' }, $unset: { acceptedBy: 1, respondedAt: 1 } });
+        return res.status(409).json({ error: 'too_many_members', max: MAX_PET_MEMBERS });
+      }
+    }
   }
-  invite.status = 'accepted';
-  invite.acceptedBy = new Types.ObjectId(me);
-  invite.respondedAt = new Date();
-  await invite.save();
 
   const accepter: any = await User.findById(me).select('name profile.firstName').lean();
   sendPushToUser(String(invite.invitedBy), {

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { recordProductUse } from '../utils/petCatalog';
 import { Types } from 'mongoose';
 import { Animal } from '../models/animal.model';
-import { isFamilyMember } from '../utils/animalAccess';
+import { isFamilyMember, isFamilyPet } from '../utils/animalAccess';
 import { Adoption } from '../models/adoption.model';
 import { User } from '../models/user.model';
 import { CareLog, WALK_KINDS, type WalkKind } from '../models/careLog.model';
@@ -30,7 +30,8 @@ async function animalIfAllowed(animalId: string, user: any) {
   if (!animal) return null;
   if (user.role === 'admin') return animal;
   const userId = String(user._id || user.id);
-  if ((user.role === 'landlord' || user.role === 'protectora') && String(animal.shelter) === userId) return animal;
+  // La protectora de origen ya no gestiona un animal adoptado (AUD-2, FAC-117).
+  if ((user.role === 'landlord' || user.role === 'protectora') && String(animal.shelter) === userId && !isFamilyPet(animal)) return animal;
   // Mascota personal: su dueño es `ownerId` y no hay adopción de por medio, así que
   // sin esta comprobación el propio dueño recibía 403 al marcar comida/arena.
   if (animal.ownerId && String(animal.ownerId) === userId) return animal;

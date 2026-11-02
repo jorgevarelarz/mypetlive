@@ -47,7 +47,8 @@ export default function VetHealthPanel() {
       return addHealthRecord(activeCode, {
         category,
         note: note.trim(),
-        treatment: treatment.trim() || undefined,
+        // El tratamiento solo se guarda en las visitas: en el resto se perdía sin avisar (AUD-2).
+        treatment: category === 'visit' ? treatment.trim() || undefined : undefined,
         date: date || undefined,
       });
     },
@@ -61,6 +62,8 @@ export default function VetHealthPanel() {
     onError: (e: any) => {
       const code = e?.response?.data?.error;
       if (code === 'not_found') toast.error('No existe ningún animal con ese código');
+      else if (code === 'no_appointment_with_animal') toast.error('Solo puedes apuntar en el pasaporte de animales con una cita en tu clínica.');
+      else if (code === 'date_in_future') toast.error('La fecha no puede ser posterior a hoy.');
       else if (code === 'note_required' || e?.message === 'note_required') toast.error('Describe el registro');
       else toast.error('No se pudo guardar el registro');
     },
@@ -139,14 +142,16 @@ export default function VetHealthPanel() {
                 style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
               />
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
-                Tratamiento (opcional)
-                <input value={treatment} onChange={e => setTreatment(e.target.value)} style={inputStyle} placeholder="Medicación, pauta…" />
-              </label>
+            <div style={{ display: 'grid', gridTemplateColumns: category === 'visit' ? '1fr 1fr' : '1fr', gap: 12 }}>
+              {category === 'visit' && (
+                <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
+                  Tratamiento (opcional)
+                  <input value={treatment} onChange={e => setTreatment(e.target.value)} style={inputStyle} placeholder="Medicación, pauta…" />
+                </label>
+              )}
               <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
                 Fecha
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
+                <input type="date" value={date} max={new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())} onChange={e => setDate(e.target.value)} style={inputStyle} />
               </label>
             </div>
             <button
@@ -167,7 +172,7 @@ export default function VetHealthPanel() {
                 {[...p.timeline].reverse().slice(0, 6).map((t, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${MPL.bg}`, paddingBottom: 7, fontSize: 13 }}>
                     <span><strong>{t.title}</strong>{t.detail ? <span style={{ color: MPL.muted }}> · {t.detail}</span> : null}</span>
-                    <span style={{ color: MPL.faint, flex: 'none' }}>{t.at ? new Date(t.at).toLocaleDateString() : ''}</span>
+                    <span style={{ color: MPL.faint, flex: 'none' }}>{t.at ? new Date(t.at).toLocaleDateString('es-ES') : ''}</span>
                   </div>
                 ))}
               </div>

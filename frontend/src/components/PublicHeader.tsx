@@ -30,7 +30,7 @@ export default function PublicHeader() {
   // menú). Antes «Compañeros», la ficha de un animal y Favoritos enseñaban esta,
   // la pública, y al entrar en ellas la cabecera cambiaba (aviso de Jorge, 2 nov 2026).
   const conSesion = Boolean(user);
-  if (conSesion) return <AppHeader />;
+  if (conSesion) return <AppHeader sinMenuLateral />;
 
   return (
     <div

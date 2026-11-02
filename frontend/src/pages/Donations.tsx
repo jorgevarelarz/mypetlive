@@ -45,12 +45,13 @@ export default function DonationsPage() {
 
   const recipientName = animalId ? animalShelterName : shelters.find(item => item.id === shelterId)?.name;
 
-  // Stripe vuelve con `?donation=success|cancel`. Hoy el backend redirige a la
-  // portada, que no lee el parámetro (queda anotado como pendiente); aquí se lee
-  // para que el retorno tenga respuesta si se apunta a esta página.
+  // Stripe vuelve aquí con `?donation=success&session_id=…` o `?donation=cancel`
+  // (AUD-2). El éxito no se da por hecho por el parámetro: el cobro lo confirma
+  // el webhook de Stripe, así que se dice que se está confirmando.
+  const vuelta = sp.get('donation');
   useEffect(() => {
-    if (sp.get('donation') === 'cancel') setError('Has cancelado el pago. No se te ha cobrado nada.');
-  }, [sp]);
+    if (vuelta === 'cancel') setError('Has cancelado el pago. No se te ha cobrado nada.');
+  }, [vuelta]);
 
   const value = Number(amount);
   // El servidor tiene la última palabra sobre el tope; aquí solo se evita el
@@ -202,6 +203,13 @@ export default function DonationsPage() {
               style={{ width: '100%', border: `1px solid ${MPL.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 15, fontFamily: MPL_FONT_BODY, color: MPL.ink, background: '#fff' }}
             />
           </label>
+
+          {vuelta === 'success' && sp.get('session_id') && (
+            <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: MPL.ink, background: '#E6F2EE', border: '1px solid #B9D8CC', borderRadius: 12, padding: '11px 13px', fontSize: 13.5 }}>
+              <Info size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Gracias. Estamos confirmando tu pago con Stripe; cuando se complete te llegará el recibo por correo. Si no llega en unos minutos, mira tu banco antes de volver a donar.</span>
+            </div>
+          )}
 
           {error && (
             <div role="alert" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: MPL.coralDark, background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 12, padding: '11px 13px', fontSize: 13 }}>

@@ -131,8 +131,10 @@ describe('Invitar', () => {
     const pet = await sharedPet();
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'ana@test.com' }).expect(400);
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'pablo@test.com' }).expect(409);
-    const res = await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'prote@test.com' }).expect(400);
-    expect(res.body.error).toBe('invitee_not_family');
+    // A una cuenta de protectora no se le manda nada, pero la respuesta es la misma
+    // que a una persona: el correo no revela qué tipo de cuenta es (AUD-2).
+    await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'prote@test.com' }).expect(201);
+    expect(await PetInvite.countDocuments({ animalId: pet._id, email: 'prote@test.com' })).toBe(0);
     await request(app).post(`/api/animals/${pet._id}/family/invites`).set(ownerH).send({ email: 'no-es-correo' }).expect(400);
   });
 

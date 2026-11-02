@@ -48,7 +48,15 @@ function isTokenKey(rawKey: string): boolean {
  * del pedido de invitado) por `[oculto]`. El resto de la URL queda tal cual,
  * byte a byte: se trocea por `&` (el separador de qs) y solo se tocan esos pares.
  */
+// Rutas que llevan la credencial en el propio camino (AUD-2, FAC-119): el enlace de
+// invitación a una mascota y la agenda .ics del veterinario.
+const TOKEN_EN_RUTA: Array<[RegExp, string]> = [
+  [/^(\/api\/pet-invites\/token\/)[^/?#]+/, '$1[oculto]'],
+  [/^(\/api\/vets\/calendar\/)[^/?#]+?(\.ics)?(?=[?#]|$)/, '$1[oculto]$2'],
+];
+
 export function sanitizeUrl(url: string): string {
+  for (const [rx, sustituto] of TOKEN_EN_RUTA) url = url.replace(rx, sustituto);
   const q = url.indexOf('?');
   if (q === -1) return url;
   const path = url.slice(0, q);

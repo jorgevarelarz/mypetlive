@@ -9,6 +9,7 @@ jest.mock('../utils/notification', () => ({
 }));
 
 import { sendEmail } from '../utils/notification';
+import { citaCon } from './utils/citas';
 
 let app: any;
 let mongo: MongoMemoryServer | undefined;
@@ -87,6 +88,9 @@ describe('quién puede apuntar salud en el pasaporte', () => {
 
   it('el veterinario sigue pudiendo, aunque no sea la familia', async () => {
     const pet = await createPet();
+    // Si atiende al animal (AUD-2, FAC-116): sin cita suya, 403.
+    await request(app).post(`/api/animals/${pet.code}/health`).set(vetH).send({ category: 'checkup', note: 'x' }).expect(403);
+    await citaCon(vetId, pet);
     await request(app)
       .post(`/api/animals/${pet.code}/health`)
       .set(vetH)

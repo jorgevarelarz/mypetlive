@@ -2,6 +2,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { startMongoMemoryReplicaSet } from './utils/mongoMemoryServer';
+import { hueco } from './utils/huecos';
 
 jest.mock('../utils/notification', () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -166,7 +167,7 @@ describe('Mensajes: adopción', () => {
 describe('Mensajes: cita con el veterinario', () => {
   it('la cita abre la conversación y sus cambios salen como tarjetas', async () => {
     const appt = await request(app).post('/api/vet-appointments').set(adopterH)
-      .send({ vetId, reason: 'Vacuna anual', requestedAt: inDays(2) }).expect(201);
+      .send({ vetId, reason: 'Vacuna anual', requestedAt: hueco(0).toISOString() }).expect(201);
 
     const [forVet] = await inbox(vetH);
     expect(forVet.context).toMatchObject({ type: 'vet_appointment', appointmentId: String(appt.body._id), status: 'requested', role: 'vet' });

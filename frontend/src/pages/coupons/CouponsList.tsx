@@ -61,7 +61,7 @@ export default function CouponsList() {
   const coupons = data?.items || [];
   const activeCoupons = coupons.filter(coupon => coupon.active !== false);
   const totalPatitas = useMemo(
-    () => activeCoupons.reduce((acc, coupon) => acc + (Number(coupon.bonusPatitas) || 40), 0),
+    () => activeCoupons.reduce((acc, coupon) => acc + (Number(coupon.rewardPatitas) || 0), 0),
     [activeCoupons],
   );
 
@@ -109,13 +109,6 @@ export default function CouponsList() {
 
       <main className="coupon-wrap">
         <div className="mpl-crumbs" style={{ fontSize: 13, color: MPL.faint, fontWeight: 700, marginBottom: 14 }}>Inicio / Mi panel / Cupones</div>
-        <div className="coupon-tabs" style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${MPL.border}`, marginBottom: 30, overflowX: 'auto' }}>
-          {['Resumen', 'Mis solicitudes', 'Favoritos', 'Mis mascotas', 'Cupones', 'Patitas'].map(tab => (
-            <span key={tab} style={{ fontSize: 14.5, fontWeight: tab === 'Cupones' ? 800 : 700, color: tab === 'Cupones' ? MPL.teal : MPL.muted, padding: '12px 16px', borderBottom: tab === 'Cupones' ? `2.5px solid ${MPL.teal}` : '2.5px solid transparent', whiteSpace: 'nowrap' }}>
-              {tab}
-            </span>
-          ))}
-        </div>
 
         {/* Maqueta «Cupones y ofertas» (2 nov 2026), a tamaño normal de iPhone. */}
         <section className="coupon-hero">
@@ -150,7 +143,7 @@ export default function CouponsList() {
                 null,
                 { icono: <CalcoCupTicket size={22} color="#FFFFFF" />, n: activeCoupons.length, label: 'Cupones activos' },
                 null,
-                { icono: <CalcoCupCategorias size={23} color="#FFFFFF" />, n: 3, label: 'Categorías' },
+                { icono: <CalcoCupCategorias size={23} color="#FFFFFF" />, n: new Set(activeCoupons.map(c => c.partnerType || 'store')).size, label: 'Categorías' },
               ].map((x, i) => x ? (
                 <div key={i} style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -174,7 +167,7 @@ export default function CouponsList() {
               <span style={{ background: MPL.coral100, color: MPL.coralDark, fontSize: 11.5, fontWeight: 800, padding: '5px 11px', borderRadius: 7 }}>Destacado</span>
               <h2 style={{ fontFamily: MPL_FONT_DISPLAY, fontSize: 24, fontWeight: 800, margin: '10px 0 4px' }}>{activeCoupons[0].copy || activeCoupons[0].title}</h2>
               <div style={{ fontSize: 14, color: MPL.muted }}>
-                {activeCoupons[0].description || 'Oferta especial de bienvenida'} · genera <strong style={{ color: MPL.goldDark }}>+{activeCoupons[0].bonusPatitas || 40} Patitas</strong>
+                {activeCoupons[0].description || 'Oferta especial de bienvenida'} · genera <strong style={{ color: MPL.goldDark }}>+{activeCoupons[0].rewardPatitas ?? 0} Patitas</strong>
               </div>
             </div>
             <button type="button" onClick={() => openCoupon(activeCoupons[0])} style={{ background: MPL.coral, color: '#fff', fontSize: 15, fontWeight: 800, padding: '14px 26px', border: 'none', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', flex: 'none' }}>
@@ -218,7 +211,7 @@ export default function CouponsList() {
                   <div style={{ borderTop: `1.5px dashed ${MPL.border}`, padding: '15px 22px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: MPL.goldDark }}>
                       <PawMark size={15} color={MPL.gold} />
-                      +{coupon.bonusPatitas || 40}
+                      +{coupon.rewardPatitas ?? 0}
                     </span>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       {canSponsor(coupon) && !isNativeApp() && (
@@ -296,7 +289,7 @@ export default function CouponsList() {
               <div style={{ height: 12 }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: MPL.gold100, borderRadius: 12, padding: 11 }}>
                 <PawMark size={18} color={MPL.gold} />
-                <span style={{ fontSize: 13, fontWeight: 800, color: MPL.goldDark }}>Generará +{selected.bonusPatitas || 40} Patitas</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: MPL.goldDark }}>Generará +{selected.rewardPatitas ?? 0} Patitas</span>
               </div>
             </div>
           </div>

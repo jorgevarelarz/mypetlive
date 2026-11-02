@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { addHealthRecord, deleteHealthRecord, updateHealthRecord, type HealthCategory } from '../../api/animals';
 import { healthCategoryLabel } from '../../styles/mypetlive';
 import { M } from './maqueta';
+import { useDialog } from '../../hooks/useDialog';
 
 // Corregir o borrar una entrada del historial de salud (2 nov 2026). Se abre al
 // tocar la entrada en «Mi mascota». Lo que apuntó la clínica solo se enseña: la
@@ -22,21 +23,27 @@ type Entrada = { _id?: string; type: string; notes?: string; date?: string; next
  * Sin `entry` es «apuntar uno nuevo» (desde «Registra un cuidado», con `tipoInicial`);
  * con `entry`, corregirlo o borrarlo.
  */
-export default function HealthEntrySheet({ code, entry: entrada, petName, onClose, onChanged, tipoInicial }: {
+export default function HealthEntrySheet({ code, entry: entrada, petName, onClose, onChanged, tipoInicial, soyClinica }: {
   code: string;
   entry?: Entrada | null;
   petName: string;
   onClose: () => void;
   onChanged: () => void;
   tipoInicial?: HealthCategory;
+  /** El veterinario que apuntó la entrada: él sí la corrige (AUD-2). */
+  soyClinica?: boolean;
 }) {
   const nueva = !entrada;
   const entry: Entrada = entrada || { type: tipoInicial || 'vaccine', date: new Date().toISOString() };
-  const deClinica = entry.byRole === 'vet';
+  const deClinica = entry.byRole === 'vet' && !soyClinica;
+  const dialogo = useDialog<HTMLDivElement>(onClose);
   const [tipo, setTipo] = React.useState<HealthCategory>((OPCIONES.includes(entry.type as HealthCategory) ? entry.type : 'other') as HealthCategory);
   const [nota, setNota] = React.useState(entry.notes || '');
   const [fecha, setFecha] = React.useState(aFecha(entry.date));
   const [proxima, setProxima] = React.useState(aFecha(entry.nextDueAt));
+  // «Quitar aviso» al apuntar algo nuevo: sin esto, vacía = el intervalo por defecto
+  // del servidor y el aviso se programaba igual (AUD-2).
+  const [sinAviso, setSinAviso] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const manana = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const hoy = new Date().toISOString().slice(0, 10);
@@ -58,18 +65,22 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
       note: nota.trim(),
       date: fecha ? new Date(`${fecha}T12:00:00`).toISOString() : undefined,
       // Vacío: que decida el servidor (vacuna al año, desparasitación a los 3 meses); lo demás, sin aviso.
-      nextDueAt: proxima ? new Date(`${proxima}T09:00:00`).toISOString() : (REPITE[tipo] ? undefined : null),
+      nextDueAt: proxima ? new Date(`${proxima}T09:00:00`).toISOString() : (REPITE[tipo] && !sinAviso ? undefined : null),
     }),
     onSuccess: res => { toast.success(res.nextDueAt ? 'Apuntado. Te avisaremos cuando toque.' : 'Apuntado en el pasaporte'); onChanged(); onClose(); },
     onError: (e: any) => setError(mensaje(e)),
   });
   const guardar = useMutation({
-    mutationFn: () => updateHealthRecord(code, String(entry._id), {
-      category: tipo,
-      note: nota.trim(),
-      date: fecha ? new Date(`${fecha}T12:00:00`).toISOString() : undefined,
-      nextDueAt: proxima ? new Date(`${proxima}T09:00:00`).toISOString() : null,
-    }),
+    // Solo lo que ha cambiado (AUD-2): reenviar la próxima fecha sin tocarla
+    // rearmaba el aviso o fallaba si ya había vencido.
+    mutationFn: () => {
+      const cambios: Parameters<typeof updateHealthRecord>[2] = {};
+      if (tipo !== entry.type) cambios.category = tipo;
+      if (nota.trim() !== (entry.notes || '')) cambios.note = nota.trim();
+      if (fecha && fecha !== aFecha(entry.date)) cambios.date = new Date(`${fecha}T12:00:00`).toISOString();
+      if (proxima !== aFecha(entry.nextDueAt)) cambios.nextDueAt = proxima ? new Date(`${proxima}T09:00:00`).toISOString() : null;
+      return updateHealthRecord(code, String(entry._id), cambios);
+    },
     onSuccess: () => { toast.success('Corregido en el pasaporte'); onChanged(); onClose(); },
     onError: (e: any) => { setError(mensaje(e)); if (e?.response?.data?.error === 'entry_not_found') onChanged(); },
   });
@@ -81,9 +92,9 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
   const ocupado = guardar.isPending || borrar.isPending || crear.isPending;
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Corregir entrada de salud" onClick={onClose}
+    <div role="dialog" aria-modal="true" aria-label={nueva ? 'Apuntar un cuidado' : 'Corregir entrada de salud'} onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(20,30,25,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()}
+      <div ref={dialogo} tabIndex={-1} onClick={e => e.stopPropagation()}
         style={{ width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', boxSizing: 'border-box', background: '#FFFDFA', borderRadius: '24px 24px 0 0', padding: '14px 18px calc(18px + env(safe-area-inset-bottom))', fontFamily: M.letra, color: M.tinta }}>
         <span aria-hidden style={{ display: 'block', width: 44, height: 5, borderRadius: 99, background: '#D9D6CF', margin: '0 auto 14px' }} />
         <h2 style={{ margin: '0 0 4px', fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>
@@ -117,11 +128,12 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
               </label>
               <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
                 Próxima
-                <input type="date" value={proxima} min={manana} onChange={e => setProxima(e.target.value)} style={CAMPO} />
+                <input type="date" value={proxima} min={manana} onChange={e => { setProxima(e.target.value); setSinAviso(false); }} style={CAMPO} />
               </label>
             </div>
             <span style={{ fontSize: 13, color: M.gris, marginTop: -4 }}>
-              {proxima ? 'Te avisaremos una semana antes.' : nueva && REPITE[tipo] ? REPITE[tipo] : 'Sin próxima fecha no te avisaremos.'}
+              {proxima ? 'Te avisaremos una semana antes.' : nueva && REPITE[tipo] && !sinAviso ? REPITE[tipo] : 'Sin próxima fecha no te avisaremos.'}
+              {!proxima && nueva && REPITE[tipo] && !sinAviso && <button type="button" onClick={() => setSinAviso(true)} style={{ marginLeft: 8, border: 0, background: 'none', padding: 0, color: M.verdeBoton, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Quitar aviso</button>}
               {proxima && <button type="button" onClick={() => setProxima('')} style={{ marginLeft: 8, border: 0, background: 'none', padding: 0, color: M.verdeBoton, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Quitar aviso</button>}
             </span>
             {error && <p style={{ margin: 0, fontSize: 14, color: '#B3261E' }}>{error}</p>}

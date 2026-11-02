@@ -325,8 +325,12 @@ if (mongoUrl) {
     .then(() => {
       if (process.env.NODE_ENV !== 'test') {
         void ensureAnimalCodes().catch(err => logger.warn({ err }, 'No se pudieron asignar códigos a todos los animales'));
-        void ensureHealthEntryIds().then(n => { if (n) logger.info({ n }, 'Entradas de salud con id y autor'); }).catch(err => logger.warn({ err }, 'No se pudieron preparar las entradas de salud'));
-        server = app.listen(PORT, () => logger.info(`Servidor en http://localhost:${PORT}`));
+        // Antes de aceptar peticiones (AUD-2): mientras no termine, las entradas sin
+        // _id llegaban con un id distinto en cada lectura. Es rápido y solo una vez.
+        void ensureHealthEntryIds()
+          .then(n => { if (n) logger.info({ n }, 'Entradas de salud con id y autor'); })
+          .catch(err => logger.warn({ err }, 'No se pudieron preparar las entradas de salud'))
+          .finally(() => { server = app.listen(PORT, () => logger.info(`Servidor en http://localhost:${PORT}`)); });
         setInterval(() => purgeOldTenantProDocs().catch(() => {}), 6 * 60 * 60 * 1000);
         startReminderJobs();
       }

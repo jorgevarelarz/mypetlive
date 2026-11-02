@@ -8,6 +8,7 @@ import { petAge } from '../../utils/age';
 import { speciesLabel } from '../../styles/mypetlive';
 import { listMyPets } from '../../api/animals';
 import { createVetAppointment, getVetAvailability, listVets } from '../../api/vetAppointments';
+import { servicePriceLabel } from './BookVetAppointment';
 import {
   CalcoCitasCampana, CalcoCitasConfirmar, CalcoCitasDetalles, CalcoCitasFecha, CalcoCitasHora,
   CalcoCitasMotivo, CalcoCitasServicio, CalcoDestellosNaranjas,
@@ -101,20 +102,28 @@ export default function ReservarCita() {
     enabled: Boolean(vetId),
     staleTime: 30_000,
   });
+  // El servidor empieza en hoy y devuelve tantos días como tiene el mes, así que
+  // trae días del mes siguiente: solo cuentan los del mes que se ve (AUD-2).
+  const prefijoMes = ymd(mes.y, mes.m, 1).slice(0, 8);
+  const diasVisibles = React.useMemo(
+    () => (huecosQ.data?.dias || []).filter(d => d.fecha.startsWith(prefijoMes)),
+    [huecosQ.data, prefijoMes],
+  );
   const horasDe = React.useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const d of huecosQ.data?.dias || []) map.set(d.fecha, d.horas);
+    for (const d of diasVisibles) map.set(d.fecha, d.horas);
     return map;
-  }, [huecosQ.data]);
+  }, [diasVisibles]);
+  const agendaPropia = huecosQ.data?.agendaPropia !== false;
 
   // Al cambiar de mes o de clínica, la primera fecha con hueco queda elegida.
   React.useEffect(() => {
     if (!huecosQ.data) return;
     if (fecha && (horasDe.get(fecha) || []).length) return;
-    const primera = huecosQ.data.dias.find(d => d.horas.length);
+    const primera = diasVisibles.find(d => d.horas.length);
     setFecha(primera?.fecha || null);
     setHora(null);
-  }, [huecosQ.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [diasVisibles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const horas = fecha ? horasDe.get(fecha) || [] : [];
   React.useEffect(() => { if (hora && !horas.includes(hora)) setHora(null); }, [horas, hora]);
@@ -146,6 +155,19 @@ export default function ReservarCita() {
     },
     onError: (e: any) => {
       const code = e?.response?.data?.error;
+      if (code === 'too_many_pending') {
+        toast.error('Ya tienes 3 citas pendientes de confirmar con esta clínica. Espera a que te respondan o cancela alguna.');
+        return;
+      }
+      if (code === 'slot_not_available') {
+        toast.error('Esa hora ya no se puede pedir. Elige otra.');
+        queryClient.invalidateQueries({ queryKey: ['vet-availability', vetId] });
+        return;
+      }
+      if (e?.response?.status === 429) {
+        toast.error('Has pedido muchas citas seguidas. Prueba dentro de un rato.');
+        return;
+      }
       if (code === 'slot_taken') {
         toast.error('Alguien acaba de pedir esa hora. Elige otra.');
         queryClient.invalidateQueries({ queryKey: ['vet-availability', vetId] });
@@ -162,7 +184,7 @@ export default function ReservarCita() {
   for (let i = primerDia - 1; i > 0; i--) celdas.push({ dia: diasMesAnterior - i + 1, fuera: true });
   for (let d = 1; d <= diasMes; d++) celdas.push({ dia: d, fecha: ymd(mes.y, mes.m, d), fuera: false });
 
-  const puede = Boolean(vetId && fecha && hora && (petId || !pets.length)) && !crear.isPending;
+  const puede = Boolean(vetId && fecha && hora && (petId || (!pets.length && petsQ.isSuccess))) && !crear.isPending;
 
   return (
     <div style={{ display: 'grid', gap: 12, fontFamily: M.letra, color: M.tinta }}>
@@ -171,6 +193,10 @@ export default function ReservarCita() {
         <h2 style={{ ...TITULO, fontSize: 16.5 }}>¿Para qué mascota es la cita?</h2>
         {petsQ.isLoading ? (
           <p style={{ margin: '10px 0 0', fontSize: 14, color: M.gris }}>Cargando tus mascotas…</p>
+        ) : petsQ.isError ? (
+          <p style={{ margin: '10px 0 0', fontSize: 14, color: '#B3261E' }}>
+            No hemos podido cargar tus mascotas. <button type="button" onClick={() => petsQ.refetch()} style={{ border: 0, background: 'none', padding: 0, color: VERDE, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Reintentar</button>
+          </p>
         ) : pets.length === 0 ? (
           <p style={{ margin: '10px 0 0', fontSize: 14, color: M.gris }}>Aún no tienes mascotas registradas. Puedes pedir la cita igual y contárselo en las notas.</p>
         ) : (
@@ -183,6 +209,7 @@ export default function ReservarCita() {
                   key={p._id}
                   type="button"
                   onClick={() => setPetId(String(p._id))}
+                  aria-pressed={activo}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '10px 8px 10px 10px', borderRadius: 16, cursor: 'pointer', textAlign: 'left',
                     border: activo ? `2px solid ${VERDE}` : `1px solid ${BORDE}`, background: activo ? VERDE_CLARO : '#FFFFFF',
@@ -194,9 +221,9 @@ export default function ReservarCita() {
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: 'block', fontSize: 15.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                     {/* A tamaño normal no cabe en una línea junto a la foto y el círculo: que baje. */}
-                    <span style={{ display: 'block', fontSize: 13, lineHeight: '16px', color: M.gris }}>
-                      {[speciesLabel(p.species), petAge(p)].filter(Boolean).map((t, i) => <React.Fragment key={i}>{i ? ' · ' : ''}<span style={{ whiteSpace: 'nowrap' }}>{t}</span></React.Fragment>)}
-                    </span>
+                    {/* Especie y edad en líneas propias: «2 meses y 3 semanas» no cabe a 390 px (AUD-2). */}
+                    <span style={{ display: 'block', fontSize: 13, lineHeight: '16px', color: M.gris, overflowWrap: 'anywhere' }}>{speciesLabel(p.species)}</span>
+                    {petAge(p) && <span style={{ display: 'block', fontSize: 13, lineHeight: '16px', color: M.gris, overflowWrap: 'anywhere' }}>{petAge(p)}</span>}
                   </span>
                   <Radio activo={activo} />
                 </button>
@@ -210,7 +237,11 @@ export default function ReservarCita() {
       <div style={TARJETA}>
         <h2 style={TITULO}><CalcoCitasFecha size={22} /> Elige una fecha</h2>
 
-        {vetsQ.isLoading ? null : vets.length === 0 ? (
+        {vetsQ.isLoading ? null : vetsQ.isError ? (
+          <p style={{ margin: '10px 0 0', fontSize: 14, color: '#B3261E' }}>
+            No hemos podido cargar las clínicas. <button type="button" onClick={() => vetsQ.refetch()} style={{ border: 0, background: 'none', padding: 0, color: VERDE, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Reintentar</button>
+          </p>
+        ) : vets.length === 0 ? (
           <p style={{ margin: '10px 0 0', fontSize: 14, color: M.gris }}>Todavía no hay clínicas veterinarias en MyPetLive.</p>
         ) : vets.length > 1 ? (
           <label style={{ display: 'grid', gap: 6, marginTop: 12, fontSize: 13.5, color: M.gris }}>
@@ -223,6 +254,11 @@ export default function ReservarCita() {
           <p style={{ margin: '6px 0 0', fontSize: 13.5, color: M.gris }}>{vet?.name}{vet?.city ? ` · ${vet.city}` : ''}</p>
         )}
 
+        {vetId && huecosQ.data && !agendaPropia && (
+          <p style={{ margin: '10px 0 0', padding: '10px 12px', borderRadius: 12, background: '#F6F1E8', fontSize: 13.5, lineHeight: '19px', color: '#3D4340' }}>
+            Esta clínica aún no ha publicado su horario en MyPetLive. Elige el día y la hora que te vengan bien: es una propuesta y la clínica te la confirmará o te ofrecerá otra.
+          </p>
+        )}
         {vetId && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, margin: '14px 0 10px' }}>
@@ -258,7 +294,8 @@ export default function ReservarCita() {
                       height: 40, borderRadius: 10, fontSize: 15, cursor: libre ? 'pointer' : 'default', padding: 0,
                       fontWeight: activo ? 800 : 500,
                       border: activo || libre || c.fuera ? '1px solid transparent' : `1px solid ${BORDE}`,
-                      background: activo ? VERDE : libre ? VERDE_CLARO : c.fuera ? '#EFECE6' : '#FFFFFF',
+                      // Sin agenda publicada no se pinta «disponible» en verde: es una propuesta.
+                      background: activo ? VERDE : libre ? (agendaPropia ? VERDE_CLARO : '#F6F1E8') : c.fuera ? '#EFECE6' : '#FFFFFF',
                       color: activo ? '#FFFFFF' : c.fuera ? '#B9B4AA' : M.tinta,
                     }}
                   >
@@ -270,7 +307,7 @@ export default function ReservarCita() {
 
             <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '6px 16px', marginTop: 12, fontSize: 12.5, color: M.gris }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: VERDE }} /> Día seleccionado</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: VERDE_CLARO }} /> Día disponible</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: agendaPropia ? VERDE_CLARO : '#F6F1E8' }} /> {agendaPropia ? 'Día disponible' : 'Se puede proponer'}</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, border: `1px solid ${BORDE}`, background: '#FFFFFF' }} /> No disponible</span>
             </div>
             {huecosQ.isError && (
@@ -278,8 +315,14 @@ export default function ReservarCita() {
                 No hemos podido cargar los huecos libres. <button type="button" onClick={() => huecosQ.refetch()} style={{ border: 0, background: 'none', padding: 0, color: VERDE, fontWeight: 700, textDecoration: 'underline' }}>Reintentar</button>
               </p>
             )}
-            {huecosQ.data && !huecosQ.data.dias.some(d => d.horas.length) && (
+            {huecosQ.isLoading && <p style={{ margin: '10px 0 0', fontSize: 13.5, color: M.gris }}>Buscando huecos libres…</p>}
+            {huecosQ.data && !diasVisibles.some(d => d.horas.length) && (
               <p style={{ margin: '10px 0 0', fontSize: 13.5, color: M.gris }}>Este mes ya no quedan huecos. Mira el mes siguiente.</p>
+            )}
+            {fecha && (
+              <p style={{ margin: '10px 0 0', fontSize: 14, fontWeight: 700, color: '#17352D', textAlign: 'center' }}>
+                {new Date(`${fecha}T12:00:00Z`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).replace(/^./, c => c.toUpperCase())}
+              </p>
             )}
           </>
         )}
@@ -319,9 +362,14 @@ export default function ReservarCita() {
             <span style={{ position: 'relative', display: 'block' }}>
               <CalcoCitasServicio size={18} style={{ position: 'absolute', left: 12, top: 14, pointerEvents: 'none' }} />
               <select value={servicio} onChange={e => setServicio(e.target.value)} style={SELECT} disabled={!catalogo.length}>
-                {catalogo.length ? catalogo.map(s => <option key={s.name} value={s.name}>{s.name}</option>) : <option value="">{SERVICIO_GENERICO}</option>}
+                {catalogo.length ? catalogo.map(s => <option key={s.name} value={s.name}>{s.name} · {servicePriceLabel(s)}</option>) : <option value="">{SERVICIO_GENERICO}</option>}
               </select>
             </span>
+            {catalogo.length > 0 && (
+              <span style={{ fontSize: 13, color: M.gris }}>
+                {(() => { const s = catalogo.find(x => x.name === servicio); return s ? (s.priceEur == null ? 'Precio: te dan presupuesto en la clínica.' : `Precio${s.pricingType === 'fijo' ? '' : ' orientativo'}: ${servicePriceLabel(s)}. Se paga en la clínica.`) : null; })()}
+              </span>
+            )}
           </label>
           <label style={{ display: 'grid', gap: 6, fontSize: 13.5, color: '#3D4340', minWidth: 0 }}>
             Motivo de la visita

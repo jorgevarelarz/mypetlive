@@ -1,4 +1,5 @@
 import { ADOPTABLE_ROLES, isAdoptableRole } from '../utils/adoptable';
+import { VetAppointment } from '../models/vetAppointment.model';
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Animal, ensureAnimalCode } from '../models/animal.model';
@@ -189,6 +190,8 @@ export async function getByCode(req: Request, res: Response) {
 
 // Construye la línea de tiempo unificada del pasaporte (eventos de ciclo de vida + salud/vet).
 // `full` (dueño/admin) incluye nombres de las familias; el público recibe versión redactada.
+const DETALLE_PRIVADO = new Set(['medication', 'test', 'surgery', 'visit']);
+
 const HEALTH_TITLES: Record<string, string> = {
   vaccine: 'Vacuna',
   deworming: 'Desparasitación',
@@ -234,10 +237,12 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
     }
     items.push({ at: e.createdAt, type: e.type, title, detail });
   }
-  for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: v.note });
+  // En el pasaporte público (QR del collar, sin sesión) no sale el texto libre de
+  // visitas, medicación, pruebas ni intervenciones (AUD-2): solo qué y cuándo.
+  for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: full ? v.note : undefined });
   // El tipo se guarda en inglés (es la clave del registro); el pasaporte lo enseña
   // en castellano. `kind` lleva la clave para que la web ponga su icono.
-  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: h.notes });
+  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: full || !DETALLE_PRIVADO.has(h.type) ? h.notes : undefined });
   return items
     .filter(i => i.at)
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -299,8 +304,9 @@ export async function addHealthRecord(req: Request, res: Response) {
   if (!code) return res.status(400).json({ error: 'invalid_code' });
 
   const body: any = req.body || {};
-  const category: HealthCategory = HEALTH_CATEGORIES.includes(body.category) ? body.category : 'visit';
-  const note = typeof body.note === 'string' ? body.note.trim() : '';
+  let category: HealthCategory = HEALTH_CATEGORIES.includes(body.category) ? body.category : 'visit';
+  // Mismo tope que al corregir (AUD-2): una nota de 10.000 caracteres acababa en el pasaporte.
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
   const treatment = typeof body.treatment === 'string' && body.treatment.trim() ? body.treatment.trim() : undefined;
   if (!note) return res.status(400).json({ error: 'note_required' });
 
@@ -308,6 +314,7 @@ export async function addHealthRecord(req: Request, res: Response) {
   if (body.date) {
     const parsed = new Date(body.date);
     if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: 'invalid_date' });
+    if (parsed.getTime() > Date.now() + 86_400_000) return res.status(400).json({ error: 'date_in_future' });
     date = parsed;
   }
 
@@ -315,10 +322,25 @@ export async function addHealthRecord(req: Request, res: Response) {
   if (!animal) return res.status(404).json({ error: 'not_found' });
 
   const user: any = (req as any).user;
+  const uidActor = String(user?._id || user?.id || '');
   const isClinician = user?.role === 'vet' || user?.role === 'admin';
   if (!isClinician && !canManageAnimal(user, animal)) {
     return res.status(403).json({ error: 'forbidden' });
   }
+  // Un veterinario solo apunta en el historial de un animal que atiende (AUD-2,
+  // FAC-116): con una cita suya no cancelada para él, o si lo gestiona. Antes
+  // bastaba con saber el código (NOMBRE-NNN, se adivina).
+  if (user?.role === 'vet' && !canManageAnimal(user, animal)) {
+    const atiende = await VetAppointment.exists({
+      vetId: uidActor,
+      status: { $ne: 'cancelled' },
+      $or: [{ animalId: animal._id }, { animalCode: animal.code }],
+    });
+    if (!atiende) return res.status(403).json({ error: 'no_appointment_with_animal' });
+  }
+  // La familia no apunta «visitas» (AUD-2): iban a vetHistory, sin id ni autor, y no
+  // se podían corregir. Lo suyo es una revisión, que sí se corrige.
+  if (category === 'visit' && user?.role !== 'vet' && user?.role !== 'admin') category = 'checkup';
 
   const actorId = String(user?._id || user?.id || '');
 
@@ -524,16 +546,22 @@ export async function updateHealthRecord(req: Request, res: Response) {
     entry.date = d;
   }
   if (body.nextDueAt !== undefined) {
-    if (body.nextDueAt === null) {
-      entry.nextDueAt = undefined;
-    } else {
-      const d = new Date(body.nextDueAt);
-      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'invalid_next_due' });
-      if (d.getTime() <= Date.now()) return res.status(400).json({ error: 'next_due_in_past' });
-      entry.nextDueAt = d;
+    const antes = entry.nextDueAt ? new Date(entry.nextDueAt).getTime() : null;
+    const nueva = body.nextDueAt === null ? null : new Date(body.nextDueAt).getTime();
+    // Misma fecha que la guardada: no se valida ni se rearma el aviso (AUD-2,
+    // FAC-123). Corregir una errata ya no reenvía el recordatorio, y una entrada
+    // con la próxima fecha vencida se puede corregir sin tener que quitar el aviso.
+    if (nueva !== antes) {
+      if (nueva === null) {
+        entry.nextDueAt = undefined;
+      } else {
+        if (Number.isNaN(nueva)) return res.status(400).json({ error: 'invalid_next_due' });
+        if (nueva <= Date.now()) return res.status(400).json({ error: 'next_due_in_past' });
+        entry.nextDueAt = new Date(nueva);
+      }
+      // Fecha nueva, aviso nuevo: el sello del enviado era de la fecha anterior.
+      entry.reminderSentAt = undefined;
     }
-    // Fecha nueva, aviso nuevo: el sello del enviado era de la fecha anterior.
-    entry.reminderSentAt = undefined;
   }
   await animal.save();
   await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'health', actorId: uid, data: { action: 'updated', entryId: String(entry._id) } });
@@ -1018,13 +1046,16 @@ export async function updateMine(req: Request, res: Response) {
   if (!animal || animal.isPersonalPet !== true) return res.status(404).json({ error: 'not_found' });
   if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
 
+  const pesoAntes = animal.weightKg ?? null;
   // `personalPetUpdateSchema` ya ha dejado en el cuerpo solo campos editables.
   for (const [field, value] of Object.entries(req.body as Record<string, unknown>)) {
     if (field === 'birthDate') continue;
     animal[field] = value === null && field === 'weightKg' ? undefined : value;
   }
-  // Fecha del peso: para decir «24,5 kg · hace 3 meses» y saber cuándo pesarla otra vez.
-  if ((req.body as any).weightKg !== undefined) animal.weightAt = (req.body as any).weightKg === null ? undefined : new Date();
+  // Fecha del peso: solo si el peso cambia (AUD-2). Guardar solo la condición
+  // corporal hacía parecer que un peso de hace meses era de hoy.
+  const pesoNuevo = (req.body as any).weightKg;
+  if (pesoNuevo !== undefined && pesoNuevo !== pesoAntes) animal.weightAt = pesoNuevo === null ? undefined : new Date();
   if ((req.body as any).birthDate !== undefined) {
     const birthDate = parseBirthDate((req.body as any).birthDate);
     if (!birthDate) return res.status(400).json({ error: 'invalid_birth_date' });

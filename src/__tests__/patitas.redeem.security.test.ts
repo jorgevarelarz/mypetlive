@@ -208,3 +208,58 @@ describe('Seguridad del canje de Patitas por código de wallet', () => {
     expect(visitStore.has('u2:p2')).toBe(false);
   });
 });
+
+// AUD-2 (FAC-115): el token del QR (walletToken) también es de un solo uso, y el
+// débito, el asiento y la marca de «usado» van juntos.
+describe('Canje con el token del QR', () => {
+  async function walletToken(shelterId: string): Promise<string> {
+    const res = await request(app).get('/api/patitas/wallet/token').set(headers(shelterId, 'landlord')).expect(200);
+    return res.body.token;
+  }
+
+  it('el mismo token no sirve para un segundo canje y el saldo no vuelve a bajar', async () => {
+    const shelterId = await createShelter(100);
+    const storeId = await createStore();
+    const walletTokenValue = await walletToken(shelterId);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: walletTokenValue, amount: 20 }).expect(200);
+    const second = await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: walletTokenValue, amount: 'all' });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toBe('wallet_already_used');
+    expect(await balance(shelterId)).toBe(80);
+  });
+
+  it('dos confirm simultáneos con el mismo token solo canjean una vez', async () => {
+    const PatitaTxn = (await import('../models/patitaTxn.model')).PatitaTxn;
+    const shelterId = await createShelter(100);
+    const storeId = await createStore();
+    const t = await walletToken(shelterId);
+    const confirm = () => request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 20 });
+    const responses = await Promise.all([confirm(), confirm()]);
+    expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+    expect(await balance(shelterId)).toBe(80);
+    expect(await PatitaTxn.countDocuments({ type: 'redeem', shelterId })).toBe(1);
+  });
+
+  it('un canje fallido por saldo no gasta el token', async () => {
+    const shelterId = await createShelter(30);
+    const storeId = await createStore();
+    const t = await walletToken(shelterId);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 500 }).expect(400);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 10 }).expect(200);
+    expect(await balance(shelterId)).toBe(20);
+  });
+
+  it('si no se puede crear el asiento, el saldo no baja y el token sigue valiendo', async () => {
+    const PatitaTxn = (await import('../models/patitaTxn.model')).PatitaTxn;
+    const shelterId = await createShelter(50);
+    const storeId = await createStore();
+    const t = await walletToken(shelterId);
+    const espia = jest.spyOn(PatitaTxn, 'create').mockRejectedValueOnce(new Error('fallo de escritura') as never);
+    const res = await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 20 });
+    espia.mockRestore();
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(await balance(shelterId)).toBe(50);
+    await request(app).post('/api/patitas/redeem/confirm').set(headers(storeId, 'store')).send({ walletToken: t, amount: 20 }).expect(200);
+    expect(await balance(shelterId)).toBe(30);
+  });
+});

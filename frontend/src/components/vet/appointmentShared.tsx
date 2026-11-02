@@ -57,7 +57,8 @@ export function datetimeLocalNow() {
 function fmt(d?: string) {
   if (!d) return '';
   const date = new Date(d);
-  return date.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // Siempre en hora de España: la cita se pide y se da en la hora de la clínica (AUD-2).
+  return date.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
 }
 
 type Action = { label: string; tone?: 'primary' | 'danger' | 'neutral'; onClick: () => void };
