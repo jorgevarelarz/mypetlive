@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 import { normalizeSpecies } from '../utils/species';
 import { SUPPLY_UNITS } from '../utils/supplies';
 
@@ -62,8 +62,13 @@ const healthEntrySchema = new Schema(
     nextDueAt: { type: Date },
     // Sello del aviso ya enviado, para que la pasada del job sea idempotente.
     reminderSentAt: { type: Date },
+    // Quién lo apuntó: lo de la clínica ('vet') no lo cambia la familia; lo suyo
+    // ('family') sí puede corregirlo o borrarlo. `vetId` guarda la cuenta que lo
+    // apuntó, sea quien sea (el nombre es de cuando solo apuntaban veterinarios).
+    byRole: { type: String, enum: ['vet', 'family', 'admin'] },
   },
-  { _id: false },
+  // Con _id desde el 2 nov 2026: hace falta para corregir o borrar una entrada
+  // concreta. Las viejas lo reciben al arrancar (`ensureHealthEntryIds`).
 );
 
 // Producto de la despensa. Las cantidades viven en la unidad base de su familia
@@ -388,6 +393,32 @@ export async function ensureAnimalCodes(batchSize = 100) {
     }
     if (animals.length < batchSize) break;
   }
+}
+
+/**
+ * Entradas de salud anteriores al 2 nov 2026: sin `_id` (el esquema lo tenía
+ * desactivado) y sin `byRole`. Les pone las dos cosas una vez; las que ya las
+ * tienen no se tocan. El papel sale de la cuenta que la apuntó (`vetId`).
+ */
+export async function ensureHealthEntryIds() {
+  const coll = Animal.collection;
+  const cursor = coll.find({ healthHistory: { $elemMatch: { $or: [{ _id: { $exists: false } }, { byRole: { $exists: false } }] } } }, { projection: { healthHistory: 1 } });
+  const users = model('User').collection;
+  let n = 0;
+  for await (const doc of cursor as any) {
+    const history = await Promise.all((doc.healthHistory || []).map(async (h: any) => {
+      const out = { ...h };
+      if (!out._id) out._id = new Types.ObjectId();
+      if (!out.byRole) {
+        const author: any = out.vetId ? await users.findOne({ _id: out.vetId }, { projection: { role: 1 } }) : null;
+        out.byRole = author?.role === 'vet' ? 'vet' : author?.role === 'admin' ? 'admin' : 'family';
+      }
+      return out;
+    }));
+    await coll.updateOne({ _id: doc._id }, { $set: { healthHistory: history } });
+    n += 1;
+  }
+  return n;
 }
 
 export async function ensureAnimalCode(animal: Document & { code?: string; name?: string }) {

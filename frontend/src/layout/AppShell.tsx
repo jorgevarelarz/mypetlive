@@ -135,7 +135,9 @@ const labelFor: Record<string, string> = {
   vet: 'Veterinario',
 };
 
-function Header() {
+// Exportada para las páginas públicas (catálogo, ficha, favoritos): con sesión
+// iniciada llevan esta misma cabecera y no la pública (ver PublicHeader).
+export function Header() {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const { openAuth } = useAuthModal();

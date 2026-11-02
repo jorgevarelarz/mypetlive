@@ -5,6 +5,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import { useAuth } from '../context/AuthContext';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark } from '../styles/mypetlive';
 import { isNativeApp } from '../utils/native';
+import { Header as AppHeader } from '../layout/AppShell';
 
 export default function PublicHeader() {
   const { openAuth } = useAuthModal();
@@ -24,6 +25,12 @@ export default function PublicHeader() {
         : user?.role === 'store' || user?.role === 'vet'
           ? '/partner'
           : '/profile';
+
+  // Con sesión iniciada, la misma cabecera que el resto de la app (Patitas, QR y
+  // menú). Antes «Compañeros», la ficha de un animal y Favoritos enseñaban esta,
+  // la pública, y al entrar en ellas la cabecera cambiaba (aviso de Jorge, 2 nov 2026).
+  const conSesion = Boolean(user);
+  if (conSesion) return <AppHeader />;
 
   return (
     <div

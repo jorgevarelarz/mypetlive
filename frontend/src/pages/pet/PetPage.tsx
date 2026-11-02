@@ -34,6 +34,7 @@ import WelcomeChecklist from '../../components/pet/WelcomeChecklist';
 import DailyCareCard from '../../components/pet/DailyCareCard';
 import CareRemindersCard from '../../components/pet/CareRemindersCard';
 import PetFamilyCard from '../../components/pet/PetFamilyCard';
+import HealthEntrySheet from '../../components/pet/HealthEntrySheet';
 import PetInvitesBanner from '../../components/pet/PetInvitesBanner';
 import RehomeEntry from '../../components/rehome/RehomeEntry';
 import MemorialFamily from '../../components/memorial/MemorialFamily';
@@ -356,6 +357,8 @@ export default function PetPage() {
   // Apuntar salud desde la ficha. Vive aquí y no en el panel del veterinario
   // porque quien pone la pipeta y guarda la cartilla es la familia.
   const [healthOpen, setHealthOpen] = useState(false);
+  // Entrada del historial que se está corrigiendo (se abre al tocarla).
+  const [healthEditing, setHealthEditing] = useState<any | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [healthForm, setHealthForm] = useState<{ category: HealthCategory; note: string; nextDueAt: string }>({
     category: 'vaccine',
@@ -978,9 +981,15 @@ export default function PetPage() {
         {Array.isArray(featuredAnimal.healthHistory) && featuredAnimal.healthHistory.length > 0 ? (
           // Línea de tiempo: un punto por entrada unidos por una raya; la próxima a la derecha.
           // Línea de tiempo de la maqueta: punto a la izquierda; fecha encima; lo hecho y, a la derecha, la próxima.
+          <>
           <ul style={{ listStyle: 'none', margin: '3px 0 0', padding: 0 }}>
             {featuredAnimal.healthHistory.map((entry: any, idx: number, all: any[]) => (
-              <li key={idx} style={{ position: 'relative', display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', columnGap: 0, padding: '4px 0 3px', borderTop: idx ? '1px solid #EDE7DE' : 0 }}>
+              // Tocar una entrada abre «Corregir» (o, si la apuntó la clínica, solo la enseña).
+              <li key={entry._id || idx} role={canEdit && entry._id ? 'button' : undefined} tabIndex={canEdit && entry._id ? 0 : undefined}
+                aria-label={canEdit && entry._id ? `Corregir ${healthCategoryLabel(entry.type)}` : undefined}
+                onClick={canEdit && entry._id ? () => setHealthEditing(entry) : undefined}
+                onKeyDown={canEdit && entry._id ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHealthEditing(entry); } }) : undefined}
+                style={{ position: 'relative', display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', columnGap: 0, padding: '4px 0 3px', borderTop: idx ? '1px solid #EDE7DE' : 0, cursor: canEdit && entry._id ? 'pointer' : 'default' }}>
                 <span aria-hidden style={{ position: 'relative', gridRow: '1 / 3' }}>
                   {idx < all.length - 1 && <span style={{ position: 'absolute', left: 6.5, top: 17, bottom: -14, width: 1.5, background: '#B9D3CF' }} />}
                   <span style={{ position: 'absolute', left: 0, top: 13, width: 11, height: 11, borderRadius: 999, background: M.verdeBoton, boxShadow: '0 0 0 2px #FFFFFF, 0 0 0 3.5px #B9D3CF' }} />
@@ -995,6 +1004,10 @@ export default function PetPage() {
               </li>
             ))}
           </ul>
+          {canEdit && (
+            <p style={{ margin: '4px 0 4px', fontSize: 12.5, color: M.gris }}>¿Algo mal apuntado? Toca la entrada para corregirla o borrarla.</p>
+          )}
+          </>
         ) : (
           !healthOpen && (
             <p className="mt-2 text-sm" style={{ color: '#7A8273' }}>
@@ -1157,6 +1170,16 @@ export default function PetPage() {
         </button>
       )}
       </>
+      )}
+
+      {healthEditing && featuredAnimal?.code && (
+        <HealthEntrySheet
+          code={String(featuredAnimal.code)}
+          entry={healthEditing}
+          petName={featuredAnimal.name}
+          onClose={() => setHealthEditing(null)}
+          onChanged={() => { refetchPets(); invalidateAnimalCaches(); }}
+        />
       )}
 
       {farewellOpen && (

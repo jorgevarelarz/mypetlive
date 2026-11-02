@@ -51,7 +51,7 @@ import vetAppointmentRoutes from './routes/vetAppointment.routes';
 import vetOffersRoutes from './routes/vetOffers.routes';
 import adminCouponRoutes from './routes/coupon.admin.routes';
 import questionnaireRoutes from './routes/questionnaire.routes';
-import { ensureAnimalCodes } from './models/animal.model';
+import { ensureAnimalCodes, ensureHealthEntryIds } from './models/animal.model';
 
 import { errorHandler } from './middleware/errorHandler';
 import { requireAdmin } from './middleware/requireAdmin';
@@ -325,6 +325,7 @@ if (mongoUrl) {
     .then(() => {
       if (process.env.NODE_ENV !== 'test') {
         void ensureAnimalCodes().catch(err => logger.warn({ err }, 'No se pudieron asignar códigos a todos los animales'));
+        void ensureHealthEntryIds().then(n => { if (n) logger.info({ n }, 'Entradas de salud con id y autor'); }).catch(err => logger.warn({ err }, 'No se pudieron preparar las entradas de salud'));
         server = app.listen(PORT, () => logger.info(`Servidor en http://localhost:${PORT}`));
         setInterval(() => purgeOldTenantProDocs().catch(() => {}), 6 * 60 * 60 * 1000);
         startReminderJobs();

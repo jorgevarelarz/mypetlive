@@ -182,6 +182,22 @@ export async function getAnimalTimeline(code: string) {
 
 export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'surgery' | 'checkup' | 'test' | 'other';
 
+/** Corrige una entrada de salud (la familia, lo suyo). `nextDueAt: null` quita el aviso. */
+export async function updateHealthRecord(
+  code: string,
+  entryId: string,
+  payload: { category?: HealthCategory; note?: string; date?: string; nextDueAt?: string | null },
+) {
+  const { data } = await client.patch(`/api/animals/${encodeURIComponent(code)}/health/${entryId}`, payload, { skipErrorToast: true } as any);
+  return data as { ok: boolean };
+}
+
+/** Borra una entrada de salud (y su recordatorio). */
+export async function deleteHealthRecord(code: string, entryId: string) {
+  const { data } = await client.delete(`/api/animals/${encodeURIComponent(code)}/health/${entryId}`, { skipErrorToast: true } as any);
+  return data as { ok: boolean };
+}
+
 // Añade un registro clínico al animal por su código (alimenta el pasaporte).
 // Lo usan el veterinario y también la familia desde la ficha de su mascota.
 //

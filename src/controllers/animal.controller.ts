@@ -341,7 +341,8 @@ export async function addHealthRecord(req: Request, res: Response) {
   if (category === 'visit') {
     animal.vetHistory.push({ date, note, treatment });
   } else {
-    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined, nextDueAt });
+    const byRole = user?.role === 'vet' ? 'vet' : user?.role === 'admin' ? 'admin' : 'family';
+    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined, byRole, nextDueAt });
   }
   await animal.save();
 
@@ -470,6 +471,84 @@ export async function getPassport(req: Request, res: Response) {
     timeline: buildTimeline(animal, events, false),
     memorial,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Corregir o borrar una entrada de salud (2 nov 2026)
+//
+// Una vacuna apuntada por error se quedaba para siempre en el pasaporte público
+// y seguía mandando su recordatorio. La familia (y con quien la comparte) puede
+// corregir o borrar lo que apuntó ella; lo que apuntó la clínica, no: el
+// pasaporte tiene que seguir siendo fiable. La clínica puede con lo suyo.
+// ---------------------------------------------------------------------------
+
+async function healthEntryAccess(req: Request, res: Response) {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  const animal: any = await Animal.findOne({ code });
+  if (!animal) { res.status(404).json({ error: 'not_found' }); return null; }
+  const entry = Types.ObjectId.isValid(String(req.params.entryId)) ? animal.healthHistory.id(req.params.entryId) : null;
+  if (!entry) { res.status(404).json({ error: 'entry_not_found' }); return null; }
+  const user: any = (req as any).user;
+  const uid = String(user?._id || user?.id || '');
+  if (user?.role === 'admin') return { animal, entry, uid };
+  if (entry.byRole === 'vet') {
+    if (user?.role === 'vet' && String(entry.vetId || '') === uid) return { animal, entry, uid };
+    res.status(403).json({ error: 'vet_record' });
+    return null;
+  }
+  if (!canManageAnimal(user, animal)) { res.status(403).json({ error: 'forbidden' }); return null; }
+  return { animal, entry, uid };
+}
+
+// PATCH /api/animals/:code/health/:entryId — { category?, note?, date?, nextDueAt? (null = sin aviso) }
+export async function updateHealthRecord(req: Request, res: Response) {
+  const got = await healthEntryAccess(req, res);
+  if (!got) return;
+  const { animal, entry, uid } = got;
+  const body: any = req.body || {};
+
+  if (body.category !== undefined) {
+    if (!HEALTH_CATEGORIES.includes(body.category) || body.category === 'visit') return res.status(400).json({ error: 'invalid_category' });
+    entry.type = body.category;
+  }
+  if (body.note !== undefined) {
+    const note = typeof body.note === 'string' ? body.note.trim() : '';
+    if (!note) return res.status(400).json({ error: 'note_required' });
+    entry.notes = note.slice(0, 500);
+  }
+  if (body.date !== undefined) {
+    const d = new Date(body.date);
+    if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'invalid_date' });
+    if (d.getTime() > Date.now() + 86_400_000) return res.status(400).json({ error: 'date_in_future' });
+    entry.date = d;
+  }
+  if (body.nextDueAt !== undefined) {
+    if (body.nextDueAt === null) {
+      entry.nextDueAt = undefined;
+    } else {
+      const d = new Date(body.nextDueAt);
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'invalid_next_due' });
+      if (d.getTime() <= Date.now()) return res.status(400).json({ error: 'next_due_in_past' });
+      entry.nextDueAt = d;
+    }
+    // Fecha nueva, aviso nuevo: el sello del enviado era de la fecha anterior.
+    entry.reminderSentAt = undefined;
+  }
+  await animal.save();
+  await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'health', actorId: uid, data: { action: 'updated', entryId: String(entry._id) } });
+  res.json({ ok: true, entry });
+}
+
+// DELETE /api/animals/:code/health/:entryId — también se va su recordatorio.
+export async function deleteHealthRecord(req: Request, res: Response) {
+  const got = await healthEntryAccess(req, res);
+  if (!got) return;
+  const { animal, entry, uid } = got;
+  const data = { action: 'deleted', entryId: String(entry._id), type: entry.type, notes: entry.notes, date: entry.date };
+  entry.deleteOne();
+  await animal.save();
+  await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'health', actorId: uid, data });
+  res.json({ ok: true, health: { vetVisits: animal.vetHistory.length, healthMilestones: animal.healthHistory.length } });
 }
 
 // ---------------------------------------------------------------------------
