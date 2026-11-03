@@ -214,7 +214,7 @@ export default function BookVetAppointment({ soloLista = false }: { soloLista?: 
             </label>
             <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>
               Fecha y hora
-              <input type="datetime-local" step={1800} min={datetimeLocalNow()} value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
+              <input type="datetime-local" min={datetimeLocalNow()} value={requestedAt} onChange={e => setRequestedAt(e.target.value)} style={inputStyle} />
             </label>
           </div>
           <label style={{ display: 'grid', gap: 6, fontWeight: 800, fontSize: 14 }}>

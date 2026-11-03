@@ -49,7 +49,9 @@ export default function DonationsPage() {
   // Se lee una vez y se quita de la dirección (AUD-3), para que no reaparezca al
   // recargar o compartir. El parámetro no prueba el cobro (lo confirma el webhook
   // de Stripe): la pantalla no lo da por hecho ni promete recibo.
-  const [resultado] = useState(() => sp.get('donation'));
+  // Solo con el session_id que pone Stripe (AUD-4): un enlace a mano con
+  // ?donation=success no enseña el agradecimiento.
+  const [resultado] = useState(() => (sp.get('donation') === 'success' && sp.get('session_id') ? 'success' : sp.get('donation')));
   useEffect(() => {
     if (!sp.get('donation')) return;
     if (sp.get('donation') === 'cancel') setError('Has cancelado el pago. No se te ha cobrado nada.');

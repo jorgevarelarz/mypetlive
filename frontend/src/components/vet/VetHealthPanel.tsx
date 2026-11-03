@@ -62,7 +62,7 @@ export default function VetHealthPanel() {
     onError: (e: any) => {
       const code = e?.response?.data?.error;
       if (code === 'not_found') toast.error('No existe ningún animal con ese código');
-      else if (code === 'no_appointment_with_animal') toast.error('Solo puedes apuntar en el pasaporte de animales con una cita en tu clínica.');
+      else if (code === 'no_appointment_with_animal') toast.error('Solo puedes apuntar en el pasaporte con una cita aceptada o completada en los últimos 30 días. Si la cita está pendiente, acéptala primero.');
       else if (code === 'date_in_future') toast.error('La fecha no puede ser posterior a hoy.');
       else if (code === 'note_required' || e?.message === 'note_required') toast.error('Describe el registro');
       else toast.error('No se pudo guardar el registro');

@@ -24,7 +24,8 @@ import { isStripeConfigured, getStripeClient } from '../utils/stripe';
 import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
 import { UserCode } from '../models/userCode.model';
-import { recordSale, recordIdentification, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
+import { recordSale, recordIdentification, couponsToApplyForSale, applyCouponsToSale, cargarPatitas, costePatitasEur } from '../utils/sales';
+import { beneficiarioValido } from '../utils/couponRules';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
 import { partnerStatements } from '../utils/settlement';
 import { canReceiveDonations } from '../utils/shelterVerification';
@@ -345,16 +346,24 @@ export async function registerSale(req: Request, res: Response) {
   const amountError = eurAmountError(amountEur, { min: 0, max: SALE_MAX_EUR });
   if (amountError) return res.status(400).json(amountError);
 
+  // Con cupones, las mismas reglas de beneficiario que useCoupon (AUD-4, FAC-139):
+  // si no, el comercio se los abonaba a sí mismo con su QR y una venta de 0 €.
+  const candidates = await couponsToApplyForSale(partnerId, target, req.body);
+  if (candidates.length && !(await beneficiarioValido(partnerId, target))) {
+    return res.status(400).json({ error: 'invalid_beneficiary' });
+  }
+
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
   const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);
 
-  const candidates = await couponsToApplyForSale(partnerId, target, req.body);
   const { appliedCoupons, couponPatitas } = candidates.length
     ? await applyCouponsToSale(r.saleId, partnerId, target, candidates)
     : { appliedCoupons: [] as any[], couponPatitas: 0 };
 
   res.status(201).json({
-    ok: true, saleId: r.saleId, commissionPct: r.commissionPct, commissionEur: r.commissionEur,
+    ok: true, saleId: r.saleId, commissionPct: r.commissionPct,
+    // Con lo que cuestan las Patitas de los cupones aplicados (las paga el comercio).
+    commissionEur: Math.round((r.commissionEur + costePatitasEur(couponPatitas)) * 100) / 100,
     patitasEarned: r.patitasEarned + couponPatitas, appliedCoupons,
     ...(r.earn ? { balance: r.earn.balance, autoDonated: r.earn.autoDonated } : {}),
   });
@@ -415,12 +424,20 @@ export async function earnVisit(req: Request, res: Response) {
   }
   visitStore.set(key, Date.now());
 
-  const result = await earnForUser({
-    userId: target,
-    amount: VISIT_PATITAS_REWARD,
-    source: 'visit',
-    partnerId,
-    concept: 'Visita a tienda',
+  // La visita la paga el comercio, como todas las Patitas que reparte (decisión
+  // de Jorge, 2 nov 2026): queda un cargo en su extracto del mes.
+  const result = await withTxnIfAvailable(async session => {
+    const r = await earnForUser({
+      userId: target,
+      amount: VISIT_PATITAS_REWARD,
+      source: 'visit',
+      partnerId,
+      concept: 'Visita a tienda',
+    }, session);
+    if (partner.role !== 'admin') {
+      await cargarPatitas({ partnerId, partnerType: partner.role === 'vet' ? 'vet' : 'store', userId: target, patitas: VISIT_PATITAS_REWARD, kind: 'visit' }, session);
+    }
+    return r;
   });
   res.json({ ok: true, ...result });
 }

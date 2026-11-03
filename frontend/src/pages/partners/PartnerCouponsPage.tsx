@@ -81,6 +81,10 @@ export default function PartnerCouponsPage() {
 
   const onSaveError = (error: any) => {
     const body = error?.response?.data;
+    if (body?.error === 'too_many_active_coupons') {
+      toast.error(`Puedes tener como mucho ${body.max} cupones activos. Desactiva alguno antes.`);
+      return;
+    }
     if (body?.error === 'bonus_too_large') {
       toast.error(`El máximo son ${body.max} Patitas de regalo por cupón.`);
       return;
@@ -247,6 +251,13 @@ export default function PartnerCouponsPage() {
                 onChange={event => setForm({ ...form, bonusPatitas: event.target.value })}
                 style={inputStyle}
               />
+              {/* Las Patitas las paga el comercio (2 nov 2026): se le dice cuánto le cuesta. */}
+              <span style={{ color: MPL.muted, fontSize: 12 }}>
+                {(() => {
+                  const n = Number(form.bonusPatitas) > 0 ? Math.round(Number(form.bonusPatitas)) : 20;
+                  return `${Number(form.bonusPatitas) > 0 ? '' : 'Vacío o 0: 20 Patitas. '}Cada uso te cuesta ${(n * 0.12).toFixed(2).replace('.', ',')} € en la comisión (0,12 € por Patita).`;
+                })()}
+              </span>
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 12.5, flex: '1 1 180px' }}>
               Caduca el (opcional)
@@ -372,7 +383,7 @@ export default function PartnerCouponsPage() {
                     <div style={{ color: MPL.muted, fontSize: 13, marginTop: 4 }}>{coupon.description}</div>
                   )}
                   <div style={{ color: MPL.faint, fontSize: 12.5, marginTop: 6 }}>
-                    {coupon.bonusPatitas ? `+${coupon.bonusPatitas} 🐾 al cliente` : 'Sin Patitas de regalo'}
+                    {`+${coupon.rewardPatitas ?? coupon.bonusPatitas ?? 0} 🐾 al cliente`}
                     {coupon.expiresAt ? ` · caduca el ${new Date(coupon.expiresAt).toLocaleDateString('es-ES')}` : ''}
                     {coupon.targetAnimalCode ? ` · solo ${coupon.targetAnimalCode}` : ''}
                   </div>

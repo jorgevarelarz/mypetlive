@@ -137,6 +137,10 @@ function PartnerStatements() {
         <div style={{ color: MPL.faint, fontSize: 14 }}>Todavía no hay ventas registradas: cuando registres la primera, aquí verás tu extracto mensual.</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
+          {/* Modelo de Patitas del 2 nov 2026: ver src/utils/sales.ts. */}
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: MPL.muted }}>
+            La mitad de tu comisión vuelve a tus clientes en Patitas para su protectora. Las Patitas extra que das con cupones y visitas se suman a la comisión: {PATITA_COSTE_TXT} cada una.
+          </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: 'left', color: MPL.muted, fontSize: 12.5 }}>
@@ -392,6 +396,8 @@ function PosIntegration() {
 
 // El QR y el código del cliente caducan a los 10 minutos: si vence entre la
 // identificación y el registro, el servidor responde invalid_user.
+// Coste por Patita para el comercio: 0,10 € de valor + 20 % de la plataforma (como en el servidor).
+const PATITA_COSTE_TXT = '0,12 €';
 const CUSTOMER_CODE_EXPIRED = 'El código del cliente ha caducado. Vuelve a escanear su QR o a pedirle el código';
 
 // Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
@@ -460,6 +466,10 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
         : code === 'coupon_expired' ? 'Este cupón ha caducado.'
         : code === 'invalid_beneficiary' ? 'Los cupones solo dan Patitas a familias.'
         : code === 'coupon_animal_mismatch' ? 'Este cupón es para otra mascota.'
+        : code === 'coupon_patitas_limit' ? `Este cliente ya ha recibido hoy o este mes el máximo de Patitas por cupones en tu comercio${e?.response?.data?.available ? ` (le quedan ${e.response.data.available})` : ''}.`
+        : code === 'coupon_inactive' ? 'Este cupón está desactivado.'
+        : code === 'coupon_not_found' ? 'Este cupón ya no existe.'
+        : code === 'coupon_partner_mismatch' || code === 'invalid_partner_coupon' ? 'Este cupón es de otro comercio.'
         : 'No se pudo aplicar el cupón');
     } finally { setBusy(false); }
   };
@@ -491,6 +501,7 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
       toast.error(
         code === 'amount_too_large' ? `El importe máximo por venta es de ${formatEur(Number(max) || SALE_MAX_EUR)} €. Revisa el ticket.`
           : code === 'invalid_amount' ? 'Importe no válido'
+            : code === 'invalid_beneficiary' ? 'Los cupones solo dan Patitas a familias: quita los cupones para registrar esta venta.'
             : 'No se pudo registrar la venta',
       );
     } finally { setBusy(false); }

@@ -149,12 +149,13 @@ describe('API POS del partner', () => {
       .send({ code, applyCoupons: true, amountEur: 47.5, items: [{ name: 'Pienso cachorro 3kg', qty: 1, priceEur: 32.5 }] })
       .expect(201);
 
-    expect(res.body.commissionEur).toBeCloseTo(2.38, 2);
+    // 5 % de 47,50 + las 20 Patitas del cupón a 0,12 € (las extra las paga el comercio).
+    expect(res.body.commissionEur).toBeCloseTo(2.38 + 20 * 0.12, 2);
     expect(res.body.appliedCoupons).toHaveLength(1);
-    expect(res.body.patitasEarned).toBe(47 + 20); // 1/€ + bonus del cupón
+    expect(res.body.patitasEarned).toBe(11 + 20); // la mitad de la comisión (1,19 €) en Patitas + bonus del cupón
 
     const ana: any = await User.findById(clientId).select('patitas').lean();
-    expect(ana.patitas).toBe(67);
+    expect(ana.patitas).toBe(11 + 20); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
 
     // El cupón queda consumido: la siguiente venta ya no lo aplica.
     const again: any = await Coupon.findById(coupon._id).lean();
@@ -204,7 +205,7 @@ describe('API POS del partner', () => {
     const body = { code, amountEur: 20, applyCoupons: true, externalRef: 'TICKET-001' };
     const first = await request(app).post('/api/pos/sales').set('X-Api-Key', key).send(body).expect(201);
     expect(first.body.appliedCoupons).toHaveLength(1);
-    expect(first.body.patitasEarned).toBe(20 + 15);
+    expect(first.body.patitasEarned).toBe(5 + 15); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
 
     // Reintento (p. ej. timeout de red): misma venta, mismo ticket imprimible.
     const retry = await request(app).post('/api/pos/sales').set('X-Api-Key', key).send(body).expect(200);
@@ -216,7 +217,7 @@ describe('API POS del partner', () => {
 
     expect(await Sale.countDocuments({})).toBe(1);
     const ana: any = await User.findById(clientId).select('patitas').lean();
-    expect(ana.patitas).toBe(35); // el reintento no duplica Patitas
+    expect(ana.patitas).toBe(5 + 15); // el reintento no duplica Patitas
   });
 
   it('dos reintentos concurrentes con el mismo externalRef crean una sola venta', async () => {
@@ -236,7 +237,7 @@ describe('API POS del partner', () => {
     expect(a.body.saleId).toBe(b.body.saleId);
     expect(await Sale.countDocuments({})).toBe(1);
     const ana: any = await User.findById(clientId).select('patitas').lean();
-    expect(ana.patitas).toBe(30);
+    expect(ana.patitas).toBe(7); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
   });
 
   it('dos cajas concurrentes no pueden consumir el mismo cupón dos veces', async () => {
@@ -253,9 +254,9 @@ describe('API POS del partner', () => {
     const totalApplied = a.body.appliedCoupons.length + b.body.appliedCoupons.length;
     expect(totalApplied).toBe(1);
 
-    // Base 10+10, bonus 20 una sola vez.
+    // Base 2+2 (la mitad de la comisión de cada venta de 10 €), bonus 20 una sola vez.
     const ana: any = await User.findById(clientId).select('patitas').lean();
-    expect(ana.patitas).toBe(40);
+    expect(ana.patitas).toBe(24); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
   });
 
   it('la clave de test (sandbox) valida y simula sin persistir nada', async () => {
@@ -276,7 +277,7 @@ describe('API POS del partner', () => {
       .expect(201);
     expect(sale.body.test).toBe(true);
     expect(sale.body.saleId).toBeNull();
-    expect(sale.body.patitasEarned).toBe(50 + 20);
+    expect(sale.body.patitasEarned).toBe(12 + 20); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
     expect(sale.body.appliedCoupons).toHaveLength(1);
 
     // Cero efectos: ni venta, ni identificación, ni cupón consumido, ni Patitas.

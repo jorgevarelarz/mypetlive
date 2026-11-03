@@ -4,7 +4,8 @@ import crypto from 'crypto';
 import { User } from '../models/user.model';
 import { Sale } from '../models/sale.model';
 import { COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
-import { recordSale, recordIdentification, computeSaleFigures, couponsToApplyForSale, applyCouponsToSale } from '../utils/sales';
+import { recordSale, recordIdentification, computeSaleFigures, couponsToApplyForSale, applyCouponsToSale, costePatitasEur } from '../utils/sales';
+import { beneficiarioValido } from '../utils/couponRules';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
 import { resolveUserFromBody } from './patitas.controller';
 import { SALE_MAX_EUR, eurAmountError } from '../utils/limits';
@@ -196,10 +197,16 @@ export async function posSale(req: Request, res: Response) {
       test: true,
       saleId: null,
       commissionPct: figures.commissionPct,
-      commissionEur: figures.commissionEur,
+      commissionEur: Math.round((figures.commissionEur + costePatitasEur(couponPatitas)) * 100) / 100,
       patitasEarned: figures.patitas + couponPatitas,
       appliedCoupons: coupons.map(serializeCoupon),
     });
+  }
+
+  // Mismas reglas de beneficiario que useCoupon (AUD-4, FAC-139).
+  const candidatos = await couponsToApplyForSale(partnerId, userId, req.body);
+  if (candidatos.length && !(await beneficiarioValido(partnerId, userId))) {
+    return res.status(400).json({ error: 'invalid_beneficiary' });
   }
 
   const externalRef = typeof req.body?.externalRef === 'string' ? req.body.externalRef.trim().slice(0, 120) : '';
@@ -228,7 +235,7 @@ export async function posSale(req: Request, res: Response) {
     ok: true,
     saleId: sale.saleId,
     commissionPct: sale.commissionPct,
-    commissionEur: sale.commissionEur,
+    commissionEur: Math.round((sale.commissionEur + costePatitasEur(couponPatitas)) * 100) / 100,
     patitasEarned: sale.patitasEarned + couponPatitas,
     appliedCoupons,
   });

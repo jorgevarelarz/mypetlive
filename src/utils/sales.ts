@@ -2,13 +2,49 @@ import { Types } from 'mongoose';
 import { Sale } from '../models/sale.model';
 import { Coupon } from '../models/coupon.model';
 import { PartnerIdentification } from '../models/partnerIdentification.model';
-import { earnForUser, EarnResult, COUPON_PATITAS_REWARD_DEFAULT } from './patitas';
+import { earnForUser, EarnResult, COUPON_PATITAS_REWARD_DEFAULT, PATITA_VALUE_EUR } from './patitas';
 import { eligibleCoupons, serializeCoupon } from './coupons';
 import { withTxnIfAvailable } from './txn';
+import { patitasCuponDisponibles } from './couponRules';
 
 // Comisión de plataforma por defecto (%) sobre ventas de partners y Patitas por € de compra.
 export const DEFAULT_SALE_COMMISSION_PCT = Number(process.env.PLATFORM_SALE_COMMISSION_PCT || 5);
-export const PATITAS_PER_EUR = Number(process.env.PATITAS_PER_EUR || 1);
+
+// Modelo de Patitas (decisión de Jorge, 2 nov 2026). Antes se daba 1 Patita
+// (0,10 €) por € de compra contra un 5 % de comisión: la plataforma pagaba el
+// doble de lo que cobraba, y los cupones y visitas, gratis para el comercio.
+//  - La comisión es fija (el % de la venta) y no sube por las Patitas de la compra.
+//  - De esa comisión, esta parte (50 %) vuelve al cliente en Patitas, a su valor.
+//    Compra de 20 € al 5 %: comisión 1 €, 0,50 € = 5 Patitas, nos quedan 0,50 €.
+//  - Las Patitas extra (cupones y visitas) las paga el comercio que las da, a su
+//    valor más el margen de la plataforma (20 %): 0,12 € cada una.
+export const PATITAS_COMMISSION_SHARE_PCT = (() => {
+  const n = Number(process.env.PATITAS_COMMISSION_SHARE_PCT);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 50;
+})();
+export const PATITA_MARGIN_PCT = (() => {
+  const n = Number(process.env.PATITA_MARGIN_PCT);
+  return Number.isFinite(n) && n >= 0 ? n : 20;
+})();
+export function costePatitasEur(patitas: number) {
+  return Math.round(Math.max(0, patitas) * PATITA_VALUE_EUR * (1 + PATITA_MARGIN_PCT / 100) * 100) / 100;
+}
+
+/** Cargo al comercio por Patitas dadas sin compra (cupón suelto o visita). */
+export async function cargarPatitas(
+  input: { partnerId: string; partnerType: 'store' | 'vet'; userId: string; patitas: number; kind: 'coupon' | 'visit'; appliedCoupon?: any },
+  session?: any,
+) {
+  const coste = costePatitasEur(input.patitas);
+  await Sale.create([{
+    partnerId: input.partnerId, partnerType: input.partnerType, userId: input.userId, kind: input.kind,
+    amountEur: 0, items: [], commissionPct: 0, commissionEur: coste, patitasCostEur: coste,
+    patitasEarned: input.kind === 'visit' ? input.patitas : 0,
+    couponPatitas: input.kind === 'coupon' ? input.patitas : 0,
+    ...(input.appliedCoupon ? { appliedCoupons: [input.appliedCoupon] } : {}),
+  }], session ? { session } : {});
+  return coste;
+}
 
 export type SaleItem = { name: string; qty: number; priceEur?: number };
 
@@ -37,8 +73,9 @@ export type RecordSaleResult = {
 export function computeSaleFigures(partner: any, amountEur: number) {
   const commissionPct = partner?.profile?.commissionPct ?? DEFAULT_SALE_COMMISSION_PCT;
   const commissionEur = Math.round(amountEur * commissionPct) / 100; // redondeo a céntimos
-  const patitas = Math.floor(amountEur * PATITAS_PER_EUR);
-  return { commissionPct, commissionEur, patitas };
+  // Las Patitas de la compra salen de nuestra comisión (no se le cobran aparte).
+  const patitas = Math.floor((commissionEur * PATITAS_COMMISSION_SHARE_PCT) / 100 / PATITA_VALUE_EUR + 1e-9);
+  return { commissionPct, commissionEur, patitas, patitasCostEur: 0 };
 }
 
 // Registra la venta de un partner: crea el Sale (snapshot de comisión), enlaza la
@@ -56,12 +93,12 @@ export async function recordSale(
 ): Promise<RecordSaleResult> {
   const items = sanitizeSaleItems(rawItems);
   const partnerType = partner?.role === 'vet' ? 'vet' : 'store';
-  const { commissionPct, commissionEur, patitas } = computeSaleFigures(partner, amountEur);
+  const { commissionPct, commissionEur, patitas, patitasCostEur } = computeSaleFigures(partner, amountEur);
 
   return withTxnIfAvailable(async (session) => {
     const [sale] = await Sale.create([{
       partnerId: partner._id, partnerType, userId, amountEur, items,
-      commissionPct, commissionEur, patitasEarned: patitas,
+      commissionPct, commissionEur, patitasEarned: patitas, patitasCostEur,
       ...(opts.externalRef ? { externalRef: opts.externalRef } : {}),
     }], { session });
 
@@ -104,6 +141,8 @@ export type AppliedSaleCoupon = ReturnType<typeof serializeCoupon> & { bonusPati
 // de uso (findOneAndUpdate con filtro usedAt evita el doble consumo con cajas
 // concurrentes) + Patitas de bonus al cliente, y persiste el detalle en la venta
 // para auditoría y para que un reintento idempotente devuelva la misma respuesta.
+class SinCupo extends Error {}
+
 export async function applyCouponsToSale(
   saleId: string,
   partnerId: string,
@@ -113,20 +152,38 @@ export async function applyCouponsToSale(
   const appliedCoupons: AppliedSaleCoupon[] = [];
   let couponPatitas = 0;
   for (const c of coupons) {
-    const applied = await withTxnIfAvailable(async (session) => {
+    let usadoSinSesion: any = null;
+    let applied: any;
+    try {
+    applied = await withTxnIfAvailable(async (session) => {
+      // Activo y sin usar, como en useCoupon (AUD-4): uno desactivado entre la
+      // lectura y aquí ya no se consume.
       const used: any = await Coupon.findOneAndUpdate(
-        { _id: c._id, usedAt: { $exists: false } },
+        { _id: c._id, active: true, usedAt: null },
         { usedAt: new Date(), usedBy: partnerId },
         { new: true, session },
       );
       if (!used) return null;
       const reward = Number(used.bonusPatitas) > 0 ? Math.round(Number(used.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
+      // Mismo tope por cliente y comercio que useCoupon (AUD-4, FAC-138): el
+      // cupón que no cabe no se consume y sigue disponible.
+      if (reward > await patitasCuponDisponibles(userId, partnerId, session)) throw new SinCupo();
       await earnForUser({
         userId, amount: reward, source: 'coupon', partnerId, couponId: String(used._id),
         concept: `Cupón: ${used.title || used.copy}`,
       }, session);
+      // Las Patitas del cupón, a la comisión de esta venta.
+      const coste = costePatitasEur(reward);
+      await Sale.updateOne({ _id: saleId }, { $inc: { commissionEur: coste, patitasCostEur: coste } }, session ? { session } : {});
+      if (!session) usadoSinSesion = used;
       return { used, reward };
     });
+    } catch (err) {
+      if (!(err instanceof SinCupo)) throw err;
+      // Sin transacción (desarrollo y tests) se devuelve el cupón a mano.
+      if (usadoSinSesion) await Coupon.updateOne({ _id: usadoSinSesion._id }, { $set: { usedAt: null, usedBy: null } });
+      continue;
+    }
     if (!applied) continue;
     couponPatitas += applied.reward;
     appliedCoupons.push({ ...serializeCoupon(applied.used), bonusPatitas: applied.reward });

@@ -180,9 +180,9 @@ export default function CouponsList() {
           <div style={{ color: MPL.muted }}>Cargando cupones...</div>
         ) : isError ? (
           // Un fallo de carga no es «no hay cupones» (AUD-3).
-          <div role="alert" style={{ background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, padding: '20px', fontSize: 15, color: '#B3261E' }}>
-            No hemos podido cargar los cupones.{' '}
-            <button type="button" onClick={() => refetch()} style={{ border: 0, background: 'none', padding: 0, color: '#0E5F5B', font: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}>Reintentar</button>
+          <div role="alert" style={{ background: MPL.coral100, border: `1px solid ${MPL.coral}`, borderRadius: 22, padding: '20px', fontSize: 15, color: MPL.coralDark }}>
+            No hemos podido cargar los cupones, por eso las cifras de arriba salen con «—».{' '}
+            <button type="button" onClick={() => refetch()} style={{ border: 0, background: 'none', padding: 0, color: MPL.tealDark, font: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}>Reintentar</button>
           </div>
         ) : activeCoupons.length === 0 ? (
           <div style={{ display: 'grid', justifyItems: 'center', gap: 14, textAlign: 'center', background: '#FEFEFE', border: '1px solid #EEE9E1', borderRadius: 22, padding: '22px 20px 24px', boxShadow: '0 8px 22px -16px rgba(60,45,30,.3)' }}>

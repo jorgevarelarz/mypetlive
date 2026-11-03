@@ -6,7 +6,7 @@ import { buildCalendar, IcsEvent } from '../utils/ics';
 import { Animal } from '../models/animal.model';
 import { isFamilyMember } from '../utils/animalAccess';
 import { availability, slotTaken, slotReservable, MAX_DIAS } from '../utils/vetAgenda';
-import { SlotClaim, slotClaimId } from '../models/slotClaim.model';
+import { SlotClaim, slotClaimId, slotClaimIdAntiguo } from '../models/slotClaim.model';
 import { isFamilyPet } from '../utils/animalAccess';
 import { User } from '../models/user.model';
 import { sendEmail } from '../utils/notification';
@@ -248,6 +248,7 @@ export async function createAppointment(req: Request, res: Response) {
   // Reclamar el hueco antes de crear la cita: si otra petición lo acaba de coger,
   // esta recibe 409 en vez de crear una segunda cita en la misma hora.
   const claimId = slotClaimId(String(vetId), when);
+  if (await SlotClaim.exists({ _id: slotClaimIdAntiguo(String(vetId), when) })) return res.status(409).json({ error: 'slot_taken' });
   try {
     await SlotClaim.create({ _id: claimId });
   } catch (err: any) {
@@ -367,6 +368,8 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
         const nueva = slotClaimId(String(appt.vetId), appt.scheduledAt);
         const actual: any = await SlotClaim.findById(nueva).session(session ?? null).lean();
         if (actual && String(actual.appointmentId || '') !== String(appt._id)) throw new AppError('slot_taken', { status: 409 });
+        const antigua: any = await SlotClaim.findById(slotClaimIdAntiguo(String(appt.vetId), appt.scheduledAt)).session(session ?? null).lean();
+        if (antigua && String(antigua.appointmentId || '') !== String(appt._id)) throw new AppError('slot_taken', { status: 409 });
         if (!actual) {
           try {
             await SlotClaim.create([{ _id: nueva, appointmentId: appt._id }], optsS);

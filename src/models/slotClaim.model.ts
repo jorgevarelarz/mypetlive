@@ -21,3 +21,7 @@ export const SlotClaim = model('SlotClaim', slotClaimSchema);
 // Por minuto en hora de España, como compara la agenda (AUD-3, FAC-130): con el
 // instante exacto, 10:00:00 y 10:00:30 eran dos claves y dos citas en el hueco.
 export const slotClaimId = (vetId: string, when: Date) => `${vetId}|${minutoMadrid(when)}`;
+
+// Clave de antes de AUD-3 (instante exacto). Las reservas viejas siguen con ella;
+// al reclamar un hueco también se mira (AUD-4) para no dar dos veces ese minuto.
+export const slotClaimIdAntiguo = (vetId: string, when: Date) => `${vetId}|${when.toISOString()}`;

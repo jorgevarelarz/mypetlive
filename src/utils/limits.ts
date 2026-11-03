@@ -31,6 +31,14 @@ export const SALE_MAX_EUR = envNumber('SALE_MAX_EUR', 3000);
 // impresora de billetes en manos del partner. El admin sigue sin tope.
 export const COUPON_BONUS_MAX_PATITAS = envNumber('COUPON_BONUS_MAX_PATITAS', 200);
 
+// Topes de los cupones de comercio (AUD-4, FAC-138; cifras acordadas con Jorge
+// el 2 nov 2026). Sin ellos, un comercio creaba cupones sin fin y se los daba a
+// un cliente cómplice: esas Patitas acaban en una protectora, que las canjea en
+// el mismo comercio y la plataforma lo paga con dinero real. El admin no tiene tope.
+export const COUPON_ACTIVE_MAX_PER_PARTNER = envNumber('COUPON_ACTIVE_MAX_PER_PARTNER', 10);
+export const COUPON_PATITAS_DAY_PER_CLIENT = envNumber('COUPON_PATITAS_DAY_PER_CLIENT', 200);
+export const COUPON_PATITAS_MONTH_PER_CLIENT = envNumber('COUPON_PATITAS_MONTH_PER_CLIENT', 600);
+
 export function eurAmountError(
   amountEur: number,
   { min, max }: { min: number; max: number },

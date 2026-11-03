@@ -123,6 +123,7 @@ describe('Coupon partner usage flow', () => {
     const log = await PatitaLog.create({
       shelterId: shelter._id,
       userId: shelter._id,
+      partnerId: vet.id, // desde AUD-4 el registro tiene que ser del propio comercio
       amount: -30,
       source: 'vet',
       concept: 'Chequeo',

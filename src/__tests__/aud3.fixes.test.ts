@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
@@ -66,14 +64,7 @@ const pedir = (u: string, when: Date) =>
 const estado = (apptId: string, body: any) =>
   request(app).patch(`/api/vet-appointments/${apptId}/status`).set(H(vetId, 'vet')).send(body);
 
-describe('FAC-128 · vuelta de Stripe en donaciones', () => {
-  it('vuelve a /donate, la página que existe', () => {
-    const src = fs.readFileSync(path.join(__dirname, '../routes/donations.routes.ts'), 'utf8');
-    expect(src).toContain("success_url: base + '/donate?donation=success&session_id={CHECKOUT_SESSION_ID}'");
-    expect(src).toContain("cancel_url: base + '/donate?donation=cancel'");
-    expect(src).not.toMatch(/'\/donations\?/);
-  });
-});
+// FAC-128: el test de la vuelta de Stripe está en donations.shelter.test.ts (con el simulador).
 
 describe('FAC-129 · protectora de origen de un animal adoptado', () => {
   it('ve la cronología sin detalle privado; la familia la ve completa', async () => {

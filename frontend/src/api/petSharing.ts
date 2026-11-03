@@ -62,7 +62,7 @@ export function sharingErrorMessage(error: any, fallback = 'No se ha podido. Int
     invalid_email: 'Ese correo no parece válido.',
     cannot_invite_self: 'Ese correo es el tuyo.',
     already_member: 'Esa persona ya la cuida contigo.',
-    invitee_not_family: 'Ese correo es de una cuenta de protectora, veterinario o tienda. Invita a su cuenta personal.',
+    invitee_not_family: 'Con una cuenta de protectora, veterinario o tienda no puedes cuidar mascotas. Entra con tu cuenta personal para aceptar.',
     too_many_members: 'Ya hay el máximo de personas (5). Quita a alguien o anula una invitación.',
     owner_only: 'Esto solo lo puede hacer quien dio de alta la mascota.',
     in_memory: 'No se puede invitar a nadie mientras está en su mural.',

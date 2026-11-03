@@ -41,7 +41,14 @@ export default function VetAppointmentsPanel() {
         queryClient.invalidateQueries({ queryKey: ['vet-appointments'] });
         return;
       }
-      toast.error(code === 'scheduled_at_required' ? 'Indica la nueva fecha' : 'No se pudo actualizar');
+      if (code === 'slot_taken' || code === 'reservation_inconsistent') {
+        toast.error(code === 'slot_taken' ? 'Esa hora ya tiene otra cita. Elige otra.' : 'La agenda ha cambiado. La actualizamos: vuelve a intentarlo.');
+        queryClient.invalidateQueries({ queryKey: ['vet-appointments'] });
+        return;
+      }
+      toast.error(code === 'scheduled_at_required' ? 'Indica la nueva fecha'
+        : code === 'invalid_date' ? 'Esa fecha no es válida o ya ha pasado.'
+        : 'No se pudo actualizar');
     },
   });
 

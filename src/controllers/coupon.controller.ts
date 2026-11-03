@@ -4,7 +4,9 @@ import { Coupon } from '../models/coupon.model';
 import { PatitaLog } from '../models/patitaLog.model';
 import { User } from '../models/user.model';
 import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
-import { COUPON_BONUS_MAX_PATITAS } from '../utils/limits';
+import { COUPON_BONUS_MAX_PATITAS, COUPON_ACTIVE_MAX_PER_PARTNER } from '../utils/limits';
+import { beneficiarioValido, patitasCuponDisponibles } from '../utils/couponRules';
+import { cargarPatitas } from '../utils/sales';
 import { withTxnIfAvailable } from '../utils/txn';
 import { resolveUserFromBody } from './patitas.controller';
 
@@ -223,6 +225,14 @@ export async function listMyCoupons(req: Request, res: Response) {
   res.json({ items: coupons.map(serializeCoupon) });
 }
 
+/** Cupones del comercio que aún se pueden usar (activos, sin usar y sin caducar). */
+async function activosDe(partnerId: string) {
+  return Coupon.countDocuments({
+    partnerId, active: true, usedAt: null,
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+  });
+}
+
 export async function createMyCoupon(req: Request, res: Response) {
   const user: any = (req as any).user;
   const data = pickFields(req.body);
@@ -233,6 +243,9 @@ export async function createMyCoupon(req: Request, res: Response) {
   }
   const invalid = partnerCouponError(data);
   if (invalid) return res.status(invalid.status).json(invalid.body);
+  if (user.role !== 'admin' && data.active !== false && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
+    return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
+  }
 
   const coupon = await Coupon.create({
     partnerId: meId(req),
@@ -274,6 +287,10 @@ export async function updateMyCoupon(req: Request, res: Response) {
 
   // Lista blanca explícita: pickFields ya deja fuera sponsored/usedAt, y
   // partnerId/partnerType se ignoran aunque vengan en el body.
+  if (data.active === true && !coupon.active && (req as any).user?.role !== 'admin'
+    && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
+    return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
+  }
   const editable = ['copy', 'title', 'description', 'discount', 'bonusPatitas', 'active', 'expiresAt', 'targetAnimalCode'] as const;
   for (const key of editable) {
     const value = (data as any)[key];
@@ -357,8 +374,7 @@ export async function useCoupon(req: Request, res: Response) {
   if (body.userToken || body.code) {
     beneficiaryId = await resolveUserFromBody(body, { allowUserId: false });
     if (!beneficiaryId) return res.status(400).json({ error: 'invalid_user_code' });
-    const b = await User.findById(beneficiaryId).select('role').lean();
-    if (!b || (b as any).role !== 'tenant' || beneficiaryId === partnerId) {
+    if (!(await beneficiarioValido(partnerId, beneficiaryId))) {
       return res.status(400).json({ error: 'invalid_beneficiary' });
     }
   } else if (body.userId) {
@@ -399,6 +415,12 @@ export async function useCoupon(req: Request, res: Response) {
     if (updatedLog.source !== coupon.partnerType) {
       return res.status(400).json({ error: 'log_partner_mismatch' });
     }
+    // Solo un registro propio y, si hay cliente, suyo (AUD-4, FAC-141): con el
+    // logId de otro comercio se reescribía su historial. 404, para no revelarlo.
+    if (user.role !== 'admin' && (String(updatedLog.partnerId || '') !== partnerId
+      || (beneficiaryId && String(updatedLog.userId || '') !== beneficiaryId))) {
+      return res.status(404).json({ error: 'log_not_found' });
+    }
   }
 
   // Reclamarlo es atómico (AUD-3): dos peticiones a la vez ya no lo usan las dos.
@@ -407,9 +429,11 @@ export async function useCoupon(req: Request, res: Response) {
   let earn: any;
   let claimed: any;
   let sinSesion = false;
+  let tope: any = null;
   try {
     await withTxnIfAvailable(async session => {
       sinSesion = !session;
+      tope = null;
       claimed = await Coupon.findOneAndUpdate(
         { _id: coupon._id, active: true, usedAt: null },
         { $set: { usedAt: new Date(), usedBy: user._id || user.id } },
@@ -418,6 +442,14 @@ export async function useCoupon(req: Request, res: Response) {
       if (!claimed) return;
       if (beneficiaryId) {
         const reward = Number(coupon.bonusPatitas) > 0 ? Math.round(Number(coupon.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
+        // Tope por cliente y comercio (AUD-4, FAC-138): pasarse deshace el uso.
+        if (user.role !== 'admin') {
+          const disponibles = await patitasCuponDisponibles(beneficiaryId, partnerId, session);
+          if (reward > disponibles) {
+            tope = { error: 'coupon_patitas_limit', available: disponibles };
+            throw new Error('coupon_patitas_limit');
+          }
+        }
         earn = await earnForUser({
           userId: beneficiaryId,
           amount: reward,
@@ -426,17 +458,23 @@ export async function useCoupon(req: Request, res: Response) {
           couponId: String(coupon._id),
           concept: coupon.title || coupon.copy || 'Cupón',
         }, session);
+        // Lo paga el comercio del cupón, en su comisión del mes (decisión de Jorge).
+        await cargarPatitas({
+          partnerId: String(coupon.partnerId), partnerType: coupon.partnerType as 'store' | 'vet', userId: beneficiaryId,
+          patitas: reward, kind: 'coupon',
+          appliedCoupon: { couponId: coupon._id, title: coupon.title, discount: coupon.discount, bonusPatitas: reward, targetAnimalCode: coupon.targetAnimalCode },
+        }, session);
       }
     });
   } catch (err) {
     if (sinSesion && claimed) await Coupon.updateOne({ _id: coupon._id }, { $unset: { usedAt: 1, usedBy: 1 } });
+    if (tope) return res.status(429).json(tope);
     throw err;
   }
   if (!claimed) return res.status(400).json({ error: 'coupon_already_used' });
 
   if (updatedLog) {
-    updatedLog.couponId = coupon._id;
-    await updatedLog.save();
+    await PatitaLog.updateOne({ _id: updatedLog._id }, { $set: { couponId: coupon._id } });
   }
 
   res.json({

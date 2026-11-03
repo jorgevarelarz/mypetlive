@@ -369,6 +369,8 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
               ) : undefined;
             };
             const activa = (target: string) => pathname === target || (target !== '/' && pathname.startsWith(target + '/'));
+            const enCajon = new Set(drawerItems.map(resolvePath));
+            const extraCajon = sinMenuLateral ? headerItems.filter(item => !enCajon.has(resolvePath(item))) : [];
             const [primera, ...resto] = drawerItems;
             const experiencia = resto.filter(item => !CUENTA.has(resolvePath(item)));
             const cuenta = resto.filter(item => CUENTA.has(resolvePath(item)));
@@ -380,6 +382,9 @@ export function Header({ sinMenuLateral = false }: { sinMenuLateral?: boolean } 
                 {experiencia.map(fila)}
                 {cuenta.length > 0 && <TituloCajon>Cuenta y seguridad</TituloCajon>}
                 {cuenta.map(fila)}
+                {/* Sin menú lateral, también lo que la cabecera esconde entre lg y xl (AUD-4). */}
+                {extraCajon.length > 0 && <TituloCajon>Más</TituloCajon>}
+                {extraCajon.map(fila)}
               </>
             );
           })()}

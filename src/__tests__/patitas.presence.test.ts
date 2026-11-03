@@ -97,8 +97,8 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
       .send({ userToken: token, amountEur: 10 })
       .expect(201);
     expect(sale.body.saleId).toBeTruthy();
-    expect(sale.body.patitasEarned).toBe(10);
-    expect(await patitas(clientAId)).toBe(10);
+    expect(sale.body.patitasEarned).toBe(2); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
+    expect(await patitas(clientAId)).toBe(2); // la mitad de la comisión en Patitas
 
     const visit = await request(app)
       .post('/api/patitas/earn/visit')
@@ -106,7 +106,7 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
       .send({ userToken: token })
       .expect(200);
     expect(visit.body.earned).toBeGreaterThan(0);
-    expect(await patitas(clientAId)).toBe(10 + visit.body.earned);
+    expect(await patitas(clientAId)).toBe(2 + visit.body.earned);
   });
 
   it('acepta una venta con el código corto vigente', async () => {
@@ -116,7 +116,7 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
       .set(storeH)
       .send({ code, amountEur: 12 })
       .expect(201);
-    expect(await patitas(clientAId)).toBe(12);
+    expect(await patitas(clientAId)).toBe(3); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
   });
 
   it('acepta una visita con el código corto vigente', async () => {
@@ -136,7 +136,7 @@ describe('Ventas y visitas de Patitas: prueba de presencia del cliente', () => {
       .set(storeH)
       .send({ userToken: token, userId: clientBId, amountEur: 20 })
       .expect(201);
-    expect(await patitas(clientAId)).toBe(20);
+    expect(await patitas(clientAId)).toBe(5); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
     expect(await patitas(clientBId)).toBe(0);
   });
 

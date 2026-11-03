@@ -18,12 +18,19 @@ const saleSchema = new Schema(
     partnerType: { type: String, enum: ['store', 'vet'], required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     amountEur: { type: Number, required: true, min: 0 },
+    // `sale`: una compra. `coupon` y `visit`: cargo por Patitas dadas sin compra
+    // (cupón suelto o visita), con importe 0 y solo el coste de esas Patitas.
+    kind: { type: String, enum: ['sale', 'coupon', 'visit'], default: 'sale' },
     // Líneas del ticket (opcionales): las teclea el partner al registrar.
     items: { type: [saleItemSchema], default: [] },
     // Snapshot de la comisión en el momento de la venta (el % puede cambiar después).
     commissionPct: { type: Number, required: true, min: 0, max: 100 },
     commissionEur: { type: Number, required: true, min: 0 },
     patitasEarned: { type: Number, default: 0, min: 0 },
+    // Lo que el comercio paga por las Patitas que reparte (decisión de Jorge,
+    // 2 nov 2026): cada Patita, a su valor más el margen de la plataforma. Va
+    // incluido en commissionEur; aquí, desglosado para el extracto.
+    patitasCostEur: { type: Number, default: 0, min: 0 },
     // Liquidación del extracto: pending → invoiced → paid.
     settlementStatus: { type: String, enum: ['pending', 'invoiced', 'paid'], default: 'pending', index: true },
     invoiceRef: { type: String },

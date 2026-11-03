@@ -67,10 +67,10 @@ describe('Ventas de partner con comisión', () => {
 
     expect(res.body.commissionPct).toBe(5); // default de plataforma
     expect(res.body.commissionEur).toBeCloseTo(2.38, 2); // 5% de 47,50 redondeado a céntimos
-    expect(res.body.patitasEarned).toBe(47); // 1 Patita por €, floor
+    expect(res.body.patitasEarned).toBe(11); // la mitad de la comisión (1,19 €) en Patitas de 0,10 €
 
     const ana: any = await User.findById(clientId).select('patitas').lean();
-    expect(ana.patitas).toBe(47);
+    expect(ana.patitas).toBe(11); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
   });
 
   it('usa el % de comisión del partner si lo tiene configurado', async () => {
@@ -171,7 +171,7 @@ describe('Cupones aplicados junto con la venta (Caja propia)', () => {
     expect(res.body.appliedCoupons).toHaveLength(1);
     expect(res.body.appliedCoupons[0].title).toBe('10% en pienso');
     // Patitas de la venta (floor(47.5)=47) + bonus del cupón (20).
-    expect(res.body.patitasEarned).toBe(67);
+    expect(res.body.patitasEarned).toBe(11 + 20); // modelo del 2 nov 2026: la mitad de la comisión (5 %) vuelve en Patitas de 0,10 €
 
     const used = await Coupon.findById(coupon._id).lean();
     expect(used.usedAt).toBeTruthy();

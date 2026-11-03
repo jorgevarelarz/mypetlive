@@ -98,4 +98,16 @@ describe('La donación va a la protectora del animal', () => {
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('shelter_verification_required');
   });
+
+  // AUD-4: la vuelta de Stripe, comprobada en la sesión que se crea de verdad.
+  it('Stripe vuelve a /donate con el resultado', async () => {
+    const { Verification } = await import('../models/verification.model');
+    await Verification.create({ userId: shelterA, status: 'verified', verificationLevel: 'animal_protection_entity' });
+    await User.updateOne({ _id: shelterA }, { $set: { stripeAccountId: 'acct_test_a' } });
+    const res = await request(app).post('/api/donations/checkout-session').set(donorH).send({ amountEUR: 25, shelterId: shelterA });
+    expect(res.status).toBeLessThan(300);
+    const args = __stripeMock.checkout.sessions.create.mock.calls[0][0];
+    expect(args.success_url).toMatch(/\/donate\?donation=success&session_id=\{CHECKOUT_SESSION_ID\}$/);
+    expect(args.cancel_url).toMatch(/\/donate\?donation=cancel$/);
+  });
 });

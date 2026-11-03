@@ -346,8 +346,9 @@ export async function addHealthRecord(req: Request, res: Response) {
       $and: [
         { $or: [{ animalId: animal._id }, { animalCode: animal.code }] },
         { $or: [
-          { status: { $in: ['confirmed', 'rescheduled'] } },
-          { status: 'completed', $or: [{ scheduledAt: { $gte: desde } }, { scheduledAt: null, requestedAt: { $gte: desde } }] },
+          // Aceptadas o completadas, y con fecha en los últimos 30 días o futura
+          // (AUD-4, FAC-140): una confirmada de hace un año ya no da permiso.
+          { status: { $in: ['confirmed', 'rescheduled', 'completed'] }, $or: [{ scheduledAt: { $gte: desde } }, { scheduledAt: null, requestedAt: { $gte: desde } }] },
         ] },
       ],
     });

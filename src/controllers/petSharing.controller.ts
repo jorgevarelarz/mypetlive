@@ -157,14 +157,15 @@ export async function invite(req: Request, res: Response) {
     }),
   ).catch(err => logger.error({ err, animalId: String(animal._id) }, '[compartir] fallo al enviar la invitación'));
 
-  // A una cuenta de protectora, tienda o veterinario se le crea y se le envía como
-  // a cualquiera (AUD-3): así el dueño no distingue qué correos son cuentas
-  // profesionales. No podrá aceptarla (accept exige familia). Sin push: se acepta
-  // con el enlace del correo, y el aviso al móvil solo va a familias.
+  // A una cuenta de protectora, tienda o veterinario se le crea y envía como a
+  // cualquiera (AUD-3), así el dueño no distingue qué correos son profesionales;
+  // no podrá aceptarla (accept exige familia). A las familias con cuenta, un aviso
+  // al móvil SIN nombres (AUD-4): el alta no verifica el correo, y quien se
+  // registrara con el ajeno vería quién invita y a qué mascota sin tener el enlace.
   if (invitee && invitee.role === 'tenant') {
     sendPushToUser(String(invitee._id), {
-      title: `${who} quiere compartir a ${animal.name} contigo`,
-      body: 'Te hemos enviado un correo con el enlace para aceptarla.',
+      title: 'Tienes una invitación para cuidar de una mascota',
+      body: 'Mira tu correo: el enlace para aceptarla está allí.',
       url: '/pet',
     }).catch(() => undefined);
   }
@@ -281,7 +282,9 @@ export async function accept(req: Request, res: Response) {
   const invite: any = await resolveInvite(req);
   if (!invite) return res.status(404).json({ error: 'not_found' });
   if (invite.status === 'accepted' && String(invite.acceptedBy) === me) {
-    return res.json({ ok: true, animalId: String(invite.animalId) });
+    // Solo si sigue dentro (AUD-4): si el dueño le quitó, la invitación ya no vale.
+    const sigue = await Animal.exists({ _id: invite.animalId, 'members.userId': new Types.ObjectId(me) });
+    return sigue ? res.json({ ok: true, animalId: String(invite.animalId) }) : res.status(410).json({ error: 'invite_revoked' });
   }
   if (invite.status !== 'pending') return res.status(410).json({ error: `invite_${invite.status}` });
   if (invite.expiresAt <= new Date()) return res.status(410).json({ error: 'invite_expired' });
@@ -309,7 +312,10 @@ export async function accept(req: Request, res: Response) {
   if (!reclamada) {
     // Doble toque o reintento de la misma persona (AUD-3): ya es suya, todo bien.
     const ahora: any = await PetInvite.findById(invite._id).lean();
-    if (ahora?.status === 'accepted' && String(ahora.acceptedBy) === me) return res.json({ ok: true, animalId: String(invite.animalId) });
+    if (ahora?.status === 'accepted' && String(ahora.acceptedBy) === me
+      && await Animal.exists({ _id: invite.animalId, 'members.userId': new Types.ObjectId(me) })) {
+      return res.json({ ok: true, animalId: String(invite.animalId) });
+    }
     return res.status(410).json({ error: 'invite_accepted' });
   }
   if (!familyMemberIds(animal).includes(me)) {
@@ -340,9 +346,15 @@ export async function accept(req: Request, res: Response) {
 export async function decline(req: Request, res: Response) {
   const invite: any = await resolveInvite(req);
   if (!invite) return res.status(404).json({ error: 'not_found' });
-  if (invite.status !== 'pending') return res.status(410).json({ error: `invite_${invite.status}` });
-  invite.status = 'declined';
-  invite.respondedAt = new Date();
-  await invite.save();
+  // Atómico (AUD-4): si se aceptó entre medias, no se pisa con «rechazada».
+  const hecha = await PetInvite.findOneAndUpdate(
+    { _id: invite._id, status: 'pending' },
+    { $set: { status: 'declined', respondedAt: new Date() } },
+    { new: true },
+  );
+  if (!hecha) {
+    const ahora: any = await PetInvite.findById(invite._id).select('status').lean();
+    return res.status(410).json({ error: `invite_${ahora?.status || 'revoked'}` });
+  }
   res.json({ ok: true });
 }
