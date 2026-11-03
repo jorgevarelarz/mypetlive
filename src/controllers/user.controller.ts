@@ -275,7 +275,9 @@ export const updateUser = async (req: Request, res: Response) => {
       const incoming = sanitizeProfile(body.profile);
       // La auto-donación solo a una protectora que puede recibir donaciones
       // (AUD-5, FAC-147): antes valía cualquier cuenta, también una sin verificar.
-      const destino = incoming.autoDonate?.shelterId;
+      // Solo al activarla (AUD-6, FAC-158): apagarla siempre se puede, aunque
+      // la protectora haya perdido la verificación.
+      const destino = incoming.autoDonate?.enabled ? incoming.autoDonate?.shelterId : null;
       if (destino) {
         const prote: any = await User.findById(destino).select('role').lean();
         if (!prote || !['landlord', 'protectora'].includes(prote.role) || !(await canReceiveDonations(destino))) {
@@ -300,7 +302,8 @@ export const updateUser = async (req: Request, res: Response) => {
     res.json({ ...safe, ...(emailChangeRequested ? { emailChangePending: true } : {}) });
   } catch (error: any) {
     if (isAppError(error)) {
-      return res.status(error.status).json({ error: error.message });
+      // Con su código (AUD-6): la pantalla lo traduce.
+      return res.status(error.status).json({ error: error.message, ...((error as any).code ? { code: (error as any).code } : {}) });
     }
     if (error?.code === 11000) {
       return res.status(409).json({ error: 'Ese email ya está en uso' });

@@ -161,7 +161,7 @@ function PartnerStatements() {
                       {st.sales}
                       {(st.visitCharges || st.couponCharges) ? (
                         <div style={{ fontSize: 11.5, color: MPL.faint }}>
-                          {[st.visitCharges ? `${st.visitCharges} visitas` : '', st.couponCharges ? `${st.couponCharges} cupones sin compra` : ''].filter(Boolean).join(' · ')}
+                          {[st.visitCharges ? `${st.visitCharges} ${st.visitCharges === 1 ? 'visita' : 'visitas'}` : '', st.couponCharges ? `${st.couponCharges} ${st.couponCharges === 1 ? 'cupón' : 'cupones'} sin compra` : ''].filter(Boolean).join(' · ')}
                         </div>
                       ) : null}
                     </td>

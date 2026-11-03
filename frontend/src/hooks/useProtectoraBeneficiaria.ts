@@ -37,23 +37,40 @@ export function useProtectoraBeneficiaria() {
       qc.invalidateQueries({ queryKey: ['patitas-me'] });
       toast.success(value ? `Tus Patitas irán a ${value.name}` : 'Donación automática desactivada');
     },
-    onError: (e: any) => toast.error(e?.response?.data?.code === 'shelter_verification_required' || e?.response?.data?.error === 'shelter_verification_required'
-      ? 'Esa protectora aún no puede recibir donaciones.'
-      : 'No se pudo guardar la protectora'),
   });
+  const mensajeError = (e: any) => (e?.response?.data?.code === 'shelter_verification_required'
+    ? 'Esa protectora aún no puede recibir donaciones. Elige otra.'
+    : 'No se pudo guardar la protectora. Inténtalo de nuevo.');
 
   if (!esFamilia) {
     return {
       protectora: loadPreferredProtectora(),
       activa: false,
       cargando: false,
-      elegir: (value: PreferredProtectora | null) => savePreferredProtectora(value),
+      elegir: async (value: PreferredProtectora | null) => { savePreferredProtectora(value); return true; },
     };
   }
   return {
     protectora: delServidor,
     activa: Boolean(auto?.enabled && auto?.shelterId),
     cargando: meQ.isLoading || guardar.isPending,
-    elegir: (value: PreferredProtectora | null) => guardar.mutate(value),
+    /**
+     * Guarda la protectora y devuelve si se guardó. Si la donación automática
+     * estaba apagada, se pide permiso antes (AUD-6, FAC-161): elegir protectora
+     * la enciende, y no puede pasar sin que la persona lo sepa.
+     */
+    elegir: async (value: PreferredProtectora | null): Promise<boolean> => {
+      if (value && !(auto?.enabled && auto?.shelterId)
+        && !window.confirm(`A partir de ahora, las Patitas que ganes se donarán automáticamente a ${value.name}. Puedes cambiarlo cuando quieras en Patitas.\n\n¿Confirmar y donar mis Patitas?`)) {
+        return false;
+      }
+      try {
+        await guardar.mutateAsync(value);
+        return true;
+      } catch (e) {
+        toast.error(mensajeError(e));
+        return false;
+      }
+    },
   };
 }

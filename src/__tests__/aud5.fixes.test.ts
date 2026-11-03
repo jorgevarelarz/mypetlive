@@ -123,3 +123,36 @@ describe('FAC-150 · la caja ve lo que da y lo que cuesta', () => {
     expect(r.body.tarifa.visita.costEur).toBeCloseTo(0.6);
   });
 });
+
+// AUD-6: lo que la auditoría corta encontró en los arreglos de AUD-5.
+describe('AUD-6', () => {
+  it('apagar la donación automática se puede aunque la protectora ya no sea válida; encenderla, no', async () => {
+    const prote = id();
+    await User.create({ _id: prote, name: 'Prote', email: `p${prote}@t.com`, passwordHash: 'x', role: 'landlord' });
+    await User.updateOne({ _id: clienteId }, { $set: { 'profile.autoDonate': { enabled: true, shelterId: prote } } });
+    await request(app).patch(`/api/users/${clienteId}`).set(H(clienteId)).send({ profile: { autoDonate: { enabled: false, shelterId: prote } } }).expect(200);
+    expect((await User.findById(clienteId).lean()).profile.autoDonate.enabled).toBe(false);
+    const r = await request(app).patch(`/api/users/${clienteId}`).set(H(clienteId)).send({ profile: { autoDonate: { enabled: true, shelterId: prote } } }).expect(400);
+    expect(r.body.code).toBe('shelter_verification_required');
+  });
+
+  it('reactivar cupones a la vez no pasa del tope', async () => {
+    for (let i = 0; i < 9; i += 1) await cupon({ bonusPatitas: 10 });
+    const inactivos = await Promise.all([1, 2, 3].map(() => cupon({ bonusPatitas: 10, active: false })));
+    const r = await Promise.all(inactivos.map(c => request(app).patch(`/api/coupons/mine/${c._id}`).set(H(tiendaId, 'store')).send({ active: true })));
+    expect(r.filter(x => x.status === 200)).toHaveLength(1);
+    expect(await Coupon.countDocuments({ partnerId: tiendaId, active: true })).toBe(10);
+  });
+
+  it('la verificación solo acepta documentos privados de la propia cuenta', async () => {
+    const prote = id();
+    await User.create({ _id: prote, name: 'Prote', email: `q${prote}@t.com`, passwordHash: 'x', role: 'landlord' });
+    const base = { legalName: 'Asoc', nif: 'G12345678', autonomousCommunity: 'Galicia', representativeName: 'Ana' };
+    await request(app).post('/api/verification/submit').set(H(prote, 'landlord'))
+      .send({ ...base, documents: [{ type: 'nif', fileUrl: '/uploads/x.pdf' }] }).expect(400);
+    await request(app).post('/api/verification/submit').set(H(prote, 'landlord'))
+      .send({ ...base, documents: [{ type: 'nif', fileUrl: `/api/uploads/private/${id()}__${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}.pdf` }] }).expect(400);
+    await request(app).post('/api/verification/submit').set(H(prote, 'landlord'))
+      .send({ ...base, documents: [{ type: 'nif', fileUrl: `/api/uploads/private/${prote}__${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}.pdf` }] }).expect(201);
+  });
+});

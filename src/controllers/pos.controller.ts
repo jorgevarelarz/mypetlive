@@ -162,6 +162,7 @@ function duplicateSaleResponse(res: Response, sale: any) {
     commissionEur: sale.commissionEur,
     patitasEarned: (sale.patitasEarned || 0) + (sale.couponPatitas || 0),
     appliedCoupons,
+    skippedCoupons: sale.skippedCoupons || [],
   });
 }
 

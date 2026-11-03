@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
+import rateLimit from 'express-rate-limit';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -122,7 +123,18 @@ export const PRIVATE_DIR = path.join(process.cwd(), 'uploads-private');
 fs.mkdirSync(PRIVATE_DIR, { recursive: true });
 const NOMBRE_PRIVADO = /^([a-f\d]{24})__[0-9a-f-]{36}\.(webp|pdf)$/i;
 
-router.post('/uploads/private', authenticate as any, (req, res, next) => {
+// Límite por persona (AUD-6): sin él, cualquier cuenta podía llenar el disco.
+const MAX_PRIVADOS_POR_USUARIO = Number(process.env.PRIVATE_UPLOADS_MAX || 20);
+const privateUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.PRIVATE_UPLOADS_HOURLY || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req.user?._id || req.user?.id || req.ip),
+  handler: (_req, res) => res.status(429).json({ error: 'too_many_uploads' }),
+});
+
+router.post('/uploads/private', authenticate as any, privateUploadLimiter, (req, res, next) => {
   upload.single('file')(req as any, res as any, async (err: any) => {
     try {
       if (err) return res.status(400).json({ error: err.message || 'upload_error' });
@@ -130,6 +142,8 @@ router.post('/uploads/private', authenticate as any, (req, res, next) => {
       if (!file) return res.status(400).json({ error: 'missing_file' });
       const me = String((req as any).user?._id || (req as any).user?.id || '');
       if (!/^[a-f\d]{24}$/i.test(me)) return res.status(401).json({ error: 'unauthorized' });
+      const yaTiene = (await fs.promises.readdir(PRIVATE_DIR)).filter(f => f.startsWith(`${me}__`)).length;
+      if (yaTiene >= MAX_PRIVADOS_POR_USUARIO) return res.status(409).json({ error: 'too_many_documents', max: MAX_PRIVADOS_POR_USUARIO });
       const detected = detectFileType(file.buffer);
       if (!detected) return res.status(400).json({ error: 'invalid_file_type' });
       let buffer = file.buffer;

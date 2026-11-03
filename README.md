@@ -360,6 +360,18 @@ healthcheck:
 - Los reinicios del host conservan certificados (`nginx_certs`, `nginx_acme`).
 - `mongo` no expone puerto público (solo `expose`, accesible en la red Docker).
 
+## Documentos de verificación (zona privada)
+
+Desde el 3 nov 2026 los documentos de verificación de las protectoras se guardan en
+`uploads-private/` (volumen propio en `docker-compose.deploy.yml`) y solo los ve su
+titular o un admin (`GET /api/uploads/private/:fichero`). Los subidos antes siguen en
+`uploads/` (público). Para moverlos, una vez y a mano:
+
+```bash
+npx ts-node scripts/migrar-documentos-verificacion.ts --dry-run   # cuenta, no toca nada
+npx ts-node scripts/migrar-documentos-verificacion.ts             # copia, comprueba, reescribe y borra el original
+```
+
 ## Datos de prueba
 Tarjeta: `4242 4242 4242 4242`, fecha futura y CVC cualquiera.
 

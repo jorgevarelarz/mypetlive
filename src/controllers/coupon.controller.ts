@@ -303,15 +303,24 @@ export async function updateMyCoupon(req: Request, res: Response) {
     usedAt: coupon.usedAt,
     expiresAt: typeof data.expiresAt !== 'undefined' ? data.expiresAt : coupon.expiresAt,
   });
-  if (!antes && despues && (req as any).user?.role !== 'admin' && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
-    return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
-  }
+  const cuentaTope = !antes && despues && (req as any).user?.role !== 'admin';
   const editable = ['copy', 'title', 'description', 'discount', 'bonusPatitas', 'active', 'expiresAt', 'targetAnimalCode'] as const;
   for (const key of editable) {
     const value = (data as any)[key];
     if (typeof value !== 'undefined') (coupon as any)[key] = value;
   }
   if (typeof data.copy !== 'undefined' && !coupon.title) coupon.title = data.copy;
+  // Contar y guardar juntos, con el cerrojo del comercio (AUD-6, FAC-159).
+  if (cuentaTope) {
+    const ok = await withTxnIfAvailable(async session => {
+      await cerrar(`activos|${meId(req)}`, session);
+      if (await activosDe(meId(req), session) >= COUPON_ACTIVE_MAX_PER_PARTNER) return false;
+      await coupon.save({ session });
+      return true;
+    });
+    if (!ok) return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
+    return res.json(serializeCoupon(coupon));
+  }
   await coupon.save();
   res.json(serializeCoupon(coupon));
 }

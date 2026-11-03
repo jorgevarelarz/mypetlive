@@ -202,6 +202,7 @@ export async function applyCouponsToSale(
     );
   }
 
+  if (skippedCoupons.length) await Sale.updateOne({ _id: saleId }, { $set: { skippedCoupons } });
   return { appliedCoupons, couponPatitas, skippedCoupons };
 }
 

@@ -28,9 +28,26 @@ export async function uploadPrivateDocument(file: File): Promise<{ url: string }
 export async function abrirDocumento(url: string) {
   if (!url.startsWith('/api/uploads/private/')) { window.open(url, '_blank', 'noopener'); return; }
   const ventana = window.open('', '_blank');
-  const { data, headers } = await client.get(url, { responseType: 'blob' });
-  const blob = new Blob([data], { type: String(headers['content-type'] || 'application/octet-stream') });
-  const href = URL.createObjectURL(blob);
-  if (ventana) ventana.location.href = href; else window.location.href = href;
+  let href = '';
+  try {
+    const { data, headers } = await client.get(url, { responseType: 'blob' });
+    const blob = new Blob([data], { type: String(headers['content-type'] || 'application/octet-stream') });
+    href = URL.createObjectURL(blob);
+  } catch (e) {
+    // Sin la pestaña vacía colgando (AUD-6); quien llama avisa del error.
+    ventana?.close();
+    throw e;
+  }
+  if (ventana) {
+    ventana.location.href = href;
+  } else {
+    // Sin ventana (bloqueador o app): se descarga, sin sacar a nadie de la web.
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = url.split('/').pop() || 'documento';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
   setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }

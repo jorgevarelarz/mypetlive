@@ -40,6 +40,14 @@ router.post('/submit', async (req, res) => {
       representativeName,
       representativeRole,
     } = req.body || {};
+    // Solo documentos de la zona privada y de esta cuenta (AUD-6, FAC-160): una
+    // URL de /uploads quedaría pública otra vez.
+    const privada = new RegExp(`^/api/uploads/private/${String(userId)}__[0-9a-f-]{36}\\.(webp|pdf)$`, 'i');
+    const urls = [
+      ...(Array.isArray(documents) ? documents.map((d: any) => d?.fileUrl) : documents ? [null] : []),
+      ...(Array.isArray(files) ? files.map((f: any) => (typeof f === 'string' ? f : f?.url || f?.fileUrl)) : files ? [null] : []),
+    ];
+    if (urls.some(u => typeof u !== 'string' || !privada.test(u))) return res.status(400).json({ error: 'invalid_document_url' });
     const v = await Verification.findOneAndUpdate(
       { userId },
       {

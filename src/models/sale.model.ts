@@ -54,6 +54,12 @@ const saleSchema = new Schema(
       ],
       default: undefined,
     },
+    // Cupones que no se aplicaron por el tope del cliente (AUD-6): para que el
+    // reintento idempotente del TPV devuelva lo mismo.
+    skippedCoupons: {
+      type: [new Schema({ couponId: { type: String }, title: { type: String }, reason: { type: String } }, { _id: false })],
+      default: undefined,
+    },
     // Patitas extra por cupones (separado de patitasEarned, lo proporcional al importe).
     couponPatitas: { type: Number, default: 0, min: 0 },
   },

@@ -72,9 +72,9 @@ export default function CouponsList() {
 
   const setPreferredProtectora = (value: PreferredProtectora | null) => beneficiaria.elegir(value);
 
-  const handleProtectoraSelected = (option: PreferredProtectora) => {
-    setPreferredProtectora(option);
-    setSelectorOpen(false);
+  // Se cierra solo si se guardó (AUD-6): si falla, sigue abierto para elegir otra.
+  const handleProtectoraSelected = async (option: PreferredProtectora) => {
+    if (await setPreferredProtectora(option)) setSelectorOpen(false);
   };
 
   // El cupón se canjea en caja: la tienda identifica al cliente por su código

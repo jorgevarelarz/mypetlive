@@ -623,8 +623,9 @@ export default function PetPage() {
     setSelectProtectoraOpen(true);
   };
 
-  const handleProtectoraSelected = (option: PreferredProtectora) => {
-    setPreferredProtectora(option);
+  // Cerrar y navegar solo si se guardó (AUD-6): si falla, el selector sigue abierto.
+  const handleProtectoraSelected = async (option: PreferredProtectora) => {
+    if (!(await setPreferredProtectora(option))) return;
     setSelectProtectoraOpen(false);
     if (pendingCouponsNav) {
       setPendingCouponsNav(false);
