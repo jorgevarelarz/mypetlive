@@ -101,4 +101,18 @@ describe('Subida de ficheros', () => {
       );
     expect(res.status).toBe(400);
   });
+
+  // AUD-5 (FAC-149): documentos de verificación fuera de lo público.
+  it('un documento privado solo lo ven su titular y un admin, y no está en /uploads', async () => {
+    const dueño = new mongoose.Types.ObjectId().toHexString();
+    const H = (id: string, role: string) => ({ 'x-user-id': id, 'x-user-role': role, 'x-user-verified': 'true' });
+    const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF');
+    const subida = await request(app).post('/api/uploads/private').set(H(dueño, 'landlord'))
+      .attach('file', pdf, { filename: 'nif.pdf', contentType: 'application/pdf' }).expect(200);
+    expect(subida.body.url).toMatch(/^\/api\/uploads\/private\//);
+    await request(app).get(subida.body.url).set(H(dueño, 'landlord')).expect(200).expect('Cache-Control', /no-store/);
+    await request(app).get(subida.body.url).set(H(new mongoose.Types.ObjectId().toHexString(), 'landlord')).expect(404);
+    await request(app).get(subida.body.url).set(H(new mongoose.Types.ObjectId().toHexString(), 'admin')).expect(200);
+    await request(app).get(`/uploads/${subida.body.filename}`).expect(404);
+  });
 });

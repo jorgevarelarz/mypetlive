@@ -10,7 +10,7 @@ import {
   type VerificationDocument,
   type VerificationDocumentType,
 } from '../../api/verification';
-import { uploadImage } from '../../api/uploads';
+import { uploadPrivateDocument, abrirDocumento } from '../../api/uploads';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 
 const CCAA = [
@@ -217,7 +217,8 @@ export default function ShelterVerificationPage() {
     }
     setUploading(true);
     try {
-      const { url } = await uploadImage(file);
+      // A la zona privada (AUD-5): solo tú y el equipo de MyPetLive podéis verlo.
+      const { url } = await uploadPrivateDocument(file);
       setDocuments(prev => [...prev, { type: docType, fileUrl: url, status: 'pending' }]);
     } catch (error: any) {
       // El código crudo del backend (`invalid_file_type`) se pintaba tal cual.
@@ -353,7 +354,8 @@ export default function ShelterVerificationPage() {
               {documents.map((doc, i) => (
                 <li key={`${doc.fileUrl}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${MPL.border}`, borderRadius: 10, padding: '8px 12px', fontSize: 13.5 }}>
                   <span style={{ fontWeight: 700 }}>{docLabel(doc.type)}</span>
-                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" style={{ color: MPL.tealDark }}>ver archivo</a>
+                  <button type="button" onClick={() => { abrirDocumento(doc.fileUrl).catch(() => toast.error('No se pudo abrir el archivo')); }}
+                    style={{ border: 0, background: 'none', padding: 0, color: MPL.tealDark, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>ver archivo</button>
                   <button type="button" onClick={() => setDocuments(prev => prev.filter((_, idx) => idx !== i))}
                     style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#8F2F2F', cursor: 'pointer', display: 'inline-flex' }}
                     aria-label="Quitar documento">

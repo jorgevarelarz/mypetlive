@@ -108,6 +108,25 @@ describe('Cambio de email con doble opt-in', () => {
     expect(recipients()).toContain(OLD);
   });
 
+  // AUD-5 (FAC-146): recuperar la cuenta anula el cambio de correo pendiente.
+  it('tras restablecer la contraseña, el enlace de un cambio pendiente ya no vale', async () => {
+    await requestChange(NEW).expect(200);
+    const { token } = await pendingToken();
+    const { createHash } = await import('crypto');
+    await User.updateOne({ _id: userId }, { $set: { resetToken: createHash('sha256').update('rt-1').digest('hex'), resetTokenExp: new Date(Date.now() + 3_600_000) } });
+    await request(app).post('/api/auth/reset').send({ token: 'rt-1', password: 'OtraClave123!' }).expect(200);
+    await request(app).post('/api/users/email/confirm').send({ token }).expect(400);
+    expect((await User.findById(userId).lean() as any).email).toBe(OLD);
+  });
+
+  it('si suben las sesiones de la cuenta (tokenVersion), el enlace ya no vale', async () => {
+    await requestChange(NEW).expect(200);
+    const { token } = await pendingToken();
+    await User.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } });
+    await request(app).post('/api/users/email/confirm').send({ token }).expect(400);
+    expect((await User.findById(userId).lean() as any).email).toBe(OLD);
+  });
+
   it('un token inválido, gastado o caducado no cambia nada', async () => {
     await request(app).post('/api/users/email/confirm').send({ token: 'inventado' }).expect(400);
     await request(app).post('/api/users/email/confirm').send({}).expect(400);

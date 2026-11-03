@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { ShieldCheck, ShieldX } from 'lucide-react';
 import { api as client } from '../../api/client';
+import { abrirDocumento } from '../../api/uploads';
 import { MPL, MPL_FONT_DISPLAY } from '../../styles/mypetlive';
 
 type Row = {
@@ -116,10 +117,10 @@ function VerificationCard({ row, onDone }: { row: Row; onDone: () => void }) {
       {(row.documents?.length || 0) > 0 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {row.documents!.map((doc, i) => (
-            <a key={`${doc.fileUrl}-${i}`} href={doc.fileUrl} target="_blank" rel="noreferrer"
-              style={{ fontSize: 12.5, fontWeight: 700, border: `1px solid ${MPL.border}`, borderRadius: 999, padding: '5px 12px', color: MPL.tealDark, textDecoration: 'none' }}>
+            <button type="button" key={`${doc.fileUrl}-${i}`} onClick={() => { abrirDocumento(doc.fileUrl).catch(() => toast.error('No se pudo abrir el documento')); }}
+              style={{ fontSize: 12.5, fontWeight: 700, border: `1px solid ${MPL.border}`, borderRadius: 999, padding: '5px 12px', color: MPL.tealDark, background: '#fff', cursor: 'pointer' }}>
               📄 {DOC_LABEL[doc.type] || doc.type}
-            </a>
+            </button>
           ))}
         </div>
       )}

@@ -16,6 +16,8 @@ export type Coupon = {
   bonusPatitas?: number | null;
   /** Patitas que da de verdad (las suyas o las de por defecto del servidor). */
   rewardPatitas?: number;
+  /** Lo que cuesta al comercio cada uso (Patitas a su valor + margen). */
+  costEur?: number;
   expiresAt?: string | null;
   usedAt?: string | null;
 };
@@ -51,7 +53,7 @@ export type PartnerCouponInput = {
 
 export async function listMyCoupons() {
   const { data } = await client.get('/api/coupons/mine');
-  return data as { items: Coupon[] };
+  return data as { items: Coupon[]; tarifa?: { costePorPatitaEur: number; visita: { patitas: number; costEur: number }; cuponPorDefecto: number } };
 }
 
 export async function createMyCoupon(payload: PartnerCouponInput) {

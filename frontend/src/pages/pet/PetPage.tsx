@@ -39,7 +39,8 @@ import RehomeEntry from '../../components/rehome/RehomeEntry';
 import MemorialFamily from '../../components/memorial/MemorialFamily';
 import FarewellSheet from '../../components/memorial/FarewellSheet';
 import { startMemorial } from '../../api/memorial';
-import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
+import { type PreferredProtectora } from '../../utils/preferredProtectora';
+import { useProtectoraBeneficiaria } from '../../hooks/useProtectoraBeneficiaria';
 import { healthCategoryLabel, moodLabel, speciesLabel } from '../../styles/mypetlive';
 import { shareLink, webUrl, openPaymentPage, isNativeApp } from '../../utils/native';
 
@@ -210,14 +211,13 @@ export default function PetPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [registerForm, setRegisterForm] = useState<RegisterForm>(REGISTER_INITIAL);
-  const [preferredProtectora, setPreferredProtectoraState] = useState<PreferredProtectora | null>(() => loadPreferredProtectora());
+  // La de la donación automática del perfil, que es adonde van las Patitas (AUD-5).
+  const beneficiaria = useProtectoraBeneficiaria();
+  const preferredProtectora = beneficiaria.activa ? beneficiaria.protectora : null;
   const [selectProtectoraOpen, setSelectProtectoraOpen] = useState(false);
   const [pendingCouponsNav, setPendingCouponsNav] = useState(false);
   const assignedAnimalId = (user as any)?.assignedAnimalId || (user as any)?.animalId || (user as any)?.petId || null;
-  const setPreferredProtectora = (value: PreferredProtectora | null) => {
-    setPreferredProtectoraState(value);
-    savePreferredProtectora(value);
-  };
+  const setPreferredProtectora = (value: PreferredProtectora | null) => beneficiaria.elegir(value);
 
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -284,11 +284,9 @@ export default function PetPage() {
     return { id: String(shelterId), name: shelterName } as PreferredProtectora;
   }, [petItems]);
 
-  useEffect(() => {
-    if (!preferredProtectora && adoptedProtectora) {
-      setPreferredProtectora(adoptedProtectora);
-    }
-  }, [preferredProtectora, adoptedProtectora]);
+  // Ya no se elige sola la protectora de adopción: activaría la donación
+  // automática sin que la persona lo pidiera (AUD-5). Se ofrece al elegir.
+  void adoptedProtectora;
 
   const isPersonal = Boolean(featuredAnimal?.isPersonalPet);
   const shelterId = !isPersonal && featuredAnimal?.shelter ? String(featuredAnimal.shelter) : undefined;

@@ -127,6 +127,24 @@ describe('Borrar la cuenta propia', () => {
     expect((await User.findById(shelterId).lean()).deletedAt).toBeNull();
   });
 
+  // AUD-5 (FAC-148): un comercio que debe comisiones o al que se deben canjes.
+  it('un comercio con comisiones sin liquidar o canjes por cobrar no puede borrarse', async () => {
+    const storeId = new mongoose.Types.ObjectId().toHexString();
+    const storeH = { 'x-user-id': storeId, 'x-user-role': 'store', 'x-user-verified': 'true' };
+    await User.create({ _id: storeId, name: 'Tienda', email: 'tienda@test.com', passwordHash: 'x', role: 'store' });
+    const { Sale } = await import('../models/sale.model');
+    const { PatitaTxn } = await import('../models/patitaTxn.model');
+    const venta = await Sale.create({ partnerId: storeId, partnerType: 'store', userId: adopterId, amountEur: 20, commissionPct: 5, commissionEur: 1 });
+    let res = await request(app).get('/api/auth/account/deletion-check').set(storeH).expect(200);
+    expect(res.body.blockers).toContain('pending_settlements');
+    await Sale.updateOne({ _id: venta._id }, { settlementStatus: 'paid' });
+    res = await request(app).get('/api/auth/account/deletion-check').set(storeH).expect(200);
+    expect(res.body.blockers).not.toContain('pending_settlements');
+    await PatitaTxn.create({ type: 'redeem', shelterId, partnerId: storeId, amount: 10, valueEur: 1, code: 'R-1', status: 'pending_payout' });
+    res = await request(app).get('/api/auth/account/deletion-check').set(storeH).expect(200);
+    expect(res.body.blockers).toContain('pending_redemptions');
+  });
+
   it('una cita veterinaria pendiente bloquea el borrado', async () => {
     await VetAppointment.create({
       vetId, userId: adopterId, animalCode: 'MPL-TOBY01', reason: 'Vacuna', requestedAt: new Date(Date.now() + 86400000), status: 'requested',

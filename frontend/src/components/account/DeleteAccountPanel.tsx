@@ -13,6 +13,8 @@ const BLOCKER_TEXT: Record<DeletionBlocker, string> = {
   locked_patitas: 'Tienes Patitas reservadas para una cita. Se liberan al cancelarla o completarla.',
   patitas_balance: 'Tu protectora todavía tiene Patitas. Escríbenos y te ayudamos a canjearlas.',
   pending_payouts: 'Tienes liquidaciones de Patitas pendientes de cobro.',
+  pending_settlements: 'Tienes comisiones de ventas, cupones o visitas sin liquidar. Cuando estén pagadas podrás borrar la cuenta.',
+  pending_redemptions: 'Tienes canjes de Patitas que aún te tenemos que pagar. Espera a recibirlos o escríbenos.',
   open_orders_as_seller: 'Tienes pedidos de tu tienda sin entregar.',
   open_orders_as_buyer: 'Tienes pedidos en camino. Podrás borrar la cuenta cuando lleguen.',
   open_adoptions_as_shelter: 'Hay adopciones en curso de tus animales. Ciérralas antes de irte.',

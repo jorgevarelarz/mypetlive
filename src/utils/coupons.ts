@@ -1,3 +1,4 @@
+import { recompensaCupon, costePatitasEur } from './couponRules';
 import { Animal } from '../models/animal.model';
 import { Coupon } from '../models/coupon.model';
 import { purchasedItemNames, itemsMatch } from './purchases';
@@ -40,5 +41,9 @@ export const serializeCoupon = (c: any) => ({
   title: c.title || c.copy,
   discount: c.discount,
   bonusPatitas: c.bonusPatitas || 0,
+  // Lo que de verdad da y lo que le cuesta al comercio (AUD-5, FAC-150): con
+  // bonus 0 se dan las de por defecto, y se pagan.
+  rewardPatitas: recompensaCupon(c.bonusPatitas),
+  costEur: costePatitasEur(recompensaCupon(c.bonusPatitas)),
   targetAnimalCode: c.targetAnimalCode || null,
 });

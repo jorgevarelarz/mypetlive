@@ -4,6 +4,7 @@ import { ClientSession } from 'mongoose';
 import { getJwtSecret } from '../config/jwt';
 import { User } from '../models/user.model';
 import { PatitaTxn } from '../models/patitaTxn.model';
+import { canReceiveDonations } from './shelterVerification';
 
 // 1 Patita = 0,10 € por defecto (configurable). Las Patitas son moneda de impacto:
 // el usuario las genera, las dona a una protectora, y la protectora las canjea en un
@@ -202,7 +203,9 @@ export async function earnForUser(input: EarnInput, session?: ClientSession): Pr
 
   const user = await User.findById(userId).select('profile.autoDonate').session(session ?? null).lean();
   const auto = (user as any)?.profile?.autoDonate;
-  if (auto?.enabled && auto?.shelterId) {
+  // Solo si sigue pudiendo recibir donaciones (AUD-5, FAC-147): si dejó de estar
+  // verificada, las Patitas se quedan en el cliente.
+  if (auto?.enabled && auto?.shelterId && await canReceiveDonations(String(auto.shelterId))) {
     const shelterId = String(auto.shelterId);
     const moved = await transferPatitas(userId, shelterId, amount, session);
     if (moved) {

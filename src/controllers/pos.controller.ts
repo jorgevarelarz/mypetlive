@@ -229,7 +229,7 @@ export async function posSale(req: Request, res: Response) {
   }
 
   const coupons = await couponsToApplyForSale(partnerId, userId, req.body);
-  const { appliedCoupons, couponPatitas } = await applyCouponsToSale(sale.saleId, partnerId, userId, coupons);
+  const { appliedCoupons, couponPatitas, skippedCoupons } = await applyCouponsToSale(sale.saleId, partnerId, userId, coupons);
 
   res.status(201).json({
     ok: true,
@@ -238,5 +238,6 @@ export async function posSale(req: Request, res: Response) {
     commissionEur: Math.round((sale.commissionEur + costePatitasEur(couponPatitas)) * 100) / 100,
     patitasEarned: sale.patitasEarned + couponPatitas,
     appliedCoupons,
+    skippedCoupons,
   });
 }

@@ -167,4 +167,23 @@ describe('Flujo de Patitas (moneda de impacto)', () => {
     await request(app).post('/api/patitas/redeem/confirm').set(tenantH).send({ walletToken: wallet.body.token, amount: 1 }).expect(403);
     await request(app).post('/api/patitas/donate').set(storeH).send({ shelterId, amount: 1 }).expect(403);
   });
+
+  it('si la protectora deja de estar verificada, las Patitas se quedan en el cliente', async () => {
+    // La protectora del beforeEach está verificada: se puede elegir.
+    await request(app).patch(`/api/users/${tenantId}`).set(tenantH).send({ profile: { autoDonate: { enabled: true, shelterId } } }).expect(200);
+    await Verification.updateOne({ userId: shelterId }, { $set: { status: 'rejected' } });
+    const coupon = await Coupon.create({ partnerId: storeId, partnerType: 'store', copy: 'X', discount: '5%', active: true, bonusPatitas: 12 });
+    const res = await request(app).post(`/api/coupons/${coupon._id}/use`).set(storeH).send({ userToken: signUserToken(tenantId) }).expect(200);
+    expect(res.body.earn.autoDonated).toBe(false);
+    expect(await balance(tenantId)).toBe(12);
+    expect(await balance(shelterId)).toBe(0);
+  });
+
+  it('no se puede poner de destino a un usuario normal ni a una protectora sin verificar', async () => {
+    await Verification.updateOne({ userId: shelterId }, { $set: { status: 'pending' } });
+    await request(app).patch(`/api/users/${tenantId}`).set(tenantH).send({ profile: { autoDonate: { enabled: true, shelterId } } }).expect(400);
+    const otro = new mongoose.Types.ObjectId().toHexString();
+    await User.create({ _id: otro, name: 'X', email: 'x@x.com', passwordHash: 'x', role: 'tenant' });
+    await request(app).patch(`/api/users/${tenantId}`).set(tenantH).send({ profile: { autoDonate: { enabled: true, shelterId: otro } } }).expect(400);
+  });
 });

@@ -127,6 +127,11 @@ export const socialLogin = async (req: Request, res: Response) => {
         if (firstProvider && user.passwordHash) {
           user.passwordHash = undefined;
           user.tokenVersion = (user.tokenVersion || 0) + 1;
+          // Un cambio de correo pendiente de quien se registró antes, tampoco (AUD-5).
+          user.set('pendingEmail', undefined);
+          user.set('pendingEmailToken', undefined);
+          user.set('pendingEmailExp', undefined);
+          user.set('pendingEmailVersion', undefined);
         }
         // Al vincular, la foto de Google entra solo si la cuenta no tenía.
         const picture = avatarFrom(claims);

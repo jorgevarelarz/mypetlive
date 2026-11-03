@@ -1,3 +1,4 @@
+import { ES_VENTA } from '../utils/settlement';
 import { Router } from 'express';
 import { Types } from 'mongoose';
 import asyncHandler from '../utils/asyncHandler';
@@ -44,7 +45,8 @@ router.get(
         {
           $group: {
             _id: '$partnerId',
-            sales: { $sum: 1 },
+            sales: { $sum: ES_VENTA },
+            charges: { $sum: { $subtract: [1, ES_VENTA] } },
             amountEur: { $sum: '$amountEur' },
             commissionEur: { $sum: '$commissionEur' },
             pendingCommissionEur: {
@@ -56,7 +58,7 @@ router.get(
         { $unwind: { path: '$partner', preserveNullAndEmptyArrays: true } },
         {
           $project: {
-            partnerId: '$_id', _id: 0, sales: 1, amountEur: 1, commissionEur: 1, pendingCommissionEur: 1,
+            partnerId: '$_id', _id: 0, sales: 1, charges: 1, amountEur: 1, commissionEur: 1, pendingCommissionEur: 1,
             partnerName: { $ifNull: ['$partner.profile.orgName', '$partner.name'] },
           },
         },
@@ -80,7 +82,7 @@ router.get(
       {
         $group: {
           _id: '$userId',
-          sales: { $sum: 1 },
+          sales: { $sum: ES_VENTA },
           amountEur: { $sum: '$amountEur' },
           commissionEur: { $sum: '$commissionEur' },
         },

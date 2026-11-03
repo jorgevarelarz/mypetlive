@@ -1,3 +1,4 @@
+import { ES_VENTA, SOLO_VENTAS } from '../utils/settlement';
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Animal } from '../models/animal.model';
@@ -151,7 +152,7 @@ export async function platformMetrics(req: Request, res: Response) {
   const salesAgg = (match: Record<string, unknown>) =>
     Sale.aggregate([
       { $match: match },
-      { $group: { _id: null, count: { $sum: 1 }, amountEur: { $sum: '$amountEur' }, commissionEur: { $sum: '$commissionEur' } } },
+      { $group: { _id: null, count: { $sum: ES_VENTA }, amountEur: { $sum: '$amountEur' }, commissionEur: { $sum: '$commissionEur' } } },
     ]);
   const donationsAgg = (match: Record<string, unknown>) =>
     Donation.aggregate([
@@ -263,7 +264,7 @@ export async function partnerMetrics(req: Request, res: Response) {
   // Clientes únicos vistos por el partner: identificados, compradores o usuarios de cupón.
   const [identified, buyers, couponUsers] = await Promise.all([
     PartnerIdentification.distinct('userId', { partnerId }),
-    Sale.distinct('userId', { partnerId }),
+    Sale.distinct('userId', { partnerId, ...SOLO_VENTAS }),
     Coupon.distinct('usedBy', { partnerId, usedBy: { $exists: true, $ne: null } }),
   ]);
   const customers = new Set([...identified, ...buyers, ...couponUsers].map(id => String(id)));
@@ -271,7 +272,7 @@ export async function partnerMetrics(req: Request, res: Response) {
   const salesAgg = (match: Record<string, unknown>) =>
     Sale.aggregate([
       { $match: match },
-      { $group: { _id: null, count: { $sum: 1 }, amountEur: { $sum: '$amountEur' }, commissionEur: { $sum: '$commissionEur' } } },
+      { $group: { _id: null, count: { $sum: ES_VENTA }, amountEur: { $sum: '$amountEur' }, commissionEur: { $sum: '$commissionEur' } } },
     ]);
   const [salesAll, salesMonth, patitasReceived] = await Promise.all([
     salesAgg({ partnerId }),

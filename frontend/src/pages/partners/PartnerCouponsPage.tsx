@@ -254,8 +254,12 @@ export default function PartnerCouponsPage() {
               {/* Las Patitas las paga el comercio (2 nov 2026): se le dice cuánto le cuesta. */}
               <span style={{ color: MPL.muted, fontSize: 12 }}>
                 {(() => {
-                  const n = Number(form.bonusPatitas) > 0 ? Math.round(Number(form.bonusPatitas)) : 20;
-                  return `${Number(form.bonusPatitas) > 0 ? '' : 'Vacío o 0: 20 Patitas. '}Cada uso te cuesta ${(n * 0.12).toFixed(2).replace('.', ',')} € en la comisión (0,12 € por Patita).`;
+                  // Los precios vienen del servidor (AUD-5), no escritos aquí.
+                  const t = data?.tarifa;
+                  if (!t) return null;
+                  const n = Number(form.bonusPatitas) > 0 ? Math.round(Number(form.bonusPatitas)) : t.cuponPorDefecto;
+                  const e = (x: number) => `${x.toFixed(2).replace('.', ',')} €`;
+                  return `${Number(form.bonusPatitas) > 0 ? '' : `Vacío o 0: ${t.cuponPorDefecto} Patitas. `}Cada uso te cuesta ${e(n * t.costePorPatitaEur)} en la comisión (${e(t.costePorPatitaEur)} por Patita).`;
                 })()}
               </span>
             </label>

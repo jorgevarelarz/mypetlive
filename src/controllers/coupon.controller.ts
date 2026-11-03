@@ -5,7 +5,7 @@ import { PatitaLog } from '../models/patitaLog.model';
 import { User } from '../models/user.model';
 import { earnForUser, COUPON_PATITAS_REWARD_DEFAULT } from '../utils/patitas';
 import { COUPON_BONUS_MAX_PATITAS, COUPON_ACTIVE_MAX_PER_PARTNER } from '../utils/limits';
-import { beneficiarioValido, patitasCuponDisponibles } from '../utils/couponRules';
+import { beneficiarioValido, patitasCuponDisponibles, recompensaCupon, costePatitasEur, tarifaPatitas, cerrar } from '../utils/couponRules';
 import { cargarPatitas } from '../utils/sales';
 import { withTxnIfAvailable } from '../utils/txn';
 import { resolveUserFromBody } from './patitas.controller';
@@ -58,7 +58,8 @@ function serializeCoupon(doc: any) {
     bonusPatitas: doc.bonusPatitas,
     // Lo que de verdad concede el servidor al usarlo (AUD-2, FAC-122): la web
     // prometía 40 cuando, sin bonus propio, se dan COUPON_PATITAS_REWARD_DEFAULT.
-    rewardPatitas: Number(doc.bonusPatitas) > 0 ? Math.round(Number(doc.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT,
+    rewardPatitas: recompensaCupon(doc.bonusPatitas),
+    costEur: costePatitasEur(recompensaCupon(doc.bonusPatitas)),
     active: doc.active,
     sponsored: !!doc.sponsored,
     sponsorshipStatus: doc.sponsorshipStatus || 'none',
@@ -222,16 +223,18 @@ export async function listMyCoupons(req: Request, res: Response) {
   const coupons = await Coupon.find({ partnerId: meId(req) })
     .sort({ createdAt: -1 })
     .lean();
-  res.json({ items: coupons.map(serializeCoupon) });
+  res.json({ items: coupons.map(serializeCoupon), tarifa: tarifaPatitas() });
 }
 
 /** Cupones del comercio que aún se pueden usar (activos, sin usar y sin caducar). */
-async function activosDe(partnerId: string) {
+async function activosDe(partnerId: string, session?: any) {
   return Coupon.countDocuments({
     partnerId, active: true, usedAt: null,
     $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-  });
+  }).session(session ?? null);
 }
+const utilizable = (c: { active?: boolean; usedAt?: any; expiresAt?: any }) =>
+  c.active !== false && !c.usedAt && (!c.expiresAt || new Date(c.expiresAt).getTime() > Date.now());
 
 export async function createMyCoupon(req: Request, res: Response) {
   const user: any = (req as any).user;
@@ -243,11 +246,13 @@ export async function createMyCoupon(req: Request, res: Response) {
   }
   const invalid = partnerCouponError(data);
   if (invalid) return res.status(invalid.status).json(invalid.body);
-  if (user.role !== 'admin' && data.active !== false && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
-    return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
+  // Contar y crear van juntos, con el cerrojo del comercio (AUD-5, FAC-156).
+  const coupon = await withTxnIfAvailable(async session => {
+  if (user.role !== 'admin' && data.active !== false) {
+    await cerrar(`activos|${meId(req)}`, session);
+    if (await activosDe(meId(req), session) >= COUPON_ACTIVE_MAX_PER_PARTNER) return null;
   }
-
-  const coupon = await Coupon.create({
+  const [creado] = await Coupon.create([{
     partnerId: meId(req),
     partnerType: user.role,
     copy: copyValue,
@@ -258,7 +263,10 @@ export async function createMyCoupon(req: Request, res: Response) {
     targetAnimalCode: data.targetAnimalCode || undefined,
     active: typeof data.active === 'boolean' ? data.active : true,
     expiresAt: data.expiresAt,
+  }], session ? { session } : {});
+  return creado;
   });
+  if (!coupon) return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
   res.status(201).json(serializeCoupon(coupon));
 }
 
@@ -287,8 +295,15 @@ export async function updateMyCoupon(req: Request, res: Response) {
 
   // Lista blanca explícita: pickFields ya deja fuera sponsored/usedAt, y
   // partnerId/partnerType se ignoran aunque vengan en el body.
-  if (data.active === true && !coupon.active && (req as any).user?.role !== 'admin'
-    && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
+  // Si pasa de no utilizable a utilizable (reactivarlo o alargar su caducidad),
+  // cuenta para el tope (AUD-5, FAC-156).
+  const antes = utilizable(coupon as any);
+  const despues = utilizable({
+    active: typeof data.active === 'boolean' ? data.active : coupon.active,
+    usedAt: coupon.usedAt,
+    expiresAt: typeof data.expiresAt !== 'undefined' ? data.expiresAt : coupon.expiresAt,
+  });
+  if (!antes && despues && (req as any).user?.role !== 'admin' && await activosDe(meId(req)) >= COUPON_ACTIVE_MAX_PER_PARTNER) {
     return res.status(409).json({ error: 'too_many_active_coupons', max: COUPON_ACTIVE_MAX_PER_PARTNER });
   }
   const editable = ['copy', 'title', 'description', 'discount', 'bonusPatitas', 'active', 'expiresAt', 'targetAnimalCode'] as const;

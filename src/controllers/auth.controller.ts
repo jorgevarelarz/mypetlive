@@ -202,6 +202,12 @@ export const resetPassword = async (req: Request, res: Response) => {
     // firma y su caducidad sigan siendo válidas. Es justo lo que faltaba: sin
     // esto, restablecer la contraseña no cerraba ninguna sesión ya abierta.
     user.tokenVersion = (user.tokenVersion || 0) + 1;
+    // Y anula un cambio de correo pendiente (AUD-5, FAC-146): quien robó la
+    // sesión pudo pedirlo hacia su dirección y quedarse la cuenta con el enlace.
+    user.set('pendingEmail', undefined);
+    user.set('pendingEmailToken', undefined);
+    user.set('pendingEmailExp', undefined);
+    user.set('pendingEmailVersion', undefined);
     await user.save();
 
     res.json({ ok: true });

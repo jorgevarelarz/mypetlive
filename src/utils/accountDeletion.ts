@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import bcrypt from 'bcryptjs';
 import { Types } from 'mongoose';
 import { User } from '../models/user.model';
@@ -7,6 +9,8 @@ import { PetInvite } from '../models/petInvite.model';
 import { Adoption } from '../models/adoption.model';
 import { VetAppointment } from '../models/vetAppointment.model';
 import { Order } from '../models/order.model';
+import { Sale } from '../models/sale.model';
+import { PatitaTxn } from '../models/patitaTxn.model';
 import { Product } from '../models/product.model';
 import { PushSubscription } from '../models/pushSubscription.model';
 import { NativePushToken } from '../models/nativePushToken.model';
@@ -37,6 +41,8 @@ export type DeletionBlocker =
   | 'locked_patitas'
   | 'patitas_balance'
   | 'pending_payouts'
+  | 'pending_settlements'
+  | 'pending_redemptions'
   | 'open_orders_as_seller'
   | 'open_orders_as_buyer'
   | 'open_adoptions_as_shelter'
@@ -66,6 +72,18 @@ export async function findDeletionBlockers(userId: string): Promise<DeletionBloc
   if (payouts > 0) blockers.push('pending_payouts');
   if (asSeller > 0) blockers.push('open_orders_as_seller');
   if (asBuyer > 0) blockers.push('open_orders_as_buyer');
+
+  // Un comercio que debe comisiones (las Patitas que reparte las paga con ellas)
+  // o al que aún le debemos canjes no puede borrarse (AUD-5, FAC-148): al
+  // anonimizar no quedaría a quién cobrar ni dónde pagar.
+  if (user.role === 'store' || user.role === 'vet') {
+    const [sinLiquidar, canjes] = await Promise.all([
+      Sale.countDocuments({ partnerId: id, settlementStatus: { $in: ['pending', 'invoiced'] }, commissionEur: { $gt: 0 } }),
+      PatitaTxn.countDocuments({ partnerId: id, type: 'redeem', status: 'pending_payout' }),
+    ]);
+    if (sinLiquidar > 0) blockers.push('pending_settlements');
+    if (canjes > 0) blockers.push('pending_redemptions');
+  }
 
   if (user.role === 'landlord') {
     // Las Patitas de una protectora valen dinero (se canjean en partners): no se
@@ -174,4 +192,11 @@ export async function deleteAccount(userId: string): Promise<void> {
       opts,
     );
   });
+
+  // Los documentos de verificación (privados) se borran con la cuenta (AUD-5).
+  try {
+    const dir = path.join(process.cwd(), 'uploads-private');
+    const mios = (await fs.promises.readdir(dir)).filter(f => f.startsWith(`${userId}__`));
+    await Promise.allSettled(mios.map(f => fs.promises.unlink(path.join(dir, f))));
+  } catch { /* sin directorio, nada que borrar */ }
 }

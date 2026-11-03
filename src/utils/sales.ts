@@ -5,7 +5,8 @@ import { PartnerIdentification } from '../models/partnerIdentification.model';
 import { earnForUser, EarnResult, COUPON_PATITAS_REWARD_DEFAULT, PATITA_VALUE_EUR } from './patitas';
 import { eligibleCoupons, serializeCoupon } from './coupons';
 import { withTxnIfAvailable } from './txn';
-import { patitasCuponDisponibles } from './couponRules';
+import { patitasCuponDisponibles, costePatitasEur, PATITA_MARGIN_PCT } from './couponRules';
+export { costePatitasEur, PATITA_MARGIN_PCT };
 
 // Comisión de plataforma por defecto (%) sobre ventas de partners y Patitas por € de compra.
 export const DEFAULT_SALE_COMMISSION_PCT = Number(process.env.PLATFORM_SALE_COMMISSION_PCT || 5);
@@ -22,14 +23,6 @@ export const PATITAS_COMMISSION_SHARE_PCT = (() => {
   const n = Number(process.env.PATITAS_COMMISSION_SHARE_PCT);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 50;
 })();
-export const PATITA_MARGIN_PCT = (() => {
-  const n = Number(process.env.PATITA_MARGIN_PCT);
-  return Number.isFinite(n) && n >= 0 ? n : 20;
-})();
-export function costePatitasEur(patitas: number) {
-  return Math.round(Math.max(0, patitas) * PATITA_VALUE_EUR * (1 + PATITA_MARGIN_PCT / 100) * 100) / 100;
-}
-
 /** Cargo al comercio por Patitas dadas sin compra (cupón suelto o visita). */
 export async function cargarPatitas(
   input: { partnerId: string; partnerType: 'store' | 'vet'; userId: string; patitas: number; kind: 'coupon' | 'visit'; appliedCoupon?: any },
@@ -142,14 +135,17 @@ export type AppliedSaleCoupon = ReturnType<typeof serializeCoupon> & { bonusPati
 // concurrentes) + Patitas de bonus al cliente, y persiste el detalle en la venta
 // para auditoría y para que un reintento idempotente devuelva la misma respuesta.
 class SinCupo extends Error {}
+export type SkippedSaleCoupon = { couponId: string; title?: string; reason: 'coupon_patitas_limit' };
 
 export async function applyCouponsToSale(
   saleId: string,
   partnerId: string,
   userId: string,
   coupons: any[],
-): Promise<{ appliedCoupons: AppliedSaleCoupon[]; couponPatitas: number }> {
+): Promise<{ appliedCoupons: AppliedSaleCoupon[]; couponPatitas: number; skippedCoupons: SkippedSaleCoupon[] }> {
   const appliedCoupons: AppliedSaleCoupon[] = [];
+  // Los que no caben en el tope del cliente: no se consumen y se dice (AUD-5).
+  const skippedCoupons: SkippedSaleCoupon[] = [];
   let couponPatitas = 0;
   for (const c of coupons) {
     let usadoSinSesion: any = null;
@@ -164,6 +160,7 @@ export async function applyCouponsToSale(
         { new: true, session },
       );
       if (!used) return null;
+      if (!session) usadoSinSesion = used;
       const reward = Number(used.bonusPatitas) > 0 ? Math.round(Number(used.bonusPatitas)) : COUPON_PATITAS_REWARD_DEFAULT;
       // Mismo tope por cliente y comercio que useCoupon (AUD-4, FAC-138): el
       // cupón que no cabe no se consume y sigue disponible.
@@ -175,13 +172,13 @@ export async function applyCouponsToSale(
       // Las Patitas del cupón, a la comisión de esta venta.
       const coste = costePatitasEur(reward);
       await Sale.updateOne({ _id: saleId }, { $inc: { commissionEur: coste, patitasCostEur: coste } }, session ? { session } : {});
-      if (!session) usadoSinSesion = used;
       return { used, reward };
     });
     } catch (err) {
       if (!(err instanceof SinCupo)) throw err;
       // Sin transacción (desarrollo y tests) se devuelve el cupón a mano.
       if (usadoSinSesion) await Coupon.updateOne({ _id: usadoSinSesion._id }, { $set: { usedAt: null, usedBy: null } });
+      skippedCoupons.push({ couponId: String(c._id), title: c.title || c.copy, reason: 'coupon_patitas_limit' });
       continue;
     }
     if (!applied) continue;
@@ -205,7 +202,7 @@ export async function applyCouponsToSale(
     );
   }
 
-  return { appliedCoupons, couponPatitas };
+  return { appliedCoupons, couponPatitas, skippedCoupons };
 }
 
 // Ventana en la que reescanear al mismo cliente no crea otra identificación: sin

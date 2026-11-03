@@ -163,6 +163,9 @@ const userSchema = new Schema(
     pendingEmail: { type: String, select: false },
     pendingEmailToken: { type: String, select: false, index: true },
     pendingEmailExp: { type: Date, select: false },
+    // tokenVersion de la cuenta al pedir el cambio (AUD-5): si luego sube
+    // (contraseña restablecida, sesiones cerradas), el enlace ya no vale.
+    pendingEmailVersion: { type: Number, select: false },
     // Feed iCal de la agenda del vet: token-capability de la URL de suscripción (.ics).
     // select:false para que nunca viaje en respuestas por defecto (el directorio
     // público /api/vets hace select de profile.vet, no de este campo).

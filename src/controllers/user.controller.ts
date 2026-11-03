@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { normalizeAgenda } from '../utils/vetAgenda';
+import { canReceiveDonations } from '../utils/shelterVerification';
 import crypto from 'crypto';
 import { User } from '../models/user.model';
 import getRequestLogger from '../utils/requestLogger';
@@ -46,6 +47,7 @@ async function startEmailChange(user: any, nextEmail: string, req: Request) {
   user.set('pendingEmail', nextEmail);
   user.set('pendingEmailToken', token);
   user.set('pendingEmailExp', new Date(Date.now() + EMAIL_CHANGE_TTL_HOURS * 60 * 60 * 1000));
+  user.set('pendingEmailVersion', user.tokenVersion || 0);
 
   const { text, html } = confirmEmailChangeEmail(buildEmailConfirmLink(token), EMAIL_CHANGE_TTL_HOURS);
   try {
@@ -68,9 +70,12 @@ export const confirmEmailChange = async (req: Request, res: Response) => {
   const user = await User.findOne({
     pendingEmailToken: token,
     pendingEmailExp: { $gt: new Date() },
-  }).select('+pendingEmail +pendingEmailToken +pendingEmailExp');
+  }).select('+pendingEmail +pendingEmailToken +pendingEmailExp +pendingEmailVersion');
 
   if (!user) return res.status(400).json({ error: 'token_invalid' });
+  // Si las sesiones de la cuenta se cerraron después de pedirlo, ya no vale (AUD-5).
+  const version = (user as any).get('pendingEmailVersion');
+  if (version != null && Number(version) !== Number(user.tokenVersion || 0)) return res.status(400).json({ error: 'token_invalid' });
 
   const pending = String((user as any).get('pendingEmail') || '');
   if (!pending) return res.status(400).json({ error: 'token_invalid' });
@@ -84,6 +89,7 @@ export const confirmEmailChange = async (req: Request, res: Response) => {
   user.set('pendingEmail', undefined);
   user.set('pendingEmailToken', undefined);
   user.set('pendingEmailExp', undefined);
+  user.set('pendingEmailVersion', undefined);
   await user.save();
 
   await notifyOldAddress(previous, pending, true, req);
@@ -267,6 +273,15 @@ export const updateUser = async (req: Request, res: Response) => {
       const current: any = (user.get('profile') as any) || {};
       const currentObj = typeof current.toObject === 'function' ? current.toObject() : { ...current };
       const incoming = sanitizeProfile(body.profile);
+      // La auto-donación solo a una protectora que puede recibir donaciones
+      // (AUD-5, FAC-147): antes valía cualquier cuenta, también una sin verificar.
+      const destino = incoming.autoDonate?.shelterId;
+      if (destino) {
+        const prote: any = await User.findById(destino).select('role').lean();
+        if (!prote || !['landlord', 'protectora'].includes(prote.role) || !(await canReceiveDonations(destino))) {
+          throw new AppError('Esa protectora no puede recibir donaciones', { status: 400, code: 'shelter_verification_required' });
+        }
+      }
       const mergedAddress = { ...(currentObj.address || {}), ...(incoming.address || {}) };
       user.set('profile', { ...currentObj, ...incoming, address: mergedAddress });
     }

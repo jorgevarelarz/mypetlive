@@ -33,8 +33,17 @@ export function deriveStatus(counts: StatusCounts): 'pending' | 'invoiced' | 'pa
   return 'paid';
 }
 
+// Desde el 2 nov 2026 hay Sale de cargo (`kind` coupon/visit, importe 0) por las
+// Patitas extra que paga el comercio. Ventas son solo las compras (AUD-5, FAC-153);
+// los cargos se cuentan aparte, y la comisión sigue siendo el total a liquidar.
+export const ES_VENTA = { $cond: [{ $in: [{ $ifNull: ['$kind', 'sale'] }, ['coupon', 'visit']] }, 0, 1] };
+export const SOLO_VENTAS = { kind: { $nin: ['coupon', 'visit'] } };
+
 const groupTotals = {
-  sales: { $sum: 1 },
+  sales: { $sum: ES_VENTA },
+  visitCharges: { $sum: { $cond: [{ $eq: ['$kind', 'visit'] }, 1, 0] } },
+  couponCharges: { $sum: { $cond: [{ $eq: ['$kind', 'coupon'] }, 1, 0] } },
+  patitasCostEur: { $sum: { $ifNull: ['$patitasCostEur', 0] } },
   amountEur: { $sum: '$amountEur' },
   commissionEur: { $sum: '$commissionEur' },
   pending: { $sum: { $cond: [{ $eq: ['$settlementStatus', 'pending'] }, 1, 0] } },
@@ -46,6 +55,9 @@ const groupTotals = {
 function mapTotals(row: any) {
   return {
     sales: row.sales,
+    visitCharges: row.visitCharges || 0,
+    couponCharges: row.couponCharges || 0,
+    patitasCostEur: round2(row.patitasCostEur || 0),
     amountEur: round2(row.amountEur || 0),
     commissionEur: round2(row.commissionEur || 0),
     status: deriveStatus(row),

@@ -7,7 +7,8 @@ import { listCoupons, sponsorCoupon, Coupon } from '../../api/coupons';
 import { getMyCode } from '../../api/patitas';
 import { useAuthModal } from '../../context/AuthModalContext';
 import SelectProtectoraModal from '../../components/protectora/SelectProtectoraModal';
-import { loadPreferredProtectora, savePreferredProtectora, type PreferredProtectora } from '../../utils/preferredProtectora';
+import { type PreferredProtectora } from '../../utils/preferredProtectora';
+import { useProtectoraBeneficiaria } from '../../hooks/useProtectoraBeneficiaria';
 import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, MPL_FONT_MONO, PawMark } from '../../styles/mypetlive';
 import MobileBottomNav from '../../components/MobileBottomNav';
 import { CalcoCupCategorias, CalcoCupExplorar, CalcoCupPatitas, CalcoCupProtectora, CalcoCupTicket } from '../../components/icons/calcados';
@@ -57,7 +58,11 @@ export default function CouponsList() {
   });
   const [selected, setSelected] = useState<Coupon | null>(null);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [preferredProtectora, setPreferredProtectoraState] = useState<PreferredProtectora | null>(() => loadPreferredProtectora());
+  // La protectora que de verdad recibe las Patitas: la de la donación automática
+  // del perfil (AUD-5). Si está desactivada, no se presenta ninguna como beneficiaria.
+  const beneficiaria = useProtectoraBeneficiaria();
+  const esFamilia = (user as any)?.role === 'tenant';
+  const preferredProtectora = !esFamilia || beneficiaria.activa ? beneficiaria.protectora : null;
   const coupons = data?.items || [];
   const activeCoupons = coupons.filter(coupon => coupon.active !== false);
   const totalPatitas = useMemo(
@@ -65,10 +70,7 @@ export default function CouponsList() {
     [activeCoupons],
   );
 
-  const setPreferredProtectora = (value: PreferredProtectora | null) => {
-    setPreferredProtectoraState(value);
-    savePreferredProtectora(value);
-  };
+  const setPreferredProtectora = (value: PreferredProtectora | null) => beneficiaria.elegir(value);
 
   const handleProtectoraSelected = (option: PreferredProtectora) => {
     setPreferredProtectora(option);

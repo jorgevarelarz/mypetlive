@@ -68,13 +68,19 @@ export type EligibleCoupon = {
   title?: string;
   discount?: string;
   bonusPatitas: number;
+  /** Lo que de verdad da (con 0, las de por defecto) y lo que cuesta al comercio. */
+  rewardPatitas?: number;
+  costEur?: number;
   targetAnimalCode: string | null;
 };
+
+/** Precios de las Patitas extra para el comercio (los manda el servidor). */
+export type TarifaPatitas = { costePorPatitaEur: number; visita: { patitas: number; costEur: number }; cuponPorDefecto: number };
 
 export async function identifyUser(payload: { userToken?: string; code?: string }) {
   const { data } = await client.post('/api/patitas/identify', payload);
   // coupons: los elegibles de ESTE cliente en este establecimiento.
-  return data as { userId: string; name?: string; email?: string; role?: string; coupons?: EligibleCoupon[] };
+  return data as { userId: string; name?: string; email?: string; role?: string; coupons?: EligibleCoupon[]; tarifa?: TarifaPatitas };
 }
 
 export async function getWalletToken() {
@@ -135,7 +141,7 @@ export async function registerSale(payload: { userToken?: string; code?: string;
   const { data } = await client.post('/api/patitas/sales', payload, { skipErrorToast: true } as any);
   return data as {
     ok: boolean; saleId: string; commissionPct: number; commissionEur: number; patitasEarned: number;
-    appliedCoupons: AppliedSaleCoupon[]; balance?: number; autoDonated?: boolean;
+    appliedCoupons: AppliedSaleCoupon[]; skippedCoupons?: { couponId: string; title?: string; reason: string }[]; balance?: number; autoDonated?: boolean;
   };
 }
 
@@ -143,6 +149,11 @@ export async function registerSale(payload: { userToken?: string; code?: string;
 export type PartnerStatement = {
   period: string; // YYYY-MM
   sales: number;
+  /** Cargos sin compra por Patitas extra (AUD-5): visitas y cupones sueltos. */
+  visitCharges?: number;
+  couponCharges?: number;
+  /** Lo que suman las Patitas extra; ya va dentro de commissionEur. */
+  patitasCostEur?: number;
   amountEur: number;
   commissionEur: number;
   status: 'pending' | 'invoiced' | 'paid';

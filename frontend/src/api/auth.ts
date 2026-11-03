@@ -125,7 +125,7 @@ export async function resetPassword(token: string, password: string) {
 }
 
 export type DeletionBlocker =
-  | "open_vet_appointments" | "locked_patitas" | "patitas_balance" | "pending_payouts"
+  | "open_vet_appointments" | "locked_patitas" | "patitas_balance" | "pending_payouts" | "pending_settlements" | "pending_redemptions"
   | "open_orders_as_seller" | "open_orders_as_buyer" | "open_adoptions_as_shelter" | "admin_account";
 
 export async function getDeletionCheck(): Promise<{ canDelete: boolean; blockers: DeletionBlocker[]; confirmWith: "password" | "email" }> {

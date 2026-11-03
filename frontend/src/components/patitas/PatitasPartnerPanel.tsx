@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Camera, CheckCircle2, X, UserCheck, Ticket, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, listMyStatements, downloadMyStatementsCsv, type EligibleCoupon, type PosKey, type RedeemPreview, type SaleItemInput, type PartnerStatement } from '../../api/patitas';
+import { getMyPatitas, redeemPreview, redeemConfirm, identifyUser, earnVisit, registerSale, listPosKeys, createPosKey, revokePosKey, listMyStatements, downloadMyStatementsCsv, type EligibleCoupon, type TarifaPatitas, type PosKey, type RedeemPreview, type SaleItemInput, type PartnerStatement } from '../../api/patitas';
 import { listCoupons, applyCouponToCustomer } from '../../api/coupons';
 import { getPartnerConnectStatus, createPartnerConnectLink, type ConnectStatus } from '../../api/connect';
 import { getPartnerMetrics } from '../../api/metrics';
@@ -139,7 +139,7 @@ function PartnerStatements() {
         <div style={{ overflowX: 'auto' }}>
           {/* Modelo de Patitas del 2 nov 2026: ver src/utils/sales.ts. */}
           <p style={{ margin: '0 0 10px', fontSize: 13, color: MPL.muted }}>
-            La mitad de tu comisión vuelve a tus clientes en Patitas para su protectora. Las Patitas extra que das con cupones y visitas se suman a la comisión: {PATITA_COSTE_TXT} cada una.
+            La mitad de tu comisión vuelve a tus clientes en Patitas para su protectora. Las Patitas extra que das con cupones y visitas se suman a la comisión, al precio que ves antes de darlas.
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
@@ -157,9 +157,19 @@ function PartnerStatements() {
                 return (
                   <tr key={st.period} style={{ borderTop: `1px solid ${MPL.border}` }}>
                     <td style={{ padding: '10px', fontWeight: 700, textTransform: 'capitalize' }}>{monthName(st.period)}</td>
-                    <td style={{ padding: '10px' }}>{st.sales}</td>
+                    <td style={{ padding: '10px' }}>
+                      {st.sales}
+                      {(st.visitCharges || st.couponCharges) ? (
+                        <div style={{ fontSize: 11.5, color: MPL.faint }}>
+                          {[st.visitCharges ? `${st.visitCharges} visitas` : '', st.couponCharges ? `${st.couponCharges} cupones sin compra` : ''].filter(Boolean).join(' · ')}
+                        </div>
+                      ) : null}
+                    </td>
                     <td style={{ padding: '10px' }}>{st.amountEur.toFixed(2)} €</td>
-                    <td style={{ padding: '10px', fontWeight: 800 }}>{st.commissionEur.toFixed(2)} €</td>
+                    <td style={{ padding: '10px', fontWeight: 800 }}>
+                      {st.commissionEur.toFixed(2)} €
+                      {st.patitasCostEur ? <div style={{ fontSize: 11.5, fontWeight: 500, color: MPL.faint }}>{st.patitasCostEur.toFixed(2)} € de Patitas extra</div> : null}
+                    </td>
                     <td style={{ padding: '10px' }}>
                       <span style={{ background: badge.bg, color: badge.color, borderRadius: 999, padding: '4px 12px', fontSize: 12.5, fontWeight: 800 }}>
                         {badge.label}
@@ -396,8 +406,7 @@ function PosIntegration() {
 
 // El QR y el código del cliente caducan a los 10 minutos: si vence entre la
 // identificación y el registro, el servidor responde invalid_user.
-// Coste por Patita para el comercio: 0,10 € de valor + 20 % de la plataforma (como en el servidor).
-const PATITA_COSTE_TXT = '0,12 €';
+const eur = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
 const CUSTOMER_CODE_EXPIRED = 'El código del cliente ha caducado. Vuelve a escanear su QR o a pedirle el código';
 
 // Generación de Patitas a un cliente (identificar por QR/código → visita o cupón).
@@ -409,6 +418,9 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
   // ref: el QR (userToken) o código con que se identificó al cliente. La venta y
   // la visita lo reenvían como prueba de presencia: el servidor no acepta userId.
   const [customer, setCustomer] = useState<{ userId: string; name?: string; coupons?: EligibleCoupon[]; ref: { userToken?: string; code?: string } } | null>(null);
+  const [tarifa, setTarifa] = useState<TarifaPatitas | null>(null);
+  // Tras una venta, visita o cupón, el extracto se refresca (AUD-5).
+  const qcCaja = useQueryClient();
   // Venta con ticket: importe + líneas opcionales (producto/cantidad/precio).
   const [saleAmount, setSaleAmount] = useState('');
   const [saleItems, setSaleItems] = useState<Array<{ name: string; qty: string; priceEur: string }>>([]);
@@ -426,6 +438,7 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     try {
       const u = await identifyUser(ref);
       setCustomer({ userId: u.userId, name: u.name, coupons: u.coupons, ref });
+      if (u.tarifa) setTarifa(u.tarifa);
     } catch (e: any) {
       if (isTooManyAttempts(e)) return;
       toast.error(e?.response?.data?.error === 'invalid_user_code' ? 'Código de cliente no válido o caducado' : 'No se pudo identificar al cliente');
@@ -443,6 +456,7 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     try {
       const r = await earnVisit(customer.ref);
       toast.success(`+${r.earned} 🐾 a ${customer.name || 'el cliente'}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
+      qcCaja.invalidateQueries({ queryKey: ['partner-statements'] });
       reset();
     } catch (e: any) {
       const code = e?.response?.data?.error;
@@ -456,8 +470,9 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
     setBusy(true);
     try {
       const r = await applyCouponToCustomer(coupon._id, customer.ref, coupon.targetAnimalCode || undefined);
-      toast.success(`Cupón aplicado · +${r.earn?.earned ?? coupon.bonusPatitas ?? 0} 🐾 a ${customer.name || 'el cliente'}`);
+      toast.success(`Cupón aplicado · +${r.earn?.earned ?? (coupon as any).rewardPatitas ?? coupon.bonusPatitas ?? 0} 🐾 a ${customer.name || 'el cliente'}`);
       couponsQ.refetch();
+      qcCaja.invalidateQueries({ queryKey: ['partner-statements'] });
       reset();
     } catch (e: any) {
       const code = e?.response?.data?.error;
@@ -493,6 +508,12 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
       const r = await registerSale({ ...customer.ref, amountEur: amount, items, ...(couponIds.length ? { couponIds } : {}) });
       const couponNote = r.appliedCoupons.length ? ` · ${r.appliedCoupons.length} cupón${r.appliedCoupons.length > 1 ? 'es' : ''} aplicado${r.appliedCoupons.length > 1 ? 's' : ''}` : '';
       toast.success(`Venta de ${amount.toFixed(2)} € registrada · +${r.patitasEarned} 🐾 a ${customer.name || 'el cliente'}${couponNote}${r.autoDonated ? ' (auto-donadas a su protectora)' : ''}`);
+      // Los cupones que no se aplicaron por el tope, aparte y sin invitar a repetir la venta (AUD-5).
+      const saltados = (r as any).skippedCoupons || [];
+      if (saltados.length) {
+        toast(`${saltados.length === 1 ? `El cupón «${saltados[0].title || 'cupón'}» no se aplicó` : `${saltados.length} cupones no se aplicaron`}: el cliente ya ha recibido el máximo de Patitas por cupones en tu comercio. La venta está registrada.`, { duration: 8000 });
+      }
+      qcCaja.invalidateQueries({ queryKey: ['partner-statements'] });
       reset();
     } catch (e: any) {
       const code = e?.response?.data?.error;
@@ -632,6 +653,12 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
           <button type="button" onClick={doVisit} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifySelf: 'start', background: MPL.olive, color: '#fff', border: 0, borderRadius: 13, padding: '12px 18px', font: 'inherit', fontWeight: 800, cursor: 'pointer' }}>
             <Store size={17} /> Solo visita (sin compra)
           </button>
+          {/* Lo que cuesta antes de pulsar (AUD-5): la visita se carga en el extracto. */}
+          {tarifa && (
+            <div style={{ fontSize: 12.5, color: MPL.muted, marginTop: -6 }}>
+              +{tarifa.visita.patitas} 🐾 al cliente · {eur(tarifa.visita.costEur)} en tu extracto
+            </div>
+          )}
 
           <div>
             {/* Si identify trajo los cupones elegibles de ESTE cliente (targeting incluido),
@@ -671,7 +698,10 @@ export function GeneratePatitas({ meId, onDone, catalog = [] }: { meId: string; 
                                   <div style={{ fontWeight: 800, fontSize: 14 }}>{c.title || c.copy}</div>
                                   <div style={{ fontSize: 12, color: MPL.faint }}>{c.discount}{c.targetAnimalCode ? ` · ${c.targetAnimalCode}` : ''}</div>
                                 </div>
-                                <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{c.bonusPatitas ?? 0} 🐾</span>
+                                <span style={{ display: 'grid', justifyItems: 'end', flex: 'none' }}>
+                                  <span style={{ fontWeight: 800, color: MPL.oliveDark }}>+{(c as any).rewardPatitas ?? c.bonusPatitas ?? 0} 🐾</span>
+                                  {(c as any).costEur != null && <span style={{ fontSize: 11.5, color: MPL.faint }}>{eur((c as any).costEur)} en tu extracto</span>}
+                                </span>
                               </button>
                               <button type="button" onClick={() => applyCoupon(c)} disabled={busy} title="Aplicarlo ya, sin venta" style={{ background: 'none', border: 0, color: MPL.faint, cursor: 'pointer', fontSize: 12, fontWeight: 700, flex: 'none' }}>
                                 sin venta

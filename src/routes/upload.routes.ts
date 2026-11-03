@@ -114,6 +114,55 @@ router.post('/uploads', authenticate as any, (req, res, next) => {
   });
 });
 
+// Documentos de verificación de protectoras (NIF, registro…). AUD-5, FAC-149:
+// antes iban a /uploads, público y con caché de 7 días: cualquiera con la URL
+// los descargaba. Ahora se guardan fuera del directorio público y solo los ve su
+// titular y los admins, sin caché. El dueño va en el nombre del fichero.
+export const PRIVATE_DIR = path.join(process.cwd(), 'uploads-private');
+fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+const NOMBRE_PRIVADO = /^([a-f\d]{24})__[0-9a-f-]{36}\.(webp|pdf)$/i;
+
+router.post('/uploads/private', authenticate as any, (req, res, next) => {
+  upload.single('file')(req as any, res as any, async (err: any) => {
+    try {
+      if (err) return res.status(400).json({ error: err.message || 'upload_error' });
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) return res.status(400).json({ error: 'missing_file' });
+      const me = String((req as any).user?._id || (req as any).user?.id || '');
+      if (!/^[a-f\d]{24}$/i.test(me)) return res.status(401).json({ error: 'unauthorized' });
+      const detected = detectFileType(file.buffer);
+      if (!detected) return res.status(400).json({ error: 'invalid_file_type' });
+      let buffer = file.buffer;
+      let ext = detected.ext;
+      if (detected.mime.startsWith('image/')) {
+        try {
+          buffer = await sharp(buffer, { limitInputPixels: 40_000_000, failOn: 'warning' })
+            .rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer();
+          ext = '.webp';
+        } catch {
+          return res.status(400).json({ error: 'invalid_file_type' });
+        }
+      }
+      const filename = `${me}__${randomUUID()}${ext}`;
+      await fs.promises.writeFile(path.join(PRIVATE_DIR, filename), buffer, { flag: 'wx' });
+      res.json({ url: `/api/uploads/private/${filename}`, filename });
+    } catch (e) { next(e); }
+  });
+});
+
+router.get('/uploads/private/:file', authenticate as any, (req, res) => {
+  const m = NOMBRE_PRIVADO.exec(String(req.params.file || ''));
+  const user: any = (req as any).user;
+  const me = String(user?._id || user?.id || '');
+  // 404 también a quien no es su dueño ni admin: no se confirma que exista.
+  if (!m || (m[1] !== me && user?.role !== 'admin')) return res.status(404).json({ error: 'not_found' });
+  const ruta = path.join(PRIVATE_DIR, m[0]);
+  if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'not_found' });
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.type(m[2].toLowerCase() === 'pdf' ? 'application/pdf' : 'image/webp');
+  res.sendFile(ruta);
+});
+
 // Vídeos del mural de recuerdo. Aparte de las imágenes porque no se pueden
 // recodificar aquí (sería ffmpeg en el contenedor) y piden otro tope: un vídeo
 // de un minuto del iPhone ya pasa de 10 MB. Mismo criterio de seguridad: la

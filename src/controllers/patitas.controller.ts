@@ -25,9 +25,9 @@ import getRequestLogger from '../utils/requestLogger';
 import { Sale } from '../models/sale.model';
 import { UserCode } from '../models/userCode.model';
 import { recordSale, recordIdentification, couponsToApplyForSale, applyCouponsToSale, cargarPatitas, costePatitasEur } from '../utils/sales';
-import { beneficiarioValido } from '../utils/couponRules';
+import { beneficiarioValido, tarifaPatitas } from '../utils/couponRules';
 import { eligibleCoupons, serializeCoupon } from '../utils/coupons';
-import { partnerStatements } from '../utils/settlement';
+import { partnerStatements, SOLO_VENTAS } from '../utils/settlement';
 import { canReceiveDonations } from '../utils/shelterVerification';
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
@@ -317,6 +317,8 @@ export async function identifyUser(req: Request, res: Response) {
     email: user.email,
     role: user.role,
     coupons: coupons.map(serializeCoupon),
+    // Para que la caja diga lo que cuesta antes de darlas (AUD-5, FAC-150).
+    tarifa: tarifaPatitas(),
   });
 }
 
@@ -356,15 +358,15 @@ export async function registerSale(req: Request, res: Response) {
   const partnerDoc: any = await User.findById(partnerId).select('name role profile.orgName profile.commissionPct').lean();
   const r = await recordSale(partnerDoc, target, amountEur, req.body?.items);
 
-  const { appliedCoupons, couponPatitas } = candidates.length
+  const { appliedCoupons, couponPatitas, skippedCoupons } = candidates.length
     ? await applyCouponsToSale(r.saleId, partnerId, target, candidates)
-    : { appliedCoupons: [] as any[], couponPatitas: 0 };
+    : { appliedCoupons: [] as any[], couponPatitas: 0, skippedCoupons: [] as any[] };
 
   res.status(201).json({
     ok: true, saleId: r.saleId, commissionPct: r.commissionPct,
     // Con lo que cuestan las Patitas de los cupones aplicados (las paga el comercio).
     commissionEur: Math.round((r.commissionEur + costePatitasEur(couponPatitas)) * 100) / 100,
-    patitasEarned: r.patitasEarned + couponPatitas, appliedCoupons,
+    patitasEarned: r.patitasEarned + couponPatitas, appliedCoupons, skippedCoupons,
     ...(r.earn ? { balance: r.earn.balance, autoDonated: r.earn.autoDonated } : {}),
   });
 }
@@ -372,7 +374,8 @@ export async function registerSale(req: Request, res: Response) {
 // GET /api/patitas/sales/mine — ventas registradas por el partner autenticado.
 export async function listMySales(req: Request, res: Response) {
   const partnerId = actorId(req);
-  const items = await Sale.find({ partnerId })
+  // Solo compras (AUD-5): los cargos por visita o cupón van en el extracto.
+  const items = await Sale.find({ partnerId, ...SOLO_VENTAS })
     .sort({ createdAt: -1 })
     .limit(200)
     .populate('userId', 'name')
@@ -392,8 +395,10 @@ export async function listMyStatements(req: Request, res: Response) {
   const items = await partnerStatements(partnerId);
 
   if (String(req.query.format || '') === 'csv') {
-    const header = 'periodo;ventas;base_eur;comision_eur;estado;factura';
-    const lines = items.map(r => `${r.period};${r.sales};${r.amountEur};${r.commissionEur};${r.status};${r.invoiceRef || ''}`);
+    // Columnas nuevas al final (AUD-5): cargos por visitas y cupones sin compra y
+    // lo que suman las Patitas extra, ya incluido en comision_eur.
+    const header = 'periodo;ventas;base_eur;comision_eur;estado;factura;visitas;cupones_sin_compra;coste_patitas_eur';
+    const lines = items.map(r => `${r.period};${r.sales};${r.amountEur};${r.commissionEur};${r.status};${r.invoiceRef || ''};${r.visitCharges};${r.couponCharges};${r.patitasCostEur}`);
     const csv = [header, ...lines].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="extracto-liquidacion.csv"');
