@@ -314,6 +314,7 @@ export async function upsertAnimalSupply(
   supply: {
     kind: 'food' | 'litter';
     name: string;
+    newName?: string;
     packSize?: number;
     packUnit?: SupplyUnit;
     perUse?: number;

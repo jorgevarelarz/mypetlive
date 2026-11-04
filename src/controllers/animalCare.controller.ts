@@ -7,6 +7,7 @@ import { Adoption } from '../models/adoption.model';
 import { User } from '../models/user.model';
 import { CareLog, WALK_KINDS, type WalkKind } from '../models/careLog.model';
 import { normalizeSpecies } from '../utils/species';
+import { escapeRegex } from '../utils/regex';
 import {
   isSupplyUnit,
   toBase,
@@ -282,7 +283,10 @@ export async function upsertSupply(req: Request, res: Response) {
 
   const name = cleanLabel(body.name);
   if (!name) return res.status(400).json({ error: 'name_required' });
-  if (body.remove !== true) void recordProductUse([name], kind, animal.species);
+  // El producto se identifica por su nombre: para cambiarlo, `name` dice cuál es
+  // y `newName` cómo se llamará.
+  const newName = cleanLabel(body.newName);
+  if (body.remove !== true) void recordProductUse([newName || name], kind, animal.species);
 
   const pantry = ensurePantry(animal);
   const list: any[] = kind === 'food' ? pantry.foods || [] : pantry.litters || [];
@@ -297,8 +301,13 @@ export async function upsertSupply(req: Request, res: Response) {
     return res.json({ ok: true, pantry: animal.carePantry });
   }
 
+  if (newName && index === -1) return res.status(404).json({ error: 'supply_not_found' });
+  if (newName && list.some((item, i) => i !== index && sameName(String(item?.name || ''), newName))) {
+    return res.status(409).json({ error: 'name_taken' });
+  }
+
   const next: any = existing || { name };
-  next.name = name;
+  next.name = newName || name;
   // `next` y `existing` son el mismo objeto, así que lo que queda AHORA hay que
   // guardarlo antes de tocarlo: es contra esto contra lo que se decide si hay
   // que rearmar el aviso de "se acaba".
@@ -360,7 +369,26 @@ export async function upsertSupply(req: Request, res: Response) {
   else pantry.litters = podarDespensa(list);
   await animal.save();
 
+  if (newName && newName !== name) await renameInCareLog(animal._id, kind, name, newName);
+
   res.json({ ok: true, pantry: animal.carePantry });
+}
+
+/**
+ * El ritmo de consumo se saca del registro buscando el producto por su nombre:
+ * sin esto, al renombrarlo dejaría de saberse para cuántos días queda.
+ */
+async function renameInCareLog(animalId: unknown, kind: 'food' | 'litter', from: string, to: string) {
+  const exact = { $regex: `^${escapeRegex(from)}$`, $options: 'i' };
+  if (kind === 'food') {
+    await CareLog.updateMany(
+      { animalId, type: 'feed', foods: exact },
+      { $set: { 'foods.$[food]': to } },
+      { arrayFilters: [{ food: exact }] },
+    );
+  } else {
+    await CareLog.updateMany({ animalId, type: 'litter', litterType: exact }, { $set: { litterType: to } });
+  }
 }
 
 const WEEK_MS = 7 * 24 * 3_600_000;

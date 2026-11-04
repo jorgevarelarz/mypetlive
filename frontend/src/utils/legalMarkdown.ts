@@ -29,7 +29,8 @@ export function renderMarkdown(md: string): string {
     t
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) =>
+        /^(https?:|mailto:|tel:|\/|#)/i.test(url.trim()) ? `<a href="${url}">${label}</a>` : label);
 
   for (const line of lines) {
     const t = line.trim();

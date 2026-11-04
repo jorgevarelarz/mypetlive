@@ -32,7 +32,7 @@ root.render(
       <ToastProvider>
         <NotificationsProvider>
           <QueryClientProvider client={queryClient}>
-            {createPortal(<Toaster position="top-right" />, toastsEl)}
+            {createPortal(<Toaster position="top-right" containerStyle={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }} />, toastsEl)}
             <App />
           </QueryClientProvider>
         </NotificationsProvider>

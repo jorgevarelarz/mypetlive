@@ -43,6 +43,7 @@ export default function SupplyList({ animalId, foods, litters, showLitter, onCha
       const code = error?.response?.data?.error;
       if (code === 'unit_mismatch') return toast.error('El paquete y la ración tienen que ir en la misma magnitud.');
       if (code === 'name_required') return toast.error('Ponle nombre al producto.');
+      if (code === 'name_taken') return toast.error('Ya tienes un producto con ese nombre.');
       if (code === 'pack_size_required') return toast.error('Para reponer hace falta saber cuánto trae el paquete.');
       toast.error('No se pudo guardar el producto');
     },
@@ -234,7 +235,6 @@ function SupplyForm({
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder={kind === 'food' ? 'Acana Adult' : 'Aglomerante'}
-            disabled={!!supply}
             className="w-full border px-3 py-2 text-sm"
             style={{ borderRadius: 8, borderColor: '#D7D0C2', marginTop: 4 }}
           />
@@ -266,7 +266,7 @@ function SupplyForm({
           placeholder={kind === 'food' ? '6' : '10'}
         />
         <AmountField
-          label={kind === 'food' ? 'Ración por comida' : 'Gasto por cambio'}
+          label={kind === 'food' ? 'Ración de cada comida' : 'Gasto por cambio'}
           value={perUse}
           onChange={setPerUse}
           unit={perUseUnit}
@@ -274,6 +274,12 @@ function SupplyForm({
           units={units}
           placeholder={kind === 'food' ? '80' : '4'}
         />
+
+        {kind === 'food' && (
+          <p className="text-xs" style={{ color: MUTED, marginTop: 4 }}>
+            Lo que le pones cada vez, no lo de todo el día. Se descuenta al marcar la comida.
+          </p>
+        )}
 
         <p className="text-xs" style={{ color: MUTED, marginTop: 8 }}>
           Con estos dos datos sabemos para cuántas {kind === 'food' ? 'comidas' : 'cambios'} queda. Puedes dejarlos en
@@ -295,9 +301,11 @@ function SupplyForm({
               disabled={busy || !name.trim()}
               onClick={() => {
                 if (pendingCode) void teachBarcode(pendingCode, name.trim(), kind, species).catch(() => undefined);
+                const renamed = supply && name.trim() !== supply.name;
                 onSave({
                   kind,
-                  name: name.trim(),
+                  name: supply ? supply.name : name.trim(),
+                  ...(renamed ? { newName: name.trim() } : {}),
                   packSize: num(packSize),
                   packUnit,
                   perUse: num(perUse),

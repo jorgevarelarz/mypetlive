@@ -79,6 +79,7 @@ import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import { requestId } from './middleware/requestId';
 import { mongoSanitize } from './middleware/mongoSanitize';
+import { textSanitize } from './middleware/textSanitize';
 import { loadEnv } from './config/env';
 import { metricsMiddleware, metricsHandler } from './metrics';
 
@@ -180,6 +181,7 @@ app.use(hpp({ checkBody: false, checkQuery: true }));
 // cual, y sin esto `?campo[$ne]=x` colaría un operador. Va después del webhook
 // de Stripe (montado arriba con su propio raw body) para no tocarlo.
 app.use(mongoSanitize);
+app.use(textSanitize);
 // Serve uploaded files (fotos de animales, etc.): inmutables en la práctica,
 // así que 7 días de caché en navegador/proxy en vez de re-servirlas siempre.
 // CORP cross-origin: helmet pone same-origin a todo, y la app de iPhone

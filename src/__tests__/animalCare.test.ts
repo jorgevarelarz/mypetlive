@@ -415,4 +415,29 @@ describe('existencias de la despensa', () => {
     const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
     expect(res.body.pantry.foods[0]).toMatchObject({ name: 'Lo que haya', usesLeft: null, daysLeft: null, runningLow: false });
   });
+
+  it('renombra un producto sin perder la cuenta ni el ritmo de consumo', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), {
+      kind: 'food', name: 'Acna Adult', packSize: 6, packUnit: 'kg', perUse: 80, perUseUnit: 'g',
+    }).expect(200);
+    await request(app).post(`/api/animals/${pet._id}/care/feed`).set(adopterH).send({ foods: ['Acna Adult'] }).expect(200);
+
+    await setSupply(String(pet._id), { kind: 'food', name: 'Acna Adult', newName: 'Acana Adult' }).expect(200);
+
+    const res = await request(app).get(`/api/animals/${pet._id}/care`).set(adopterH).expect(200);
+    expect(res.body.pantry.foods).toHaveLength(1);
+    expect(res.body.pantry.foods[0]).toMatchObject({ name: 'Acana Adult', remaining: 5920, perUse: 80 });
+    expect(res.body.items[0].foods).toEqual(['Acana Adult']);
+  });
+
+  it('no deja renombrar a un nombre que ya existe ni un producto que no está', async () => {
+    const pet = await createPersonalPet();
+    await setSupply(String(pet._id), { kind: 'food', name: 'Pienso A' }).expect(200);
+    await setSupply(String(pet._id), { kind: 'food', name: 'Pienso B' }).expect(200);
+
+    const taken = await setSupply(String(pet._id), { kind: 'food', name: 'Pienso A', newName: 'pienso b' }).expect(409);
+    expect(taken.body.error).toBe('name_taken');
+    await setSupply(String(pet._id), { kind: 'food', name: 'Otro', newName: 'Nuevo' }).expect(404);
+  });
 });

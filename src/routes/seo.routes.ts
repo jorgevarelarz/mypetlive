@@ -152,7 +152,7 @@ ${facts.map(([k, v]) => `<dt>${escapeHtml(String(k))}</dt><dd>${escapeHtml(Strin
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${escapeHtml(image)}">
-${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ''}
+${jsonLd ? `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>` : ''}
 ${redirect.head}
 </head>
 <body>
