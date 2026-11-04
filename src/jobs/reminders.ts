@@ -3,6 +3,7 @@ import { WelcomePlan, WELCOME_TASKS } from '../models/welcomePlan.model';
 import { User } from '../models/user.model';
 import { Animal } from '../models/animal.model';
 import { familyRecipientIds } from '../utils/animalAccess';
+import { tomasCerca } from '../utils/medicationDoses';
 import { sendEmail } from '../utils/notification';
 import { brandedEmail } from '../utils/emailTemplates';
 import { sendPushToUser, type PushPayload } from '../utils/push';
@@ -15,6 +16,10 @@ const H24_MS = 24 * 60 * 60 * 1000;
 const WELCOME_NUDGE_AFTER_DAYS = 3;
 // Con cuánta antelación se avisa de lo que toca repetir en el pasaporte.
 const HEALTH_NOTICE_DAYS = 7;
+// Avisos de cada toma, con el mismo margen que comida y paseos: la pasada corre cada
+// 5 minutos, y lo marcado desde poco antes de la hora cuenta como dado.
+const DOSE_WINDOW_MS = 30 * 60_000;
+const DOSE_DONE_BEFORE_MS = 90 * 60_000;
 const FRONTEND_URL = () => process.env.FRONTEND_URL || 'https://mypetlive.es';
 
 // Las categorías se guardan en inglés porque son la clave del registro; lo que
@@ -249,6 +254,57 @@ export async function sendHealthDueReminders(now = new Date()): Promise<number> 
   return sent;
 }
 
+/**
+ * Aviso de cada toma de medicación. Solo al móvil: varios correos al día serían
+ * spam, y esto solo sirve si llega en el momento. Una toma que se pasó de largo
+ * (servidor parado) no se avisa tarde: podría acabar dándose dos veces.
+ *
+ * La marca se pone con una escritura condicionada a la propia entrada, para no
+ * pisar lo que la familia corrija mientras tanto.
+ */
+export async function sendMedicationDoseReminders(now = new Date()): Promise<number> {
+  const animals = await Animal.find({
+    healthHistory: { $elemMatch: { type: 'medication', firstDoseAt: { $ne: null } } },
+    'memorial.active': { $ne: true },
+  }).lean();
+
+  let sent = 0;
+  for (const animal of animals as any[]) {
+    const due: Array<{ h: any; toma: Date }> = [];
+    for (const h of animal.healthHistory || []) {
+      if (h.type !== 'medication') continue;
+      const toma = tomasCerca(h, now).anterior;
+      if (!toma || now.getTime() - toma.getTime() > DOSE_WINDOW_MS) continue;
+      if (h.doseReminderAt && new Date(h.doseReminderAt).getTime() >= toma.getTime()) continue;
+      if (h.lastDoseAt && new Date(h.lastDoseAt).getTime() >= toma.getTime() - DOSE_DONE_BEFORE_MS) continue;
+      due.push({ h, toma });
+    }
+    if (!due.length) continue;
+
+    const people: any[] = await User.find({ _id: { $in: familyRecipientIds(animal) } }).select('_id').lean();
+    if (!people.length) continue;
+
+    const claimed: any[] = [];
+    for (const { h, toma } of due) {
+      const r = await Animal.updateOne(
+        { _id: animal._id, healthHistory: { $elemMatch: { _id: h._id, $or: [{ doseReminderAt: null }, { doseReminderAt: { $lt: toma } }] } } },
+        { $set: { 'healthHistory.$.doseReminderAt': toma } },
+      );
+      if (r.modifiedCount) claimed.push(h);
+    }
+    if (!claimed.length) continue;
+
+    const petName = animal.name || 'tu mascota';
+    const body = claimed.map(h => [h.notes, h.dose].filter(Boolean).join(' · ')).join('\n');
+    for (const person of people) {
+      await push(person._id, { title: `Toca la medicación de ${petName} 💊`, body, url: `/cuidados?mascota=${animal._id}` });
+      sent += 1;
+    }
+  }
+  if (sent) logger.info({ sent }, '[reminders] avisos de toma enviados');
+  return sent;
+}
+
 /** Programa las pasadas periódicas de recordatorios (arranque del servidor). */
 export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   const run = () => {
@@ -264,6 +320,10 @@ export function startReminderJobs(intervalMs = 15 * 60 * 1000) {
   const care = () => sendCareReminders().catch(err => logger.error({ err }, '[reminders] pasada de cuidado falló'));
   setTimeout(care, 45_000);
   setInterval(care, 5 * 60 * 1000);
+  // Las tomas igual: llegan a su hora o no sirven.
+  const doses = () => sendMedicationDoseReminders().catch(err => logger.error({ err }, '[reminders] pasada de tomas falló'));
+  setTimeout(doses, 50_000);
+  setInterval(doses, 5 * 60 * 1000);
   // Correo de mensajes sin leer: sale a los 10 minutos, así que se mira a menudo.
   const chat = () => sendUnreadChatEmails().catch(err => logger.error({ err }, '[reminders] pasada de chat falló'));
   setInterval(chat, 2 * 60 * 1000);

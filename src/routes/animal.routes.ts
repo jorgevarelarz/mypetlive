@@ -93,6 +93,7 @@ r.get('/:code/timeline', optionalAuthenticate, asyncHandler(ctrl.getTimeline));
 r.post('/:code/health', authenticate, asyncHandler(ctrl.addHealthRecord));
 // Corregir o borrar una entrada (la familia, lo suyo; la clínica, lo suyo).
 r.patch('/:code/health/:entryId', authenticate, asyncHandler(ctrl.updateHealthRecord));
+r.post('/:code/health/:entryId/dose', authenticate, asyncHandler(ctrl.markMedicationDose));
 r.delete('/:code/health/:entryId', authenticate, asyncHandler(ctrl.deleteHealthRecord));
 r.get('/:id', optionalAuthenticate, asyncHandler(ctrl.getById));
 r.get('/', optionalAuthenticate, asyncHandler(ctrl.search));

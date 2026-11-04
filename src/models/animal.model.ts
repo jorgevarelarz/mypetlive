@@ -50,6 +50,9 @@ const vetEntrySchema = new Schema(
   { _id: false },
 );
 
+// Cada cuánto se da una medicación. La fecha de la entrada es cuándo empezó.
+export const MEDICATION_FREQUENCIES = ['every_6h', 'every_8h', 'every_12h', 'daily', 'every_2_days', 'weekly', 'monthly', 'as_needed'] as const;
+
 const healthEntrySchema = new Schema(
   {
     date: { type: Date, default: Date.now },
@@ -62,6 +65,17 @@ const healthEntrySchema = new Schema(
     nextDueAt: { type: Date },
     // Sello del aviso ya enviado, para que la pasada del job sea idempotente.
     reminderSentAt: { type: Date },
+    // Pauta de una medicación (solo `type: 'medication'`): qué cantidad, cada cuánto
+    // y hasta cuándo. Sin `endsAt` no tiene fecha de fin. Opcional: las entradas
+    // antiguas y las versiones de la app ya publicadas solo mandan la nota.
+    dose: { type: String, maxlength: 60 },
+    frequency: { type: String, enum: MEDICATION_FREQUENCIES },
+    endsAt: { type: Date },
+    // Avisos de cada toma: sin `firstDoseAt` no hay. Las siguientes se calculan desde
+    // ella (utils/medicationDoses). `doseReminderAt` es la toma ya avisada.
+    firstDoseAt: { type: Date },
+    lastDoseAt: { type: Date },
+    doseReminderAt: { type: Date },
     // Quién lo apuntó: lo de la clínica ('vet') no lo cambia la familia; lo suyo
     // ('family') sí puede corregirlo o borrarlo. `vetId` guarda la cuenta que lo
     // apuntó, sea quien sea (el nombre es de cuando solo apuntaban veterinarios).

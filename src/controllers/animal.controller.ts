@@ -2,7 +2,7 @@ import { ADOPTABLE_ROLES, isAdoptableRole } from '../utils/adoptable';
 import { VetAppointment } from '../models/vetAppointment.model';
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { Animal, ensureAnimalCode } from '../models/animal.model';
+import { Animal, ensureAnimalCode, MEDICATION_FREQUENCIES } from '../models/animal.model';
 import { Adoption } from '../models/adoption.model';
 import { AnimalAlert } from '../models/animalAlert.model';
 import { User } from '../models/user.model';
@@ -38,6 +38,21 @@ function stripInternalFields<T extends Record<string, any>>(animal: T): T {
   // `members`: con quién comparte la familia la mascota; tan privado como `ownerId`.
   const { ownerId, members, __v, ...rest } = animal as any;
   if (rest.lost) rest.lost = { ...rest.lost, sightings: undefined };
+  // La medicación es dato de salud de la familia: fuera de ella, solo qué y cuándo.
+  // En una mascota de familia, igual que en su pasaporte, el texto solo se enseña
+  // en vacunas y desparasitaciones. La ficha de adopción de una protectora
+  // conserva el suyo: es lo que quiere leer quien va a adoptar.
+  const deFamilia = isFamilyPet(animal);
+  if (Array.isArray(rest.healthHistory)) {
+    rest.healthHistory = rest.healthHistory.map((h: any) => {
+      const { dose, frequency, endsAt, firstDoseAt, lastDoseAt, doseReminderAt, ...resto } = h;
+      if (h?.type === 'medication' || (deFamilia && !DETALLE_PUBLICO.has(h?.type))) delete resto.notes;
+      return resto;
+    });
+  }
+  if (deFamilia && Array.isArray(rest.vetHistory)) {
+    rest.vetHistory = rest.vetHistory.map(({ note, treatment, ...v }: any) => v);
+  }
   // Cesión de un particular: es una persona, no una entidad. Fuera su correo, y
   // del microchip solo las 4 últimas cifras (el anuncio lo lleva, art. 57.2).
   if (rest.createdByRole === 'particular') {
@@ -208,6 +223,26 @@ const HEALTH_TITLES: Record<string, string> = {
   visit: 'Visita veterinaria',
 };
 
+const FRECUENCIA_TEXTO: Record<string, string> = {
+  every_6h: 'cada 6 horas',
+  every_8h: 'cada 8 horas',
+  every_12h: 'cada 12 horas',
+  daily: 'una vez al día',
+  every_2_days: 'cada 2 días',
+  weekly: 'una vez a la semana',
+  monthly: 'una vez al mes',
+  as_needed: 'solo si lo necesita',
+};
+
+/** «Amoxicilina · 1 comprimido · cada 12 horas · hasta el 12 de noviembre». */
+function detalleSalud(h: any) {
+  if (h.type !== 'medication') return h.notes;
+  const hasta = h.endsAt
+    ? `hasta el ${new Date(h.endsAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', timeZone: 'Europe/Madrid' })}`
+    : undefined;
+  return [h.notes, h.dose, FRECUENCIA_TEXTO[h.frequency], hasta].filter(Boolean).join(' · ');
+}
+
 function buildTimeline(animal: any, events: any[], full: boolean) {
   const items: { at: any; type: string; kind?: string; title: string; detail?: string }[] = [];
   const hasCreated = events.some(e => e.type === 'created');
@@ -247,7 +282,7 @@ function buildTimeline(animal: any, events: any[], full: boolean) {
   for (const v of (animal.vetHistory || [])) items.push({ at: v.date, type: 'vet', title: 'Visita veterinaria', detail: full ? v.note : undefined });
   // El tipo se guarda en inglés (es la clave del registro); el pasaporte lo enseña
   // en castellano. `kind` lleva la clave para que la web ponga su icono.
-  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: full || DETALLE_PUBLICO.has(h.type) ? h.notes : undefined });
+  for (const h of (animal.healthHistory || [])) items.push({ at: h.date, type: 'health', kind: h.type, title: HEALTH_TITLES[h.type] || 'Hito de salud', detail: full || DETALLE_PUBLICO.has(h.type) ? detalleSalud(h) : undefined });
   return items
     .filter(i => i.at)
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -293,6 +328,33 @@ const DEFAULT_REPEAT_MONTHS: Partial<Record<HealthCategory, number>> = {
   deworming: 3,
 };
 
+/**
+ * Lee la pauta de una medicación. Solo trae lo que viene en el cuerpo: `null` o
+ * vacío borra ese dato, y lo ausente no se toca (al corregir).
+ */
+function leerPauta(body: any): { error: string } | { dose?: string | null; frequency?: string | null; endsAt?: Date | null; firstDoseAt?: Date | null } {
+  const pauta: { dose?: string | null; frequency?: string | null; endsAt?: Date | null; firstDoseAt?: Date | null } = {};
+  if (body.dose !== undefined) pauta.dose = typeof body.dose === 'string' && body.dose.trim() ? body.dose.trim().slice(0, 60) : null;
+  if (body.frequency !== undefined) {
+    if (body.frequency !== null && body.frequency !== '' && !MEDICATION_FREQUENCIES.includes(body.frequency)) return { error: 'invalid_frequency' };
+    pauta.frequency = body.frequency || null;
+  }
+  if (body.endsAt !== undefined) {
+    const fin = body.endsAt ? new Date(body.endsAt) : null;
+    if (fin && Number.isNaN(fin.getTime())) return { error: 'invalid_ends_at' };
+    pauta.endsAt = fin;
+  }
+  if (body.firstDoseAt !== undefined) {
+    const primera = body.firstDoseAt ? new Date(body.firstDoseAt) : null;
+    if (primera && Number.isNaN(primera.getTime())) return { error: 'invalid_first_dose' };
+    pauta.firstDoseAt = primera;
+  }
+  return pauta;
+}
+
+/** Compara por día: un tratamiento de un solo día empieza y acaba en la misma fecha. */
+const acabaAntes = (inicio: Date, fin?: Date | null) => !!fin && fin.toISOString().slice(0, 10) < inicio.toISOString().slice(0, 10);
+
 function addMonths(from: Date, months: number) {
   const d = new Date(from);
   d.setMonth(d.getMonth() + months);
@@ -324,6 +386,10 @@ export async function addHealthRecord(req: Request, res: Response) {
     if (parsed.getTime() > Date.now() + 86_400_000) return res.status(400).json({ error: 'date_in_future' });
     date = parsed;
   }
+
+  const pauta = category === 'medication' ? leerPauta(body) : {};
+  if ('error' in pauta) return res.status(400).json({ error: pauta.error });
+  if (acabaAntes(date, pauta.endsAt)) return res.status(400).json({ error: 'ends_before_start' });
 
   const animal: any = await Animal.findOne({ code });
   if (!animal) return res.status(404).json({ error: 'not_found' });
@@ -381,7 +447,11 @@ export async function addHealthRecord(req: Request, res: Response) {
     animal.vetHistory.push({ date, note, treatment });
   } else {
     const byRole = user?.role === 'vet' ? 'vet' : user?.role === 'admin' ? 'admin' : 'family';
-    animal.healthHistory.push({ date, type: category, notes: note, vetId: actorId || undefined, byRole, nextDueAt });
+    animal.healthHistory.push({
+      date, type: category, notes: note, vetId: actorId || undefined, byRole, nextDueAt,
+      dose: pauta.dose || undefined, frequency: pauta.frequency || undefined, endsAt: pauta.endsAt || undefined,
+      firstDoseAt: pauta.firstDoseAt || undefined,
+    });
   }
   await animal.save();
 
@@ -539,7 +609,7 @@ async function healthEntryAccess(req: Request, res: Response) {
   return { animal, entry, uid };
 }
 
-// PATCH /api/animals/:code/health/:entryId — { category?, note?, date?, nextDueAt? (null = sin aviso) }
+// PATCH /api/animals/:code/health/:entryId — { category?, note?, date?, nextDueAt? (null = sin aviso), dose?, frequency?, endsAt? }
 export async function updateHealthRecord(req: Request, res: Response) {
   const got = await healthEntryAccess(req, res);
   if (!got) return;
@@ -579,9 +649,46 @@ export async function updateHealthRecord(req: Request, res: Response) {
       entry.reminderSentAt = undefined;
     }
   }
+  if (entry.type === 'medication') {
+    const pauta = leerPauta(body);
+    if ('error' in pauta) return res.status(400).json({ error: pauta.error });
+    if (pauta.dose !== undefined) entry.dose = pauta.dose || undefined;
+    if (pauta.frequency !== undefined) entry.frequency = pauta.frequency || undefined;
+    if (pauta.endsAt !== undefined) entry.endsAt = pauta.endsAt || undefined;
+    if (pauta.firstDoseAt !== undefined) {
+      entry.firstDoseAt = pauta.firstDoseAt || undefined;
+      entry.doseReminderAt = undefined;
+    }
+    if (acabaAntes(new Date(entry.date), entry.endsAt)) return res.status(400).json({ error: 'ends_before_start' });
+  } else {
+    // Dejó de ser medicación: la pauta ya no significa nada.
+    entry.dose = undefined;
+    entry.frequency = undefined;
+    entry.endsAt = undefined;
+    entry.firstDoseAt = undefined;
+    entry.lastDoseAt = undefined;
+    entry.doseReminderAt = undefined;
+  }
   await animal.save();
   await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'health', actorId: uid, data: { action: 'updated', entryId: String(entry._id) } });
   res.json({ ok: true, entry });
+}
+
+// POST /api/animals/:code/health/:entryId/dose — «ya se la hemos dado». Va aparte de
+// corregir: quien da la pastilla es la familia, también si la pauta la puso la clínica.
+export async function markMedicationDose(req: Request, res: Response) {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  const animal: any = await Animal.findOne({ code });
+  if (!animal) return res.status(404).json({ error: 'not_found' });
+  const user: any = (req as any).user;
+  if (!canManageAnimal(user, animal)) return res.status(403).json({ error: 'forbidden' });
+  const entry = Types.ObjectId.isValid(String(req.params.entryId)) ? animal.healthHistory.id(req.params.entryId) : null;
+  if (!entry) return res.status(404).json({ error: 'entry_not_found' });
+  if (entry.type !== 'medication') return res.status(400).json({ error: 'not_medication' });
+  entry.lastDoseAt = new Date();
+  await animal.save();
+  await logAnimalEvent({ animalId: String(animal._id), code: animal.code, type: 'health', actorId: String(user?._id || user?.id || ''), data: { action: 'dose', entryId: String(entry._id) } });
+  res.json({ ok: true, lastDoseAt: entry.lastDoseAt });
 }
 
 // DELETE /api/animals/:code/health/:entryId — también se va su recordatorio.

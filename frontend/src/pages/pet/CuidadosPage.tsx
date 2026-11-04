@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { listMyPets, updateMyPet, type BodyCondition, type HealthCategory } from '../../api/animals';
+import { listMyPets, markMedicationDose, updateMyPet, type BodyCondition, type HealthCategory } from '../../api/animals';
 import { listMyVetAppointments } from '../../api/vetAppointments';
-import { healthCategoryLabel } from '../../styles/mypetlive';
+import { healthCategoryLabel, medicationSummary } from '../../styles/mypetlive';
+import { estadoToma } from '../../utils/medicationDoses';
 import { loadSelectedPet, saveSelectedPet } from '../../utils/selectedPet';
 import PetSwitcher from '../../components/pet/PetSwitcher';
 import HealthEntrySheet from '../../components/pet/HealthEntrySheet';
@@ -106,6 +107,11 @@ export default function CuidadosPage() {
   const [consejo, setConsejo] = React.useState(0);
   const [editarDatos, setEditarDatos] = React.useState(false);
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['my-pets'] });
+  const marcarToma = useMutation({
+    mutationFn: (v: { code: string; id: string }) => markMedicationDose(v.code, v.id),
+    onSuccess: () => { toast.success('Toma apuntada'); refrescar(); },
+    onError: () => { toast.error('No se ha podido apuntar. Inténtalo de nuevo.'); },
+  });
 
   if (petsQ.isLoading) return <div style={{ padding: 20, color: GRIS }}>Cargando…</div>;
   if (petsQ.isError) {
@@ -152,6 +158,12 @@ export default function CuidadosPage() {
   // Vacunas con aviso quitado: no se puede decir que estén «al día».
   const vacunasSinFecha = vacunas.filter(v => !v.nextDueAt);
   const medicacion = ultimasPorCosa(salud, 'medication');
+  // En tratamiento: con pauta y sin haber pasado su último día. Las antiguas, sin
+  // pauta, solo son historial. Sin fecha de fin sigue hasta que se le ponga una.
+  const hoyInicio = new Date(ahora).setHours(0, 0, 0, 0);
+  const tratamientos = salud
+    .filter(e => e.type === 'medication' && e.frequency && (!e.endsAt || new Date(e.endsAt).getTime() >= hoyInicio))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const vencidas = [
     ...vacunas.filter(v => v.nextDueAt && new Date(v.nextDueAt).getTime() < ahora),
     ...desparasVencidas,
@@ -235,6 +247,34 @@ export default function CuidadosPage() {
         )}
       </Fila>
 
+      {tratamientos.length > 0 && (
+        <Fila icono={<CalcoCuiBtnMedicacion size={30} />} fondo="#FDF1DC" titulo="Medicación"
+          subtitulo={`${tratamientos.length} en tratamiento`}>
+          {tratamientos.map(t => {
+            const toma = estadoToma(t, new Date(ahora));
+            return (
+              <span key={t._id} style={{ display: 'block', marginTop: 6 }}>
+                <button type="button" onClick={() => setApuntar({ entrada: t })}
+                  style={{ display: 'block', width: '100%', padding: 0, border: 0, background: 'none', textAlign: 'left', font: 'inherit', fontSize: 14.5, lineHeight: '20px', color: '#3D4340', cursor: 'pointer' }}>
+                  <strong>{nombreCorto(t.notes)}</strong> · {medicationSummary(t)}
+                </button>
+                {toma && (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 6, fontSize: 14, color: '#3D2A1E' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{toma.pendiente && <CalcoCuiAlerta size={17} />}{toma.texto}</span>
+                    {toma.marcar && (
+                      <button type="button" disabled={marcarToma.isPending} onClick={() => marcarToma.mutate({ code: String(pet.code), id: String(t._id) })}
+                        style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 12, border: 0, background: '#0E5F5B', color: '#fff', font: 'inherit', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>
+                        Dada
+                      </button>
+                    )}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+        </Fila>
+      )}
+
       <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: vencidas.length ? '#B4472A' : '#14726E', color: '#fff', padding: '18px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
         <span aria-hidden style={{ position: 'absolute', right: -10, bottom: -24, width: 110, height: 110, borderRadius: 999, background: 'rgba(255,255,255,.08)' }} />
         <span style={{ width: 62, height: 62, borderRadius: 999, background: 'rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -292,7 +332,7 @@ export default function CuidadosPage() {
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 15.5, lineHeight: '21px' }}>
-                      <strong>{e.type === 'visit' ? 'Revisión veterinaria' : healthCategoryLabel(e.type)}</strong>{e.notes ? <span style={{ color: '#3D4340' }}> · {e.notes}</span> : null}
+                      <strong>{e.type === 'visit' ? 'Revisión veterinaria' : healthCategoryLabel(e.type)}</strong>{e.notes ? <span style={{ color: '#3D4340' }}> · {e.notes}</span> : null}{e.type === 'medication' && medicationSummary(e) ? <span style={{ color: '#3D4340' }}> · {medicationSummary(e)}</span> : null}
                     </span>
                     <span style={{ display: 'block', fontSize: 13.5, color: GRIS }}>{fechaCorta(e.date)}</span>
                   </span>

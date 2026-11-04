@@ -161,6 +161,24 @@ export const healthCategoryLabel = (value?: string) => {
   return value ? labels[String(value).toLowerCase()] || value : 'Hito de salud';
 };
 
+export const MEDICATION_FREQUENCY_OPTIONS = [
+  { value: 'every_6h', label: 'Cada 6 horas' },
+  { value: 'every_8h', label: 'Cada 8 horas' },
+  { value: 'every_12h', label: 'Cada 12 horas' },
+  { value: 'daily', label: 'Una vez al día' },
+  { value: 'every_2_days', label: 'Cada 2 días' },
+  { value: 'weekly', label: 'Una vez a la semana' },
+  { value: 'monthly', label: 'Una vez al mes' },
+  { value: 'as_needed', label: 'Solo si lo necesita' },
+] as const;
+
+/** «1 comprimido · cada 12 horas · hasta el 12 nov»; vacío si la entrada no tiene pauta. */
+export const medicationSummary = (e: { dose?: string; frequency?: string; endsAt?: string | Date | null }) => {
+  const frecuencia = MEDICATION_FREQUENCY_OPTIONS.find(o => o.value === e.frequency)?.label.toLowerCase();
+  const hasta = e.endsAt ? `hasta el ${new Date(e.endsAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '')}` : '';
+  return [e.dose, frecuencia, hasta].filter(Boolean).join(' · ');
+};
+
 export const statusLabel = (value?: string) => {
   const labels: Record<string, string> = {
     borrador: 'Borrador',

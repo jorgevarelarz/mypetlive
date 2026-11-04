@@ -182,6 +182,9 @@ export async function getAnimalTimeline(code: string) {
 
 export type HealthCategory = 'visit' | 'vaccine' | 'deworming' | 'medication' | 'surgery' | 'checkup' | 'test' | 'other';
 
+/** Cada cuánto se da una medicación (MEDICATION_FREQUENCIES del backend). */
+export type MedicationFrequency = 'every_6h' | 'every_8h' | 'every_12h' | 'daily' | 'every_2_days' | 'weekly' | 'monthly' | 'as_needed';
+
 /** Condición corporal que apunta la familia en «Sus datos de salud». */
 export type BodyCondition = 'muy_delgado' | 'delgado' | 'bueno' | 'sobrepeso' | 'obesidad';
 
@@ -189,10 +192,16 @@ export type BodyCondition = 'muy_delgado' | 'delgado' | 'bueno' | 'sobrepeso' | 
 export async function updateHealthRecord(
   code: string,
   entryId: string,
-  payload: { category?: HealthCategory; note?: string; date?: string; nextDueAt?: string | null },
+  payload: { category?: HealthCategory; note?: string; date?: string; nextDueAt?: string | null; dose?: string | null; frequency?: MedicationFrequency | null; endsAt?: string | null; firstDoseAt?: string | null },
 ) {
   const { data } = await client.patch(`/api/animals/${encodeURIComponent(code)}/health/${entryId}`, payload, { skipErrorToast: true } as any);
   return data as { ok: boolean };
+}
+
+/** Apunta que ya se ha dado una toma de la medicación. */
+export async function markMedicationDose(code: string, entryId: string) {
+  const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health/${entryId}/dose`, {}, { skipErrorToast: true } as any);
+  return data as { ok: boolean; lastDoseAt: string };
 }
 
 /** Borra una entrada de salud (y su recordatorio). */
@@ -209,7 +218,7 @@ export async function deleteHealthRecord(code: string, entryId: string) {
 // habitual de la categoría (vacuna al año, desparasitación a los tres meses).
 export async function addHealthRecord(
   code: string,
-  payload: { category: HealthCategory; note: string; treatment?: string; date?: string; nextDueAt?: string | null },
+  payload: { category: HealthCategory; note: string; treatment?: string; date?: string; nextDueAt?: string | null; dose?: string; frequency?: MedicationFrequency; endsAt?: string | null; firstDoseAt?: string | null },
 ) {
   // Quien llama muestra su propio mensaje en español (AUD-3).
   const { data } = await client.post(`/api/animals/${encodeURIComponent(code)}/health`, payload, { skipErrorToast: true } as any);

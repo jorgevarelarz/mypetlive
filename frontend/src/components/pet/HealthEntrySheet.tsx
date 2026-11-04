@@ -2,8 +2,8 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { addHealthRecord, deleteHealthRecord, updateHealthRecord, type HealthCategory } from '../../api/animals';
-import { healthCategoryLabel } from '../../styles/mypetlive';
+import { addHealthRecord, deleteHealthRecord, updateHealthRecord, type HealthCategory, type MedicationFrequency } from '../../api/animals';
+import { healthCategoryLabel, medicationSummary, MEDICATION_FREQUENCY_OPTIONS } from '../../styles/mypetlive';
 import { M } from './maqueta';
 import { useDialog } from '../../hooks/useDialog';
 
@@ -15,9 +15,10 @@ const OPCIONES: HealthCategory[] = ['vaccine', 'deworming', 'medication', 'check
 // Lo que el servidor programa solo si no se pone fecha (ver DEFAULT_REPEAT_MONTHS).
 const REPITE: Partial<Record<HealthCategory, string>> = { vaccine: 'Si lo dejas vacío, te avisaremos dentro de un año.', deworming: 'Si lo dejas vacío, te avisaremos dentro de tres meses.' };
 const aFecha = (v?: string | Date | null) => (v ? new Date(v).toISOString().slice(0, 10) : '');
+const aHora = (v?: string | Date | null) => (v ? new Date(v).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '');
 const CAMPO: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 46, borderRadius: 12, border: '1px solid #E4DED3', padding: '0 12px', font: 'inherit', fontSize: 16, background: '#fff', color: M.tinta };
 
-type Entrada = { _id?: string; type: string; notes?: string; date?: string; nextDueAt?: string | null; byRole?: string };
+type Entrada = { _id?: string; type: string; notes?: string; date?: string; nextDueAt?: string | null; byRole?: string; dose?: string; frequency?: MedicationFrequency; endsAt?: string | null; firstDoseAt?: string | null };
 
 /**
  * Sin `entry` es «apuntar uno nuevo» (desde «Registra un cuidado», con `tipoInicial`);
@@ -44,6 +45,16 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
   // «Quitar aviso» al apuntar algo nuevo: sin esto, vacía = el intervalo por defecto
   // del servidor y el aviso se programaba igual (AUD-2).
   const [sinAviso, setSinAviso] = React.useState(false);
+  // La medicación no se repite como una vacuna: lleva pauta, no «próxima fecha».
+  const esMedicacion = tipo === 'medication';
+  const [dosis, setDosis] = React.useState(entry.dose || '');
+  const [frecuencia, setFrecuencia] = React.useState<MedicationFrequency | ''>(entry.frequency || '');
+  const [hasta, setHasta] = React.useState(aFecha(entry.endsAt));
+  const [hora, setHora] = React.useState(aHora(entry.firstDoseAt));
+  // «Solo si lo necesita» no tiene calendario: ni hora ni avisos.
+  const conTomas = !!frecuencia && frecuencia !== 'as_needed';
+  const primeraToma = () => (conTomas && hora ? new Date(`${fecha || new Date().toISOString().slice(0, 10)}T${hora}:00`).toISOString() : null);
+  const faltaPauta = nueva && esMedicacion && (!dosis.trim() || !frecuencia);
   const [error, setError] = React.useState<string | null>(null);
   const manana = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const hoy = new Date().toISOString().slice(0, 10);
@@ -55,6 +66,7 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
       note_required: 'Escribe qué le habéis hecho.',
       next_due_in_past: 'La próxima fecha tiene que ser a partir de mañana.',
       date_in_future: 'La fecha no puede ser futura.',
+      ends_before_start: 'La fecha de fin no puede ser anterior a la de inicio.',
       entry_not_found: 'Esta entrada ya no existe. Actualizamos la ficha.',
     } as Record<string, string>)[code] || 'No se ha podido guardar. Inténtalo de nuevo.';
   };
@@ -65,7 +77,8 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
       note: nota.trim(),
       date: fecha ? new Date(`${fecha}T12:00:00`).toISOString() : undefined,
       // Vacío: que decida el servidor (vacuna al año, desparasitación a los 3 meses); lo demás, sin aviso.
-      nextDueAt: proxima ? new Date(`${proxima}T09:00:00`).toISOString() : (REPITE[tipo] && !sinAviso ? undefined : null),
+      nextDueAt: esMedicacion ? null : proxima ? new Date(`${proxima}T09:00:00`).toISOString() : (REPITE[tipo] && !sinAviso ? undefined : null),
+      ...(esMedicacion ? { dose: dosis.trim(), frequency: frecuencia || undefined, endsAt: hasta ? new Date(`${hasta}T12:00:00`).toISOString() : null, firstDoseAt: primeraToma() } : {}),
     }),
     onSuccess: res => { toast.success(res.nextDueAt ? 'Apuntado. Te avisaremos cuando toque.' : 'Apuntado en el pasaporte'); onChanged(); onClose(); },
     onError: (e: any) => setError(mensaje(e)),
@@ -78,7 +91,16 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
       if (tipo !== entry.type) cambios.category = tipo;
       if (nota.trim() !== (entry.notes || '')) cambios.note = nota.trim();
       if (fecha && fecha !== aFecha(entry.date)) cambios.date = new Date(`${fecha}T12:00:00`).toISOString();
-      if (proxima !== aFecha(entry.nextDueAt)) cambios.nextDueAt = proxima ? new Date(`${proxima}T09:00:00`).toISOString() : null;
+      if (esMedicacion) {
+        // Las apuntadas antes de la pauta podían llevar «próxima»: aquí ya no se ve, así que no se deja un aviso oculto.
+        if (entry.nextDueAt) cambios.nextDueAt = null;
+        if (dosis.trim() !== (entry.dose || '')) cambios.dose = dosis.trim() || null;
+        if (frecuencia !== (entry.frequency || '')) cambios.frequency = frecuencia || null;
+        if (hasta !== aFecha(entry.endsAt)) cambios.endsAt = hasta ? new Date(`${hasta}T12:00:00`).toISOString() : null;
+        const primera = primeraToma();
+        const antes = entry.firstDoseAt ? new Date(entry.firstDoseAt).toISOString() : null;
+        if (primera !== antes) cambios.firstDoseAt = primera;
+      } else if (proxima !== aFecha(entry.nextDueAt)) cambios.nextDueAt = proxima ? new Date(`${proxima}T09:00:00`).toISOString() : null;
       return updateHealthRecord(code, String(entry._id), cambios);
     },
     onSuccess: () => { toast.success('Corregido en el pasaporte'); onChanged(); onClose(); },
@@ -98,11 +120,12 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
         style={{ width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', boxSizing: 'border-box', background: '#FFFDFA', borderRadius: '24px 24px 0 0', padding: '14px 18px calc(18px + env(safe-area-inset-bottom))', fontFamily: M.letra, color: M.tinta }}>
         <span aria-hidden style={{ display: 'block', width: 44, height: 5, borderRadius: 99, background: '#D9D6CF', margin: '0 auto 14px' }} />
         <h2 style={{ margin: '0 0 4px', fontFamily: M.titulos, fontSize: 20, fontWeight: 800 }}>
-          {deClinica ? healthCategoryLabel(entry.type) : nueva ? 'Apuntar un cuidado' : 'Corregir'}
+          {deClinica ? healthCategoryLabel(entry.type) : nueva ? (esMedicacion ? 'Apuntar medicación' : 'Apuntar un cuidado') : 'Corregir'}
         </h2>
         {deClinica ? (
           <>
             <p style={{ margin: '6px 0 4px', fontSize: 15, lineHeight: '21px' }}>{entry.notes}</p>
+            {entry.type === 'medication' && medicationSummary(entry) && <p style={{ margin: '0 0 4px', fontSize: 15, lineHeight: '21px' }}>{medicationSummary(entry)}</p>}
             <p style={{ margin: '0 0 14px', fontSize: 14, color: M.gris }}>{entry.date ? new Date(entry.date).toLocaleDateString('es-ES') : ''}</p>
             <p style={{ margin: '0 0 16px', fontSize: 14.5, lineHeight: '20px', color: '#3D4340', background: '#F2EEE6', borderRadius: 12, padding: '10px 12px' }}>
               Esto lo apuntó la clínica, así que no se puede cambiar desde aquí. Si hay un error, pídeles que lo corrijan.
@@ -118,27 +141,55 @@ export default function HealthEntrySheet({ code, entry: entrada, petName, onClos
               </select>
             </label>
             <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340' }}>
-              Detalle
-              <input value={nota} maxLength={500} onChange={e => setNota(e.target.value)} style={CAMPO} placeholder={tipo === 'vaccine' ? 'Rabia, polivalente…' : tipo === 'deworming' ? 'Interna, pipeta…' : tipo === 'medication' ? 'Antibiótico 7 días, antiinflamatorio…' : 'Qué le habéis hecho'} />
+              {esMedicacion ? 'Medicamento' : 'Detalle'}
+              <input value={nota} maxLength={500} onChange={e => setNota(e.target.value)} style={CAMPO} placeholder={tipo === 'vaccine' ? 'Rabia, polivalente…' : tipo === 'deworming' ? 'Interna, pipeta…' : esMedicacion ? 'Amoxicilina, antiinflamatorio…' : 'Qué le habéis hecho'} />
             </label>
+            {esMedicacion && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
+                  Cantidad
+                  <input value={dosis} maxLength={60} onChange={e => setDosis(e.target.value)} style={CAMPO} placeholder="1 comprimido, 5 ml…" />
+                </label>
+                <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
+                  Frecuencia
+                  <select value={frecuencia} onChange={e => setFrecuencia(e.target.value as MedicationFrequency | '')} style={CAMPO}>
+                    <option value="">Elige…</option>
+                    {MEDICATION_FREQUENCY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
-                Fecha
+                {esMedicacion ? 'Desde' : 'Fecha'}
                 <input type="date" value={fecha} max={hoy} onChange={e => setFecha(e.target.value)} style={CAMPO} />
               </label>
-              <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
-                Próxima
-                <input type="date" value={proxima} min={manana} onChange={e => { setProxima(e.target.value); setSinAviso(false); }} style={CAMPO} />
-              </label>
+              {esMedicacion ? (
+                <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
+                  Hasta
+                  <input type="date" value={hasta} min={fecha || undefined} onChange={e => setHasta(e.target.value)} style={CAMPO} />
+                </label>
+              ) : (
+                <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340', minWidth: 0 }}>
+                  Próxima
+                  <input type="date" value={proxima} min={manana} onChange={e => { setProxima(e.target.value); setSinAviso(false); }} style={CAMPO} />
+                </label>
+              )}
             </div>
-            <span style={{ fontSize: 13, color: M.gris, marginTop: -4 }}>
+            {esMedicacion && conTomas && (
+              <label style={{ display: 'grid', gap: 6, fontSize: 14, color: '#3D4340' }}>
+                Hora de la primera toma
+                <input type="time" value={hora} onChange={e => setHora(e.target.value)} style={CAMPO} />
+              </label>
+            )}
+            {esMedicacion ? <span style={{ fontSize: 13, color: M.gris, marginTop: -4 }}>{conTomas ? (hora ? 'Te avisaremos en el móvil de cada toma. ' : 'Sin hora no te avisaremos de las tomas. ') : ''}Deja «Hasta» vacío si no tiene fecha de fin.</span> : <span style={{ fontSize: 13, color: M.gris, marginTop: -4 }}>
               {proxima ? 'Te avisaremos una semana antes.' : nueva && REPITE[tipo] && !sinAviso ? REPITE[tipo] : 'Sin próxima fecha no te avisaremos.'}
               {!proxima && nueva && REPITE[tipo] && !sinAviso && <button type="button" onClick={() => setSinAviso(true)} style={{ marginLeft: 8, border: 0, background: 'none', padding: 0, color: M.verdeBoton, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Quitar aviso</button>}
               {proxima && <button type="button" onClick={() => setProxima('')} style={{ marginLeft: 8, border: 0, background: 'none', padding: 0, color: M.verdeBoton, font: 'inherit', fontWeight: 700, textDecoration: 'underline' }}>Quitar aviso</button>}
-            </span>
+            </span>}
             {error && <p style={{ margin: 0, fontSize: 14, color: '#B3261E' }}>{error}</p>}
-            <button type="button" disabled={ocupado || !nota.trim()} onClick={() => { setError(null); (nueva ? crear : guardar).mutate(); }}
-              style={{ height: 52, borderRadius: 14, border: 0, background: M.verdeBoton, color: '#fff', font: 'inherit', fontSize: 16.5, fontWeight: 800, opacity: ocupado || !nota.trim() ? 0.6 : 1 }}>
+            <button type="button" disabled={ocupado || !nota.trim() || faltaPauta} onClick={() => { setError(null); (nueva ? crear : guardar).mutate(); }}
+              style={{ height: 52, borderRadius: 14, border: 0, background: M.verdeBoton, color: '#fff', font: 'inherit', fontSize: 16.5, fontWeight: 800, opacity: ocupado || !nota.trim() || faltaPauta ? 0.6 : 1 }}>
               {guardar.isPending || crear.isPending ? 'Guardando…' : nueva ? 'Apuntar en el pasaporte' : 'Guardar cambios'}
             </button>
             {!nueva && <button type="button" disabled={ocupado}

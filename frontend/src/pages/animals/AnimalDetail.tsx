@@ -9,7 +9,7 @@ import { getQuestionnaireByProtectora } from '../../api/questionnaire';
 import { useAuth } from '../../context/AuthContext';
 import { useAuthModal } from '../../context/AuthModalContext';
 import { toAbsoluteUrl } from '../../utils/media';
-import { MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
+import { healthCategoryLabel, MPL, MPL_FONT_BODY, MPL_FONT_DISPLAY, PawMark, sexLabel, sizeLabel, speciesLabel } from '../../styles/mypetlive';
 import PublicHeader from '../../components/PublicHeader';
 import { useAnimalFavorites } from '../../hooks/useAnimalFavorites';
 import { usePageMeta } from '../../utils/usePageMeta';
@@ -354,7 +354,7 @@ export default function AnimalDetail() {
                   {a.healthHistory.map((entry: any, idx: number) => (
                     <li key={idx} style={{ borderBottom: `1px solid ${MPL.bg}`, paddingBottom: 10 }}>
                       <span style={{ fontSize: 12, color: MPL.faint }}>{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</span>
-                      <div>{entry.type}{entry.notes ? ` · ${entry.notes}` : ''}</div>
+                      <div>{healthCategoryLabel(entry.type)}{entry.notes ? ` · ${entry.notes}` : ''}</div>
                     </li>
                   ))}
                 </ul>
