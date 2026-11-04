@@ -195,17 +195,17 @@ export default function Home() {
       `}</style>
       <div className="hm-in mx-auto grid gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8" style={{ maxWidth: 1120 }}>
         <section
-          className="hm-s1 grid gap-6 lg:grid-cols-[minmax(0,1.16fr)_minmax(320px,.84fr)]"
+          className="hm-s1 grid gap-6 xl:grid-cols-[minmax(0,1.16fr)_minmax(320px,.84fr)]"
           style={{
             borderBottom: `1px solid ${colors.border}`,
             paddingBottom: 28,
           }}
         >
-          <div className="hm-txt-wrap grid gap-6">
+          <div className="hm-txt-wrap grid content-start gap-6">
             {/* Sin logo ni etiquetas: la cabecera ya lleva la marca. */}
             <div className="hm-txt grid gap-3">
               <h1
-                className="hm-h1 max-w-3xl text-4xl font-extrabold leading-none sm:text-5xl lg:text-6xl"
+                className="hm-h1 max-w-3xl text-4xl font-extrabold leading-none sm:text-5xl xl:text-6xl"
                 style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.03em' }}
               >
                 <span className="hm-l1" style={{ whiteSpace: 'nowrap' }}>
@@ -243,7 +243,7 @@ export default function Home() {
             onClick={hasPet && !isError ? () => nav('/pet') : undefined}
             label={`Abrir la ficha de ${displayName}`}
           >
-            <div className="hm-foto relative aspect-[2/1] lg:aspect-[4/3]" style={{ background: colors.panel }}>
+            <div className="hm-foto relative aspect-[2/1] xl:aspect-[4/3]" style={{ background: colors.panel }}>
               {isLoading ? (
                 <div className="flex h-full items-center justify-center text-sm font-semibold" style={{ color: colors.soft }}>
                   Cargando mascota
@@ -333,12 +333,12 @@ export default function Home() {
           )}
         </section>
 
-        <section className="hm-s2 grid gap-5 lg:grid-cols-[1fr_1fr_1fr]" style={{ gap: 15 }}>
+        <section className="hm-s2 grid gap-5 xl:grid-cols-[1fr_1fr_1fr]" style={{ gap: 15 }}>
           {/* El mismo cuidado diario que «Mi mascota»: pregunta qué comió, qué
               arena y cómo fue el paseo. Antes el inicio tenía botones propios que
               marcaban sin preguntar nada. La despensa se queda en «Mi mascota». */}
           {featuredAnimal && (
-            <div className="lg:col-span-2">
+            <div className="xl:col-span-2">
               <DailyCareCard
                 animalId={String(featuredAnimal._id || featuredAnimal.id || '')}
                 species={featuredAnimal.species}
@@ -361,7 +361,7 @@ export default function Home() {
               </p>
               <h2
                 className="hm-cup-t mt-2 text-2xl font-extrabold"
-                style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em' }}
+                style={{ fontFamily: '"Bricolage Grotesque", sans-serif', letterSpacing: '-0.02em', paddingRight: 96 }}
               >
                 Ventajas para ti
               </h2>
