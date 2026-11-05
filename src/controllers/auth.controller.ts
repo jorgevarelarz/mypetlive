@@ -220,3 +220,16 @@ export const resetPassword = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * Renueva la sesión de quien ya la tiene válida: la app lo pide al abrirse si su
+ * token tiene más de una semana, y así no caduca mientras se use. `authenticate`
+ * ya rechaza tokens caducados o anulados por `tokenVersion`.
+ */
+export const renewSession = async (req: Request, res: Response) => {
+  const id = (req as any).user?.id || (req as any).user?._id;
+  const user: any = await User.findById(id).select('role tokenVersion').lean();
+  if (!user) return res.status(401).json({ error: 'Sesión no válida' });
+  const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
+  res.json({ token });
+};

@@ -63,6 +63,23 @@ export type User = {
   token: string;
 };
 
+const RENOVAR_TRAS_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** La sesión se renueva sola si el token tiene más de una semana. */
+export function sessionNeedsRenewal(token: string | undefined, now = Date.now()): boolean {
+  try {
+    const iat = JSON.parse(atob((token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).iat;
+    return typeof iat === 'number' && now - iat * 1000 > RENOVAR_TRAS_MS;
+  } catch {
+    return false;
+  }
+}
+
+export async function renewSessionToken(): Promise<string> {
+  const { data } = await axios.post('/api/auth/session/renew');
+  return data.token;
+}
+
 export async function login(email: string, password: string): Promise<User> {
   const { data } = await axios.post("/api/auth/login", { email, password });
   const user: User = { ...data.user, token: data.token };

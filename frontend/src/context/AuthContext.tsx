@@ -9,6 +9,8 @@ import {
   socialLogin as apiSocialLogin,
   SocialProvider,
   bootstrapAuthHeader,
+  renewSessionToken,
+  sessionNeedsRenewal,
 } from "../api/auth";
 import { nativePushAvailable, disableNativePush, refreshNativePush } from '../utils/nativePush';
 import {
@@ -75,6 +77,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     bootstrapAuthHeader();
   }, []);
+
+  // Mientras se use la app la sesión no caduca: al abrirla o volver a ella se cambia
+  // un token de más de una semana por otro nuevo. Si falla no pasa nada: sigue el actual.
+  const renewing = useRef(false);
+  useEffect(() => {
+    const renew = () => {
+      if (renewing.current || document.visibilityState === 'hidden' || !sessionNeedsRenewal(user?.token)) return;
+      const generation = sessionGeneration.current;
+      renewing.current = true;
+      renewSessionToken()
+        .then((token) => {
+          if (generation !== sessionGeneration.current || !token) return;
+          setUser((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, token };
+            localStorage.setItem("user", JSON.stringify(next));
+            return next;
+          });
+          bootstrapAuthHeader();
+        })
+        .catch(() => undefined)
+        .finally(() => { renewing.current = false; });
+    };
+    renew();
+    document.addEventListener('visibilitychange', renew);
+    return () => document.removeEventListener('visibilitychange', renew);
+  }, [user?.token]);
 
   // El servidor rechazó la sesión: se limpia también el usuario en memoria para
   // que las rutas protegidas lleven al login aunque la recarga no llegue a ocurrir.

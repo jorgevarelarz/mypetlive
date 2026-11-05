@@ -113,6 +113,25 @@ describe('Auth hardening', () => {
     expect(res.body.token).toBeDefined();
   });
 
+  it('renews a live session for a year and refuses a revoked one', async () => {
+    const user = await User.create({
+      name: 'Sesión larga',
+      email: 'renueva@example.com',
+      passwordHash: await bcrypt.hash(password, 10),
+      role: 'tenant',
+    });
+    const login = await request(app).post('/api/auth/login').send({ email: 'renueva@example.com', password });
+    const res = await request(app).post('/api/auth/session/renew').set('Authorization', `Bearer ${login.body.token}`);
+    expect(res.status).toBe(200);
+    const payload = JSON.parse(Buffer.from(res.body.token.split('.')[1], 'base64url').toString());
+    expect(payload.id).toBe(String(user._id));
+    expect(payload.exp - payload.iat).toBe(365 * 24 * 60 * 60);
+
+    await User.updateOne({ _id: user._id }, { $inc: { tokenVersion: 1 } });
+    const revoked = await request(app).post('/api/auth/session/renew').set('Authorization', `Bearer ${res.body.token}`);
+    expect(revoked.status).toBe(401);
+  });
+
   // Regresión del 29 sep 2026: el móvil puso la inicial en mayúscula, el login
   // decía "usuario o contraseña incorrectos" y el reseteo respondía ok sin enviar nada.
   it('matches the email regardless of case in login and reset request', async () => {

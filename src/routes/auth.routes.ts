@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
-import { register, login, requestPasswordReset, resetPassword } from '../controllers/auth.controller';
+import { register, login, requestPasswordReset, resetPassword, renewSession } from '../controllers/auth.controller';
 import { socialLogin } from '../controllers/oauth.controller';
 import { deletionCheck, deleteMyAccount } from '../controllers/account.controller';
 import { authenticate } from '../middleware/auth.middleware';
@@ -92,6 +92,7 @@ router.post(
 // Borrar la cuenta propia (App Store 5.1.1(v), RGPD art. 17). Aquí y no en
 // /users porque /users exige cuenta verificada y borrar tiene que poder
 // cualquiera. Limitador del login: el cuerpo lleva la contraseña.
+router.post('/session/renew', authenticate, asyncHandler(renewSession));
 router.get('/account/deletion-check', authenticate, asyncHandler(deletionCheck));
 router.post(
   '/account/delete',
