@@ -1,4 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
+import toast from 'react-hot-toast';
 
 const fallbackBase = () => {
   if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
@@ -11,6 +12,9 @@ const fallbackBase = () => {
   }
   return '';
 };
+
+/** Avisa a AuthContext de que el servidor ya no acepta la sesión guardada. */
+export const SESSION_EXPIRED_EVENT = 'mypetlive:session-expired';
 
 export const API_BASE = fallbackBase().replace(/\/$/, '');
 
@@ -54,22 +58,25 @@ api?.interceptors?.response?.use?.(
       // No afecta al 401: la sesión caducada se sigue gestionando siempre.
       const skipToast = (err?.config as any)?.skipErrorToast === true;
       if (!/\/api\/auth\//.test(url)) {
-        // Sesión caducada (JWT de 7 días): sin esto cada llamada devolvía 401 en
+        // Sesión caducada: sin esto cada llamada devolvía 401 en
         // silencio y la UI parecía rota (p. ej. el QR de canje "no salía").
         // Solo si HAY usuario guardado: al anónimo de páginas públicas no se le toca.
         const hasSession = typeof window !== 'undefined' && !!localStorage.getItem('user');
         if (err?.response?.status === 401 && hasSession) {
           localStorage.removeItem('user');
-          require('react-hot-toast').toast.error('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+          // Primero la salida y después el aviso: si el aviso fallaba, el catch de
+          // abajo se lo tragaba y nadie llevaba al usuario al login. Se quedaba en
+          // «No hemos podido comprobar tu aceptación» con la sesión ya borrada.
+          window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
           if (!window.location.pathname.startsWith('/login')) {
             setTimeout(() => window.location.assign('/login'), 600);
           }
+          toast.error('Tu sesión ha caducado. Vuelve a iniciar sesión.');
           return Promise.reject(err);
         }
         if (skipToast) return Promise.reject(err);
         const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Error de red';
-        // Lazy require to avoid circular deps
-        require('react-hot-toast').toast.error(msg);
+        toast.error(msg);
       }
     } catch {}
     return Promise.reject(err);

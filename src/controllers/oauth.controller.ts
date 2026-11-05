@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.model';
-import { getJwtSecret } from '../config/jwt';
+import { getJwtSecret, SESSION_TOKEN_TTL } from '../config/jwt';
 import { AppError, badRequest, isAppError } from '../utils/errors';
 import getRequestLogger from '../utils/requestLogger';
 import { APPLE_OIDC, GOOGLE_OIDC, verifyIdToken, OidcClaims } from '../utils/oidc';
@@ -161,7 +161,7 @@ export const socialLogin = async (req: Request, res: Response) => {
       }
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
     res.json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },

@@ -9,7 +9,7 @@ import getRequestLogger from '../utils/requestLogger';
 import { AppError, badRequest, isAppError } from '../utils/errors';
 
 import { getLatestLegalDoc, recordLegalAcceptance } from '../utils/legalDocs';
-import { getJwtSecret } from '../config/jwt';
+import { getJwtSecret, SESSION_TOKEN_TTL } from '../config/jwt';
 
 const normalizeEmail = (value: unknown) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -91,7 +91,7 @@ export const register = async (req: Request, res: Response) => {
         if (latest) await recordLegalAcceptance(user._id, slug, latest.version, req);
       }
     }
-    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
     res.status(201).json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },
@@ -135,7 +135,7 @@ export const login = async (req: Request, res: Response) => {
       throw new AppError(INVALID_CREDENTIALS, { status: 400, code: 'invalid_credentials' });
     }
     // Generate and return JWT
-    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL });
     res.json({
       token,
       user: { _id: user._id, email: user.email, role: user.role },

@@ -1,5 +1,12 @@
 const FALLBACK_SECRET = 'insecure';
 
+/**
+ * Duración de la sesión. La gente entra a la app de vez en cuando: 7 días la
+ * echaba cada semana. `tokenVersion` sigue cerrando las sesiones al cambiar la
+ * contraseña o borrar la cuenta sin esperar a esta caducidad.
+ */
+export const SESSION_TOKEN_TTL = '365d';
+
 // Valores de plantilla que NUNCA deben acabar firmando tokens reales: el que
 // traía `.env.example` antes (un hex de 64 que parecía legítimo) y el marcador
 // que lo sustituye. Si producción arranca con cualquiera de ellos, aborta.

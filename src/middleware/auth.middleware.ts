@@ -10,7 +10,7 @@ const JWT_SECRET = getJwtSecret();
  * contraseña: la firma no sabe nada de lo que ha pasado en la cuenta desde que
  * se emitió. `tokenVersion` es lo que sí lo sabe — viaja en el token y
  * `resetPassword` la sube en BD — así que un token emitido antes dejar de
- * servir en cuanto se compara aquí, sin esperar a que caduquen sus 7 días.
+ * servir en cuanto se compara aquí, sin esperar a que caduque.
  */
 async function loadLiveSession(resolvedId: string, decoded: any): Promise<{ role?: string } | null> {
   const dbUser: any = await User.findById(resolvedId).select('tokenVersion role').lean();
@@ -22,7 +22,7 @@ async function loadLiveSession(resolvedId: string, decoded: any): Promise<{ role
 /**
  * El rol manda desde la base, no desde el token: si el admin cambia el rol de
  * una cuenta (o la degrada), se aplica en la siguiente petición y no al
- * caducar el JWT, que dura 7 días. Mismo arreglo que RentalApp (1231d5c).
+ * caducar el JWT. Mismo arreglo que RentalApp (1231d5c).
  */
 function withDbRole(decoded: any, session: { role?: string }) {
   return session.role ? { ...decoded, role: session.role } : decoded;

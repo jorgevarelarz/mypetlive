@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from '@tanstack/react-query';
+import { SESSION_EXPIRED_EVENT } from '../api/client';
 import {
   User,
   getStoredUser,
@@ -74,6 +75,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     bootstrapAuthHeader();
   }, []);
+
+  // El servidor rechazó la sesión: se limpia también el usuario en memoria para
+  // que las rutas protegidas lleven al login aunque la recarga no llegue a ocurrir.
+  useEffect(() => {
+    const onExpired = () => {
+      sessionGeneration.current += 1;
+      queryClient.clear();
+      setUser(null);
+      setLegalStatus(null);
+      setLegalStatusError(false);
+      setLegalStatusLoading(false);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!user) {
